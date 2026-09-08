@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-launch-ros \
     && rm -rf /var/lib/apt/lists/*
 
-# Optional packages inherited from the Polimi template; no current node uses them.
+# Optional packages inherited template; no current node uses them.
 # Some may already be included transitively in the base image.
 # Uncomment this entire RUN block only when the corresponding features are added.
 # RUN apt-get update && apt-get install -y --no-install-recommends \

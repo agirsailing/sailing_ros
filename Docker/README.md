@@ -164,7 +164,7 @@ by this Docker configuration.
 - The entrypoint loads ROS and, if available, the built workspace. A fresh container
   can open a shell before the first workspace build.
 - The Dockerfiles install `rclpy`, message types, launch support, PySerial, SMBus2,
-  lgpio and pyubx2. Optional Polimi ROS packages are commented out until needed.
+  lgpio and pyubx2. Optional Agir ROS packages are commented out until needed.
   MQTT/Bluetooth Python integrations remain installed on Raspberry Pi and commented
   out on PC. Some ROS tools remain dependencies of the PC desktop base image.
 - The Python package installs its launch and YAML files using `setup.py`, following

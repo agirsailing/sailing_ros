@@ -1,28 +1,29 @@
-name: agir-pc
+name: agir-ros-pc
+version: '3.8'
 
 services:
   jazzy:
-    build: .
+    build: ./
     image: agirsailing:jazzy-desktop
     container_name: agir-ros-pc
     user: "ros"
-    working_dir: /home/ros/ros2_ws
     environment:
-      - DISPLAY=${DISPLAY:-host.docker.internal:0}
-      - QT_X11_NO_MITSHM=1
+      - DISPLAY=host.docker.internal:0
+      - QT_X11_NO_MITSHM=1  # Avoids potential issues with shared memory
     volumes:
       - ../../ros2_ws/src:/home/ros/ros2_ws/src
       - ../../ros2_ws/scripts:/home/ros/ros2_ws/scripts
       - ../../ros2_ws/rosbags:/home/ros/ros2_ws/rosbags
       - ../../ros2_ws/tools:/home/ros/ros2_ws/tools
-      - ../../ros2_ws/CSVs:/home/ros/ros2_ws/CSVs
-      # Optional Linux X11/GPU mounts; enable only if these host paths exist.
-      # - /dev/dri:/dev/dri
-      # - /tmp/.X11-unix:/tmp/.X11-unix
-      # - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
-    # On Docker Desktop, enable host networking in Settings > Resources > Network.
+      # DRI for HW accel (optional but nice)
+      - /dev/dri:/dev/dri
+      # If you still need XWayland apps:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - $HOME/.Xauthority:/home/ros/.Xauthority:ros
     network_mode: host
     ipc: host
+    privileged: true
     stdin_open: true
     tty: true
     command: bash
+    entrypoint: ""
