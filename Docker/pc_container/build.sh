@@ -1,15 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-echo "=========================================="
-echo "⛵ Agir Sailing Team - ROS 2 PC Setup"
-echo "=========================================="
-echo "Costruisco e avvio il container di sviluppo..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Lancia docker compose direttamente, dato che siamo già nella cartella giusta
-docker compose up -d --build
+echo "Agir Sailing Team - ROS 2 PC Setup"
+echo "Building and starting the development container..."
 
-echo "=========================================="
-echo "✅ Fatto! Il container 'ros-barca' è in esecuzione."
-echo "Ora apri Docker Desktop e assicurati che sia verde."
-echo "Vai su VS Code -> Ctrl+Shift+P -> 'Dev Containers: Attach to Running Container'."
-echo "=========================================="
+# Resolve Compose relative to this script, regardless of the current directory.
+docker compose -f "$SCRIPT_DIR/compose.yaml" up -d --build
+
+echo "Done! The 'agir-ros-pc' container is running."
+echo "In VS Code, open Ctrl+Shift+P -> Dev Containers: Attach to Running Container."

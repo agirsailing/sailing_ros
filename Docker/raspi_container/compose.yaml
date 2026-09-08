@@ -1,38 +1,37 @@
-version: "3.8"
+name: agir-raspi
 
 services:
   jazzy:
-    build: ./
-    image: polisail:jazzy-desktop
-    container_name: ros-barca
-    user: "ros"               # make sure UID/GID match host (see Dockerfile note)
+    build: .
+    image: agirsailing:jazzy-raspi
+    container_name: agir-ros-raspi
+    user: "ros"
+    working_dir: /home/ros/ros2_ws
     environment:
       - QT_QPA_PLATFORM=wayland
       - WAYLAND_DISPLAY=wayland-0
       - XDG_RUNTIME_DIR=/tmp/runtime-ros
     volumes:
       - ../../ros2_ws:/home/ros/ros2_ws
-
-      # Wayland socket from host user (usually UID 1000). Adjust path if your UID differs.
-      - /run/user/1000/wayland-0:/run/user/1001/wayland-0
-      # DRI for HW accel (optional but nice)
+      # Match the host desktop user; the target follows XDG_RUNTIME_DIR.
+      - /run/user/1000/wayland-0:/tmp/runtime-ros/wayland-0
       - /dev/dri:/dev/dri
-      # If you still need XWayland apps:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - $HOME/.Xauthority:/home/ros/.Xauthority:ro
-      # Devices and project
+      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+      # Linux hardware access: USB serial, I2C and GPIO.
       - /dev:/dev
     devices:
       - /dev/ttyAMA0:/dev/ttyAMA0
     group_add:
-      # prefer names inside container; see Dockerfile to ensure these groups exist
       - "dialout"
       - "tty"
-      # if your compose requires numeric IDs, look them up on your host: getent group gpio
+      # Match host device ownership (check with: stat -c '%g' /dev/i2c-1).
+      # Uncomment after setting these to the actual host device group IDs.
+      # - "${I2C_GID}"
+      # - "${GPIO_GID}"
     network_mode: host
     ipc: host
     privileged: true
     stdin_open: true
     tty: true
-    # command: bash
-    # entrypoint: ""
+    command: bash

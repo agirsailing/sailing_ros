@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>communication_web</name>
+  <version>0.0.0</version>
+  <description>Web communication for the Agir Sailing Team</description>
+  <maintainer email="tech@agirsailing.se">Agir Sailing Team</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,64 +1,28 @@
 #!/usr/bin/env bash
 set -e
 
-# =========================
-# Config
-# =========================
-WS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-LAUNCH_PKG="poli_sail"
+WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-LIVE_LAUNCH="live_poli_sail_system.launch.py"
-REPLAY_LAUNCH="replay_poli_sail_system.launch.py"
-BAG_FULL_TOPIC_LAUNCH="bag_full_topic.launch.py"
-
-# =========================
-# Helpers
-# =========================
-usage() {
-  echo "Usage:"
-  echo "  ./run.sh live    # run live system"
-  echo "  ./run.sh replay  # run replay system"
-  echo "  ./run.sh bag_full_topic  # run bag full topic system"
-  exit 1
-}
-
-# =========================
-# Args
-# =========================
-MODE="$1"
-
-if [[ -z "$MODE" ]]; then
-  echo "❌ Missing mode"
-  usage
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  echo "Usage: bash run.sh [live] [ROS 2 launch arguments...]"
+  echo "Starts the Agir sensors. Replay is not configured yet."
+  exit 0
 fi
 
-case "$MODE" in
-  live)
-    LAUNCH_FILE="$LIVE_LAUNCH"
-    ;;
-  replay)
-    LAUNCH_FILE="$REPLAY_LAUNCH"
-    ;;
-  bag_full_topic)
-    LAUNCH_FILE="$BAG_FULL_TOPIC_LAUNCH"
-    ;;
-  *)
-    echo "❌ Unknown mode: $MODE"
-    usage
-    ;;
-esac
+# Keep the existing 'live' spelling while also allowing invocation without it.
+if [[ "${1:-}" == "live" ]]; then
+  shift
+elif [[ $# -gt 0 && "$1" != -* && "$1" != *:=* ]]; then
+  echo "Unknown mode: $1. Only 'live' is available."
+  exit 1
+fi
 
-# =========================
-# Environment
-# =========================
-echo "🚀 Starting PoliSail system in '$MODE' mode"
-echo "📦 Workspace: $WS_DIR"
-echo "📄 Launch file: $LAUNCH_FILE"
+if [[ ! -f "$WS_DIR/install/setup.bash" ]]; then
+  echo "Workspace is not built. Run: bash $WS_DIR/scripts/build.sh"
+  exit 1
+fi
 
+echo "Starting Agir sensors from $WS_DIR"
 source /opt/ros/jazzy/setup.bash
 source "$WS_DIR/install/setup.bash"
-
-# =========================
-# Run
-# =========================
-exec ros2 launch "$LAUNCH_PKG" "$LAUNCH_FILE"
+exec ros2 launch sensors sensors_launch.py "$@"

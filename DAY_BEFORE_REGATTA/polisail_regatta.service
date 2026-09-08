@@ -1,0 +1,15 @@
+[Unit]
+Description=PoliSail - Regatta autostart (live)
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=simple
+User=barca
+WorkingDirectory=/home/barca/2025_SOFTWARE/Sailing_ROS/DAY_BEFORE_REGATTA
+ExecStart=/usr/local/bin/polisail_regatta_start.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

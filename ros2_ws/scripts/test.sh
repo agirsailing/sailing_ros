@@ -19,9 +19,8 @@ PACKAGES=()
 usage() {
   echo "Usage:"
   echo "  ./test.sh                         # build workspace, run all tests"
-  echo "  ./test.sh can_bus                 # build workspace, run tests for one package"
-  echo "  ./test.sh can_bus flap_control    # build workspace, run tests for selected packages"
-  echo "  ./test.sh --no-build can_bus      # run selected tests without rebuilding first"
+  echo "  ./test.sh sensors                 # build workspace, run sensor package tests"
+  echo "  ./test.sh --no-build sensors      # run sensor tests without rebuilding first"
   echo "  ./test.sh --clean-build           # clean and rebuild using scripts/build.sh first"
   echo "  ./test.sh --summary               # print compact test result summary"
   echo

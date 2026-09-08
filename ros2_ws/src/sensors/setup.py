@@ -13,12 +13,13 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), ['launch/sensors_launch.py']),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='sumoth',
     maintainer_email='tech@agirsailing.se',
-    description='ROS2 GPS package',
+    description='ROS 2 nodes for Agir GPS, ultrasonic, IMU and battery sensors',
     license='Apache-2.0',
     extras_require={
         'test': [
@@ -27,12 +28,11 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'talker_gps = sensors_package.gps_node:main',
-            'listener_gps = sensors_package.gps_listener:main',
-            'talker_ultrasonic = sensors_package.ultrasonic_node:main',
-            'talker_filter_ultrasonic = sensors_package.ultrasonic_filter_node:main',
-            'talker_imu = sensors_package.imu_node:main',
-            'talker_bat = sensors_package.battery_node:main',
+            'gps_node = sensors.gps_node:main',
+            'ultrasonic_node = sensors.ultrasonic_node:main',
+            'ultrasonic_filter_node = sensors.ultrasonic_filter_node:main',
+            'imu_node = sensors.imu_node:main',
+            'battery_node = sensors.battery_node:main',
         ],
     },
 )

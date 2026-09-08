@@ -1,0 +1,12 @@
+# Keys must match the node names in sensors_launch.py.
+ultrasonic_left_node:
+  ros__parameters:
+    port: /dev/ttyUSB0
+    topic: ctrl_raw_left
+    device_id: ultrasonic_left
+
+ultrasonic_right_node:
+  ros__parameters:
+    port: /dev/ttyUSB1
+    topic: ctrl_raw_right
+    device_id: ultrasonic_right

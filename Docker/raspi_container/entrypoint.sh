@@ -1,20 +1,18 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
-source /opt/ros/jazzy/setup.bash
+source "/opt/ros/${ROS_DISTRO:-jazzy}/setup.bash"
 source /usr/share/colcon_cd/function/colcon_cd.sh
-export _colcon_cd_root=/opt/ros/jazzy/
-source /usr/share/colcon_cd/function/colcon_cd-argcomplete.bash
+export _colcon_cd_root="/opt/ros/${ROS_DISTRO:-jazzy}/"
+source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 
-echo "Provided arguments: $@"
-
-# Change directory to your ROS2 workspace
 cd /home/ros/ros2_ws
+if [[ -f install/setup.bash ]]; then
+  source install/setup.bash
+fi
 
-# If no arguments are provided, open an interactive bash terminal.
-if [ "$#" -eq 0 ]; then
+if [[ "$#" -eq 0 ]]; then
   exec bash
 else
   exec "$@"
 fi
-
