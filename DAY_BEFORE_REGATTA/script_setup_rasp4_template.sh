@@ -4,38 +4,38 @@ set -euo pipefail
 echo "🚤 SETUP RASPBERRY SAILING TEAM — ROS container + workspace"
 
 ########################################
-# ⚙️  PARAMETRI DA ADATTARE
+# ⚙️  PARAMETERS TO ADAPT
 ########################################
 
-USER_HOME="/home/persefone"
+USER_HOME="/home/agir"
 BASE_DIR="$USER_HOME/2025_SOFTWARE"
 
 GIT_USER=""
 GIT_TOKEN="" 
-REPO_SLUG="Sailing-Team-Polimi/Sailing_ROS"
+REPO_SLUG="agirsailing/sailing_ros"
 
-REPO_DIR="$BASE_DIR/Sailing_ROS"
+REPO_DIR="$BASE_DIR/sailing_ros"
 BRANCH="main"
 
 ROS_WS="$REPO_DIR/ros2_ws"
 CONTAINER_DIR="$REPO_DIR/Docker/raspi_container"
 COMPOSE_FILE="$CONTAINER_DIR/compose.yaml"
-CONTAINER_NAME="ros-persefone"
+CONTAINER_NAME="ros-boat"
 
 ########################################
 
-echo "🔎 Utente corrente: $USER"
+echo "🔎 Current user: $USER"
 echo "📁 BASE_DIR:   $BASE_DIR"
 echo "📁 REPO_DIR:   $REPO_DIR"
 echo "🌿 Branch:     $BRANCH"
 
 ########################################
-# 0) Fix hosts/hostname (optional ma utile)
+# 0) Fix hosts/hostname (optional but useful)
 ########################################
 
 HOSTN="$(hostnamectl --static || hostname)"
 if ! grep -q "^127\.0\.1\.1\s\+$HOSTN" /etc/hosts; then
-  echo "🔧 Allineo /etc/hosts con hostname: $HOSTN"
+  echo "🔧 Aligning /etc/hosts with hostname: $HOSTN"
   if grep -q "^127\.0\.1\.1" /etc/hosts; then
     sudo sed -i "s/^127\.0\.1\.1.*/127.0.1.1   $HOSTN/" /etc/hosts
   else
@@ -44,180 +44,180 @@ if ! grep -q "^127\.0\.1\.1\s\+$HOSTN" /etc/hosts; then
 fi
 
 ########################################
-# 1) Update & pacchetti base
+# 1) Update & base packages
 ########################################
 
 echo "🔄 Update & upgrade..."
 sudo apt-get update -y
 sudo apt-get upgrade -y
 
-echo "📦 Installo pacchetti base (SSH, git, curl, nano, tree, ca-certificates, lsb-release)..."
+echo "📦 Installing base packages (SSH, git, curl, nano, tree, ca-certificates, lsb-release)..."
 sudo apt-get install -y \
   openssh-client openssh-server \
   git curl nano tree ca-certificates lsb-release
 
-echo "📡 Abilito SSH server..."
+echo "📡 Enabling SSH server..."
 sudo systemctl enable ssh
 sudo systemctl start ssh
 
 ########################################
-# 1.5) Configurazione Permessi Hardware (UDEV Rules)
+# 1.5) Hardware Permissions Configuration (UDEV Rules)
 ########################################
 
-echo "🔌 Disattivo la console seriale di sistema per liberare le porte (ttyS0 / ttyAMA0)..."
-# Disattiviamo e mascheriamo il demone che "ruba" i permessi alle porte seriali
+echo "🔌 Disabling system serial console to free up ports (ttyS0 / ttyAMA0)..."
+# We disable and mask the daemon that "steals" permissions from serial ports
 sudo systemctl stop serial-getty@ttyS0.service 2>/dev/null || true
 sudo systemctl mask serial-getty@ttyS0.service 2>/dev/null || true
 sudo systemctl stop serial-getty@ttyAMA0.service 2>/dev/null || true
 sudo systemctl mask serial-getty@ttyAMA0.service 2>/dev/null || true
 
-echo "🔌 Configuro i permessi permanenti universali (666) per Seriale, USB, I2C..."
+echo "🔌 Configuring universal permanent permissions (666) for Serial, USB, I2C..."
 
-# Creiamo un file con regole usando i caratteri jolly (*)
+# We create a rules file using wildcards (*)
 sudo tee /etc/udev/rules.d/99-sailing-hardware.rules > /dev/null <<EOF
-# Permessi per TUTTE le porte seriali hardware e adattatori USB
+# Permissions for ALL hardware serial ports and USB adapters
 KERNEL=="ttyS[0-9]*", MODE="0666"
 KERNEL=="ttyAMA[0-9]*", MODE="0666"
 KERNEL=="ttyACM[0-9]*", MODE="0666"
 KERNEL=="ttyUSB[0-9]*", MODE="0666"
 
-# Permessi per TUTTI i bus I2C
+# Permissions for ALL I2C buses
 KERNEL=="i2c-[0-9]*", MODE="0666"
 
-# Permessi per TUTTI i pin GPIO
+# Permissions for ALL GPIO pins
 KERNEL=="gpiochip[0-9]*", MODE="0666"
 EOF
 
-# Applichiamo le regole immediatamente
+# Apply rules immediately
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 
-echo "✅ Regole hardware UDEV applicate con successo."
+echo "✅ UDEV hardware rules successfully applied."
 
 ########################################
 # 2) Docker + Compose
 ########################################
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "🐋 Docker non trovato, lo installo..."
+  echo "🐋 Docker not found, installing it..."
   curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
   sudo sh /tmp/get-docker.sh
   sudo systemctl enable docker
   sudo systemctl start docker
 else
-  echo "🐋 Docker già installato: $(docker --version)"
+  echo "🐋 Docker already installed: $(docker --version)"
 fi
 
-echo "🧩 Installo docker-compose-plugin (Compose v2, se non c'è)..."
+echo "🧩 Installing docker-compose-plugin (Compose v2, if missing)..."
 sudo apt-get install -y docker-compose-plugin || true
 
 COMPOSE_CMD="docker compose"
 if ! docker compose version >/dev/null 2>&1; then
-  echo "⚠️  docker compose (v2) non disponibile, provo con docker-compose (v1)..."
+  echo "⚠️  docker compose (v2) not available, trying with docker-compose (v1)..."
   sudo apt-get install -y docker-compose || true
   if command -v docker-compose >/dev/null 2>&1; then
     COMPOSE_CMD="docker compose"
   else
-    echo "❌ Nessun Docker Compose disponibile. Controlla APT/mirror."
+    echo "❌ No Docker Compose available. Check APT/mirror."
     exit 1
   fi
 fi
-echo "✅ Userò: $COMPOSE_CMD"
+echo "✅ Will use: $COMPOSE_CMD"
 
-# Gruppo docker per l'utente corrente
+# docker group for current user
 if ! id -nG "$USER" | grep -q '\bdocker\b'; then
-  echo "👥 Aggiungo $USER al gruppo docker (effetto pieno dopo nuovo login)..."
+  echo "👥 Adding $USER to docker group (full effect after new login)..."
   sudo usermod -aG docker "$USER" || true
 fi
 
 ########################################
-# 3) Clona/aggiorna la repo Sailing_ROS (branch main)
+# 3) Clone/update Sailing_ROS repo (main branch)
 ########################################
 
 mkdir -p "$BASE_DIR"
 
-# sistemazione permessi dell'intera repo PRIMA di toccare git
+# fix permissions of the whole repo BEFORE touching git
 if [ -d "$REPO_DIR" ]; then
-  echo "🔑 Sistemazione permessi repo esistente (per git + ros)..."
+  echo "🔑 Fixing permissions for existing repo (for git + ros)..."
   sudo chown -R "$USER":"$USER" "$REPO_DIR"
 fi
 
 if [ -d "$REPO_DIR/.git" ]; then
-  echo "🔄 Repo esistente in $REPO_DIR, allineo a origin/$BRANCH..."
+  echo "🔄 Existing repo in $REPO_DIR, aligning to origin/$BRANCH..."
 
-  # --- Aggiorna il token anche se la repo esiste ---
+  # --- Update the token even if the repo exists ---
   git -C "$REPO_DIR" remote set-url origin "https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git"
 
   git -C "$REPO_DIR" fetch --all --prune
   git -C "$REPO_DIR" checkout -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || true
   git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
 else
-  echo "📥 Clono la repo in $REPO_DIR..."
-  if [ "$GIT_TOKEN" = "INSERISCI_IL_TUO_TOKEN_QUI" ]; then
-    echo "❌ Devi impostare il GIT_TOKEN nello script prima di eseguirlo."
+  echo "📥 Cloning repo into $REPO_DIR..."
+  if [ "$GIT_TOKEN" = "INSERT_YOUR_TOKEN_HERE" ]; then
+    echo "❌ You must set the GIT_TOKEN in the script before running it."
     exit 1
   fi
   git clone -b "$BRANCH" "https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git" "$REPO_DIR"
 fi
 
 ########################################
-# 4) Sistemazione permessi workspace + pulizia build
+# 4) Workspace permissions fix + build cleanup
 ########################################
 
-echo "🔑 Sistemazione permessi ros2_ws per host e container..."
+echo "🔑 Fixing ros2_ws permissions for host and container..."
 if [ -d "$ROS_WS" ]; then
   sudo chown -R "$USER":"$USER" "$ROS_WS"
   sudo chmod -R 777 "$ROS_WS"
 
-  echo "🧹 Pulizia build/install/log precedenti..."
+  echo "🧹 Cleaning previous build/install/log..."
   sudo rm -rf "$ROS_WS/build" "$ROS_WS/install" "$ROS_WS/log"
   mkdir -p "$ROS_WS/log"
   sudo chown -R "$USER":"$USER" "$ROS_WS"
   sudo chmod -R 777 "$ROS_WS"
 else
-  echo "⚠️  Attenzione: ROS_WS non esiste ancora: $ROS_WS"
+  echo "⚠️  Warning: ROS_WS does not exist yet: $ROS_WS"
 fi
 
 ########################################
-# 5) Build & up del container ROS
+# 5) Build & up ROS container
 ########################################
 
 if [ ! -f "$COMPOSE_FILE" ]; then
-  echo "❌ compose.yaml non trovato in: $COMPOSE_FILE"
-  echo "   Controlla che la dir raspi_container esista e che il file si chiami così."
+  echo "❌ compose.yaml not found at: $COMPOSE_FILE"
+  echo "   Check that raspi_container dir exists and file is named correctly."
   exit 1
 fi
 
-echo "🧱 Stop di un eventuale container vecchio..."
+echo "🧱 Stopping any old container..."
 sudo $COMPOSE_CMD -f "$COMPOSE_FILE" down --remove-orphans -v || true
 
-echo "🧹 Rimuovo immagini docker inutilizzate (dangling + non usate)..."
+echo "🧹 Removing unused docker images (dangling + unused)..."
 sudo docker image prune -af || true
 
-echo "⚙️  Build del container ROS (directory: $CONTAINER_DIR)..."
+echo "⚙️  Building ROS container (directory: $CONTAINER_DIR)..."
 cd "$CONTAINER_DIR"
 sudo $COMPOSE_CMD -f "$COMPOSE_FILE" build --no-cache
 
-echo "🚀 Avvio del container ROS in background..."
+echo "🚀 Starting ROS container in background..."
 sudo $COMPOSE_CMD -f "$COMPOSE_FILE" up -d
 
 ########################################
-# 6) colcon build dentro al container
+# 6) colcon build inside container
 ########################################
 
-echo "⏳ Aspetto qualche secondo che il container parta..."
+echo "⏳ Waiting a few seconds for container to start..."
 sleep 5
 
-# Rendo eseguibile lo script DALL'HOST (Raspberry)
-# Così non devo farlo dentro il container dove potrei non avere i permessi.
+# Make script executable FROM THE HOST (Raspberry)
+# So I don't have to do it inside the container where I might lack permissions.
 if [ -f "$ROS_WS/scripts/build.sh" ]; then
-    echo "🔧 Rendo eseguibile build.sh (dall'host)..."
+    echo "🔧 Making build.sh executable (from host)..."
     chmod +x "$ROS_WS/scripts/build.sh"
 else
-    echo "⚠️ Attenzione: Non trovo $ROS_WS/scripts/build.sh"
+    echo "⚠️ Warning: Cannot find $ROS_WS/scripts/build.sh"
 fi
 
-echo "🏗️  Eseguo build.sh dentro al container: $CONTAINER_NAME"
+echo "🏗️  Executing build.sh inside container: $CONTAINER_NAME"
 sudo docker exec "$CONTAINER_NAME" bash -lc \
   "set -eo pipefail && \
    source /opt/ros/jazzy/setup.bash && \
@@ -225,12 +225,12 @@ sudo docker exec "$CONTAINER_NAME" bash -lc \
    ./build.sh"
 
 ########################################
-# 7) Stop e Chiusura
+# 7) Stop and Shutdown
 ########################################
 
-echo "✅ Compilazione completata con successo."
-echo "🛑 Spengo il container di setup..."
+echo "✅ Compilation successfully completed."
+echo "🛑 Stopping setup container..."
 sudo docker compose -f "$COMPOSE_FILE" stop
 
-echo "🎉 SETUP FINITO! Il sistema è pronto ma SPENTO."
-echo "👉 Per avviare usa lo script di RUN."
+echo "🎉 SETUP FINISHED! The system is ready but STOPPED."
+echo "👉 To start use the RUN script."

@@ -1,20 +1,20 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALLATORE: PoliSail Wi-Fi Guardian
+# INSTALLER: Agir Wi-Fi Guardian
 # ==============================================================================
 
-SERVICE_NAME="polisail_wifi_guardian.service"
+SERVICE_NAME="agir_wifi_guardian.service"
 SERVICE_PATH="/etc/systemd/system/$SERVICE_NAME"
-SCRIPT_NAME="polisail_wifi_check.sh"
+SCRIPT_NAME="agir_wifi_check.sh"
 SCRIPT_PATH="/usr/local/bin/$SCRIPT_NAME"
 
 if [ "$EUID" -ne 0 ]; then
-  echo "❌ Errore: Esegui con sudo."
+  echo "❌ Error: Run with sudo."
   exit 1
 fi
 
-echo "⛵ Installazione $SERVICE_NAME..."
+echo "⛵ Installing $SERVICE_NAME..."
 
 if systemctl is-active --quiet "$SERVICE_NAME" || systemctl is-enabled --quiet "$SERVICE_NAME"; then
     systemctl stop "$SERVICE_NAME"
@@ -22,7 +22,7 @@ if systemctl is-active --quiet "$SERVICE_NAME" || systemctl is-enabled --quiet "
 fi
 
 if [ ! -f "./$SCRIPT_NAME" ]; then
-    echo "❌ Errore: ./$SCRIPT_NAME non trovato qui!"
+    echo "❌ Error: ./$SCRIPT_NAME not found here!"
     exit 1
 fi
 
@@ -31,7 +31,7 @@ chmod +x "$SCRIPT_PATH"
 
 cat <<EOF > "$SERVICE_PATH"
 [Unit]
-Description=PoliSail - Wi-Fi Guardian (Check and Inject)
+Description=Agir - Wi-Fi Guardian (Check and Inject)
 After=NetworkManager.service
 Before=network-online.target
 Wants=NetworkManager.service
@@ -49,4 +49,4 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl start "$SERVICE_NAME"
 
-echo "🎉 Installazione Wi-Fi Guardian completata!"
+echo "🎉 Wi-Fi Guardian installation completed!"

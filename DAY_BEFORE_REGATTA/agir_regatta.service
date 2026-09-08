@@ -1,0 +1,15 @@
+[Unit]
+Description=Agir - Regatta autostart (live)
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=simple
+User=agir
+WorkingDirectory=/home/agir/2025_SOFTWARE/sailing_ros/DAY_BEFORE_REGATTA
+ExecStart=/usr/local/bin/agir_regatta_start.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

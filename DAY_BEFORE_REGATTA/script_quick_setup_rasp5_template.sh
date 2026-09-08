@@ -1,58 +1,58 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "🚤 FAST UPDATE RASPBERRY SAILING TEAM — Pull & Build Incrementale"
+echo "🚤 FAST UPDATE RASPBERRY SAILING TEAM — Incremental Pull & Build"
 
 ########################################
-# ⚙️  PARAMETRI
+# ⚙️  PARAMETERS
 ########################################
 
-USER_HOME="/home/barca"
+USER_HOME="/home/agir"
 BASE_DIR="$USER_HOME/2025_SOFTWARE"
-REPO_DIR="$BASE_DIR/Sailing_ROS"
+REPO_DIR="$BASE_DIR/sailing_ros"
 BRANCH="main"
 
 CONTAINER_DIR="$REPO_DIR/Docker/raspi_container"
 COMPOSE_FILE="$CONTAINER_DIR/compose.yaml"
-CONTAINER_NAME="ros-barca"
+CONTAINER_NAME="ros-boat"
 COMPOSE_CMD="docker compose"
 
 ########################################
 
-echo "⬇️ 1) Aggiornamento codice da GitHub..."
+echo "⬇️ 1) Updating code from GitHub..."
 if [ -d "$REPO_DIR/.git" ]; then
-  echo "🔄 Scarico gli aggiornamenti dal main (mantenendo i file locali)..."
+  echo "🔄 Downloading updates from main (keeping local files)..."
   
-  # Usa pull con rebase e autostash: 
-  # Salva le modifiche locali in automatico, aggiorna, e le riapplica sopra al nuovo codice.
+  # Use pull with rebase and autostash: 
+  # Saves local modifications automatically, updates, and reapplies them on top of the new code.
   git -C "$REPO_DIR" pull origin "$BRANCH" --rebase --autostash
 
-  echo "🔓 Allento i permessi della cartella src per il container Docker..."
+  echo "🔓 Relaxing permissions for the src folder for the Docker container..."
   sudo chmod -R 777 "$REPO_DIR/ros2_ws/src"
 
 else
-  echo "❌ Errore: Repo non trovata in $REPO_DIR."
-  echo "👉 Devi prima eseguire lo script di SETUP BASE per inizializzare il sistema!"
+  echo "❌ Error: Repo not found in $REPO_DIR."
+  echo "👉 You must run the BASE SETUP script first to initialize the system!"
   exit 1
 fi
 
-echo "🐳 2) Controllo stato Container Docker..."
-# Controlla se il container è già in esecuzione
+echo "🐳 2) Checking Docker Container status..."
+# Check if the container is already running
 if ! sudo docker ps --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}\$"; then
-  echo "🚀 Il container non è attivo. Lo avvio..."
+  echo "🚀 The container is not active. Starting it..."
   cd "$CONTAINER_DIR"
   sudo $COMPOSE_CMD -f "$COMPOSE_FILE" up -d
-  echo "⏳ Aspetto 3 secondi per l'inizializzazione di ROS..."
+  echo "⏳ Waiting 3 seconds for ROS initialization..."
   sleep 3
 else
-  echo "✅ Container '$CONTAINER_NAME' già in esecuzione. Entro direttamente."
+  echo "✅ Container '$CONTAINER_NAME' already running. Entering directly."
 fi
 
-echo "🏗️ 3) Build incrementale del workspace ROS 2..."
-# Rendiamo eseguibile il build.sh per sicurezza
+echo "🏗️ 3) Incremental build of ROS 2 workspace..."
+# Make build.sh executable for safety
 chmod +x "$REPO_DIR/ros2_ws/scripts/build.sh" 2>/dev/null || true
 
-# Colcon farà una build incrementale super veloce perché non abbiamo cancellato le cartelle build/ e install/
+# Colcon will do a super fast incremental build because we haven't deleted the build/ and install/ folders
 sudo docker exec "$CONTAINER_NAME" bash -lc \
   "set -eo pipefail && \
    source /opt/ros/jazzy/setup.bash && \
@@ -60,13 +60,13 @@ sudo docker exec "$CONTAINER_NAME" bash -lc \
    ./build.sh"
 
 ########################################
-# 4) Chiusura (Opzionale)
+# 4) Shutdown (Optional)
 ########################################
 
-# Se il tuo workflow prevede che dopo la build il sistema debba essere spento in attesa dello script di RUN, lascialo così.
-# Se invece vuoi testarlo subito, puoi commentare la riga qui sotto.
-echo "🛑 Spengo il container..."
+# If your workflow expects the system to be stopped after the build waiting for the RUN script, leave it as is.
+# If you want to test it immediately, you can comment out the line below.
+echo "🛑 Stopping the container..."
 sudo $COMPOSE_CMD -f "$COMPOSE_FILE" stop
 
-echo "🎉 UPDATE COMPLETATO! Codice aggiornato e compilato in tempo record."
-echo "👉 Per avviare il sistema, usa il tuo script di RUN."
+echo "🎉 UPDATE COMPLETED! Code updated and compiled in record time."
+echo "👉 To start the system, use your RUN script."

@@ -2,33 +2,33 @@
 set -euo pipefail
 
 # ==============================================================================
-# PARAMETRI DI CONFIGURAZIONE
+# CONFIGURATION PARAMETERS
 # ==============================================================================
-BASE_DIR="/home/barca/2025_SOFTWARE/Sailing_ROS"
+BASE_DIR="/home/agir/2025_SOFTWARE/sailing_ros"
 COMPOSE_DIR="$BASE_DIR/Docker/raspi_container"
 COMPOSE_FILE="$COMPOSE_DIR/compose.yaml"
-CONTAINER="ros-barca"
+CONTAINER="ros-boat"
 HOST_SCRIPT_PATH="$BASE_DIR/ros2_ws/scripts/run.sh"
 
-# Indirizzo IP da pingare per assicurarsi che la rete sia attiva.
-# Sostituisci 8.8.8.8 con l'IP del router locale se non c'è internet in regata!
+# IP address to ping to ensure the network is up.
+# Replace 8.8.8.8 with the local router's IP if there is no internet during the regatta!
 TARGET_IP="8.8.8.8"
 
-echo "🚀 Avvio Sailing Team ROS System..."
+echo "🚀 Starting Sailing Team ROS System..."
 
 # ------------------------------------------------------------------------------
-# 0. ATTESA CONNESSIONE DI RETE
+# 0. WAITING FOR NETWORK CONNECTION
 # ------------------------------------------------------------------------------
-echo "⏳ Attendo connessione di rete verso $TARGET_IP..."
-# Finché il ping fallisce, aspetta 2 secondi e riprova all'infinito
+echo "⏳ Waiting for network connection to $TARGET_IP..."
+# While ping fails, wait 2 seconds and retry indefinitely
 while ! ping -c 1 -W 2 "$TARGET_IP" &> /dev/null; do
-    echo "⚠️ Rete non ancora pronta. Riprovo tra 2 secondi..."
+    echo "⚠️ Network not ready yet. Retrying in 2 seconds..."
     sleep 2
 done
-echo "✅ Rete connessa e funzionante!"
+echo "✅ Network connected and working!"
 
 # ------------------------------------------------------------------------------
-# 1. PERMESSI E AVVIO DOCKER (Senza sudo!)
+# 1. PERMISSIONS AND DOCKER STARTUP (Without sudo!)
 # ------------------------------------------------------------------------------
 if [ -f "$HOST_SCRIPT_PATH" ]; then
     chmod +x "$HOST_SCRIPT_PATH"
@@ -37,21 +37,21 @@ fi
 cd "$COMPOSE_DIR"
 docker compose -f "$COMPOSE_FILE" up -d
 
-echo "⏳ Attendo container $CONTAINER..."
+echo "⏳ Waiting for container $CONTAINER..."
 for i in {1..30}; do
   if docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true; then
-    echo "✅ Container attivo."
+    echo "✅ Container active."
     break
   fi
   sleep 1
 done
 
 # ------------------------------------------------------------------------------
-# 2. ESECUZIONE DI ROS (Senza sudo!)
+# 2. ROS EXECUTION (Without sudo!)
 # ------------------------------------------------------------------------------
-echo "🔥 Lancio ROS 2 (run.sh live)..."
+echo "🔥 Launching ROS 2 (run.sh live)..."
 
-# Usiamo -i invece di -it perché systemd non ha un terminale (TTY)
+# We use -i instead of -it because systemd does not have a terminal (TTY)
 docker exec -i "$CONTAINER" bash -lc \
   "source /opt/ros/jazzy/setup.bash && \
    cd /home/ros/ros2_ws/scripts && \
