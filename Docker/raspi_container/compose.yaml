@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  jazzy:
+    build: ./
+    image: polisail:jazzy-desktop
+    container_name: ros-barca
+    user: "ros"               # make sure UID/GID match host (see Dockerfile note)
+    environment:
+      - QT_QPA_PLATFORM=wayland
+      - WAYLAND_DISPLAY=wayland-0
+      - XDG_RUNTIME_DIR=/tmp/runtime-ros
+    volumes:
+      - ../../ros2_ws:/home/ros/ros2_ws
+
+      # Wayland socket from host user (usually UID 1000). Adjust path if your UID differs.
+      - /run/user/1000/wayland-0:/run/user/1001/wayland-0
+      # DRI for HW accel (optional but nice)
+      - /dev/dri:/dev/dri
+      # If you still need XWayland apps:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - $HOME/.Xauthority:/home/ros/.Xauthority:ro
+      # Devices and project
+      - /dev:/dev
+    devices:
+      - /dev/ttyAMA0:/dev/ttyAMA0
+    group_add:
+      # prefer names inside container; see Dockerfile to ensure these groups exist
+      - "dialout"
+      - "tty"
+      # if your compose requires numeric IDs, look them up on your host: getent group gpio
+    network_mode: host
+    ipc: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    # command: bash
+    # entrypoint: ""
