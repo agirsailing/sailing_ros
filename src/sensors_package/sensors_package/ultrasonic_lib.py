@@ -58,9 +58,6 @@ class DFRobot_A02_Distance:
   def _check_sum(self, l):
     return (l[0] + l[1] + l[2])&0x00ff
 
-  def _check_sum(self, l):
-    return (l[0] + l[1] + l[2])&0x00ff
-
   def _measure(self):
     data = [0]*4
     i = 0

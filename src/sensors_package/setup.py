@@ -1,5 +1,4 @@
 from setuptools import find_packages, setup
-from glob import glob
 import os
 
 package_name = 'sensors_package'
@@ -18,7 +17,7 @@ setup(
     zip_safe=True,
     maintainer='sumoth',
     maintainer_email='tech@agirsailing.se',
-    description='ROS2 GPS package',
+    description='ROS2 sensors package',
     license='Apache-2.0',
     extras_require={
         'test': [
@@ -28,7 +27,6 @@ setup(
     entry_points={
         'console_scripts': [
             'talker_gps = sensors_package.gps_node:main',
-            'listener_gps = sensors_package.gps_listener:main',
             'talker_ultrasonic = sensors_package.ultrasonic_node:main',
             'talker_filter_ultrasonic = sensors_package.ultrasonic_filter_node:main',
             'talker_imu = sensors_package.imu_node:main',

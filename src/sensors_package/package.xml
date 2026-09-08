@@ -3,7 +3,7 @@
 <package format="3">
   <name>sensors_package</name>
   <version>0.0.0</version>
-  <description>ROS2 GPS package</description>
+  <description>ROS2 sensors package</description>
   <maintainer email="tech@agirsailing.se">sumoth</maintainer>
   <license>Apache-2.0</license>
   <exec_depend>rclpy</exec_depend>

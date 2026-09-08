@@ -7,7 +7,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Range
 
 
-class TreatmentNode(Node):
+class UltrasonicFilterNode(Node):
     def __init__(self):
         super().__init__('ultrasonic_filter_node')
 
@@ -95,7 +95,7 @@ class TreatmentNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = TreatmentNode()
+    node = UltrasonicFilterNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
