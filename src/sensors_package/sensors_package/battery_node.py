@@ -22,7 +22,7 @@ class VoltageNode(Node):
         # self.bus = SMBus(1)
         # self.bus.write_byte(MUX_ADDR, MUX_CHANNEL)
 
-        # --- lgpio setup ---
+        # --- gpio setup ---
         self.chip = lgpio.gpiochip_open(0)
         lgpio.gpio_claim_alert(self.chip, BATTERY_LOW_PIN, lgpio.FALLING_EDGE, lgpio.SET_PULL_UP)
         lgpio.callback(self.chip, BATTERY_LOW_PIN, lgpio.FALLING_EDGE, self._battery_low_cb)
