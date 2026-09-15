@@ -1,0 +1,6 @@
+# Request
+---
+# Response
+bool success
+string error_message
+string effective_bag_name

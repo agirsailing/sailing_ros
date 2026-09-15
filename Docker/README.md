@@ -91,14 +91,19 @@ With the container running and VS Code attached:
     This script builds all ROS 2 packages in the workspace with the project defaults.
 4. You can now start testing the software by running or launching nodes as needed.
 
-The package is named `sensors`. Its launcher is `sensors_launch.py`:
+The workspace run script selects the top-level `orchestrator` launch:
 
 ```bash
 bash /home/ros/ros2_ws/scripts/run.sh live
 ```
 
-The launcher starts two ultrasonic nodes, their filter, GPS and battery monitoring.
-It requires the connected hardware; the PC container is primarily for development.
+Use `replay` instead of `live` for the replay launch. Both orchestrator launches
+are currently empty and will be connected to the package launch files later.
+
+The existing sensor system can be launched separately with
+`ros2 launch sensors sensors_launch.py`. It starts two ultrasonic nodes, their
+filter, GPS and battery monitoring and requires the connected hardware; the PC
+container is primarily for development.
 The IMU executable is installed but is not part of this launcher yet.
 The ultrasonic ports, topics and device IDs are configured in
 `ros2_ws/src/sensors/config/params.yaml`, installed to `share/sensors/config/params.yaml`.
@@ -146,6 +151,16 @@ the `dialout` group. The current GPS code expects `/dev/ttyUSB2`, and the batter
 node expects `/dev/gpiochip0`. The original `/dev/ttyAMA0` device mapping is also
 retained. Verify these and the graphical mount paths against the actual Pi.
 
+The Raspberry Pi image creates `/tmp/runtime-ros` with owner `ros` and permissions
+`700`. Compose mounts the Wayland socket at `/tmp/runtime-ros/wayland-0`, matching
+`XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`. This prepares the container directory;
+access to the mounted socket still depends on the host socket permissions.
+Both teams use the same optional I2C/GPIO group examples. They remain commented
+until the actual host group IDs are known; `dialout` and `tty` are enabled.
+
+Compose inherits both `ENTRYPOINT` and `CMD` from the image. The shared
+entrypoint loads ROS and an existing workspace installation before executing Bash.
+
 The battery node's existing `sudo shutdown` call runs inside the container;
 powering off the host Pi needs a separate host integration and is not implemented
 by this Docker configuration.
@@ -164,9 +179,16 @@ by this Docker configuration.
 - The entrypoint loads ROS and, if available, the built workspace. A fresh container
   can open a shell before the first workspace build.
 - The Dockerfiles install `rclpy`, message types, launch support, PySerial, SMBus2,
-  lgpio and pyubx2. Optional Agir ROS packages are commented out until needed.
-  MQTT/Bluetooth Python integrations remain installed on Raspberry Pi and commented
-  out on PC. Some ROS tools remain dependencies of the PC desktop base image.
+  lgpio and pyubx2. All listed ROS packages are enabled in both Dockerfiles.
+  MQTT/Bluetooth Python integrations are installed on both images; the PC image
+  also installs pandas. The PC uses `osrf/ros:jazzy-desktop-full`; Raspberry Pi uses
+  `ros:jazzy-ros-core-noble`. Both include APT recommended packages, run
+  `apt-get upgrade` and create the workspace with `chmod 777`.
+  Host bind mounts retain their host permissions.
+  Some ROS tools remain dependencies of the PC desktop-full base image.
+  For each platform, the Agir and Polimi Dockerfiles share the same structure and settings, with
+  separate commented sections for each task. Only Agir adds the Python sensor
+  dependencies (`python3-serial`, `python3-smbus2`, `python3-lgpio` and `pyubx2`).
 - The Python package installs its launch and YAML files using `setup.py`, following
   the [ROS 2 package installation pattern](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/Launch/Launch-system.html).
 

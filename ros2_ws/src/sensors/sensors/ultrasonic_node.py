@@ -1,90 +1,149 @@
+# /ros2_ws/src/sensors/sensors/ultrasonic_node.py
 import rclpy
-import sys
-import os
-import csv
-from datetime import datetime, timezone
-
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from sensor_msgs.msg import Range
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-from .ultrasonic_lib import DFRobot_A02_Distance as Board
+from sensors.drivers.ultrasonic_driver import DFRobot_A02_Distance
+from sensors.generated.ros_endpoints import Topics
 
-class CtrlNode(Node):
+
+class UltrasonicNode(Node):
     def __init__(self):
         super().__init__('ultrasonic_node')
 
-        self.declare_parameter('port', '/dev/ttyUSB0')
-        self.declare_parameter('topic', 'ctrl')
-        self.declare_parameter('device_id', 'ultrasonic')
+        # 1. Declare ROS parameters (values are provided by params.yaml).
+        self.declare_parameter('enabled', Parameter.Type.BOOL)
+        self.declare_parameter('endpoint_group', Parameter.Type.STRING)
+        self.declare_parameter('port', Parameter.Type.STRING)
+        self.declare_parameter('baudrate', Parameter.Type.INTEGER)
+        self.declare_parameter('timeout_s', Parameter.Type.DOUBLE)
+        self.declare_parameter('rate_hz', Parameter.Type.DOUBLE)
+        self.declare_parameter('frame_id', Parameter.Type.STRING)
+        self.declare_parameter('min_range_m', Parameter.Type.DOUBLE)
+        self.declare_parameter('max_range_m', Parameter.Type.DOUBLE)
+        self.declare_parameter('field_of_view_rad', Parameter.Type.DOUBLE)
+        self.declare_parameter('qos_depth', Parameter.Type.INTEGER)
 
-        port = self.get_parameter('port').get_parameter_value().string_value
-        topic = self.get_parameter('topic').get_parameter_value().string_value
-        self.device_id = self.get_parameter('device_id').get_parameter_value().string_value
+        # 2. Read parameters.
+        self.enabled = self.get_parameter('enabled').value
+        self.endpoint_group = self.get_parameter('endpoint_group').value
+        self.port = self.get_parameter('port').value
+        self.baudrate = self.get_parameter('baudrate').value
+        self.timeout_s = self.get_parameter('timeout_s').value
+        self.rate_hz = self.get_parameter('rate_hz').value
+        self.frame_id = self.get_parameter('frame_id').value
+        self.min_range_m = self.get_parameter('min_range_m').value
+        self.max_range_m = self.get_parameter('max_range_m').value
+        self.field_of_view_rad = self.get_parameter('field_of_view_rad').value
+        self.qos_depth = self.get_parameter('qos_depth').value
 
-        self.board = Board(port=port)
-        self.board.set_dis_range(0, 4500)
+        # 3. Validate configuration and select the generated topic constant.
+        if self.timeout_s <= 0:
+            raise ValueError('timeout_s must be positive')
+        if self.rate_hz <= 0:
+            raise ValueError('rate_hz must be positive')
+        if self.field_of_view_rad <= 0:
+            raise ValueError('field_of_view_rad must be positive')
+        if self.qos_depth <= 0:
+            raise ValueError('qos_depth must be positive')
+        if not 0 <= self.min_range_m < self.max_range_m:
+            raise ValueError('Invalid ultrasonic measurement range')
 
-        self.publisher_ = self.create_publisher(Range, topic, 10)
+        if self.endpoint_group == 'ULTRASONIC_FRONT_NODE':
+            self.range_topic = Topics.ULTRASONIC_FRONT_NODE.PUB.RANGE
+        elif self.endpoint_group == 'ULTRASONIC_BACK_NODE':
+            self.range_topic = Topics.ULTRASONIC_BACK_NODE.PUB.RANGE
+        else:
+            raise ValueError(f'Unknown endpoint_group: {self.endpoint_group}')
 
-        log_dir = os.path.expanduser("~/ros2_ws/CSVs")
-        os.makedirs(log_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.csv_filepath = os.path.join(log_dir, f"ctrl_{self.device_id}_{timestamp}.csv")
-
-        with open(self.csv_filepath, mode='w', newline='') as f:
-            csv.writer(f).writerow([
-                "timestamp_utc", "device_id",
-                "ride_height_m", "flap_angle_deg", "rudder_deg",
-            ])
-
-        self.get_logger().info(f"{self.device_id} using port {port}")
-        self.timer = self.create_timer(0.3, self.timer_callback)
-
-    def timer_callback(self):
-        distance_mm = self.board.getDistance()
-
-        if self.board.last_operate_status != self.board.STA_OK:
-            if self.board.last_operate_status == self.board.STA_ERR_CHECKSUM:
-                self.get_logger().warn(f"{self.device_id}: checksum error")
-            elif self.board.last_operate_status == self.board.STA_ERR_SERIAL:
-                self.get_logger().error(f"{self.device_id}: serial open failed")
-            elif self.board.last_operate_status == self.board.STA_ERR_DATA:
-                self.get_logger().warn(f"{self.device_id}: no data received")
+        # A disabled sensor does not open a serial port or publish messages.
+        self.sensor = None
+        if not self.enabled:
+            self.get_logger().info(
+                f'Ultrasonic sensor disabled: {self.frame_id}'
+            )
             return
 
-        ride_height_m = round(distance_mm/1000.0, 4)
+        # 4. Distance publisher.
+        self.range_pub = self.create_publisher(
+            Range,
+            self.range_topic,
+            self.qos_depth
+        )
+
+        # 5. Open the sensor driver and set software measurement limits.
+        self.sensor = DFRobot_A02_Distance(
+            self.port,
+            self.baudrate,
+            self.timeout_s
+        )
+        self.sensor.set_dis_range(
+            self.min_range_m * 1000,
+            self.max_range_m * 1000
+        )
+
+        # 6. Timer for reading and publishing the distance.
+        self.distance_timer = self.create_timer(
+            1.0 / self.rate_hz,
+            self.publish_distance
+        )
+
+        self.get_logger().info(
+            f'Ultrasonic node initialized: {self.port} -> {self.range_topic}, '
+            f'reading at {self.rate_hz} Hz'
+        )
+
+    # -----------------------
+    #   Read and publish distance
+    # -----------------------
+    def publish_distance(self):
+        try:
+            distance_mm = self.sensor.getDistance()
+        except OSError as error:
+            self.get_logger().warning(f'Ultrasonic read failed: {error}')
+            return
+
+        if self.sensor.last_operate_status != self.sensor.STA_OK:
+            self.get_logger().warning(
+                'Ultrasonic measurement rejected: '
+                f'{self.sensor.last_operate_status}'
+            )
+            return
 
         msg = Range()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = self.device_id
+        msg.header.frame_id = self.frame_id
         msg.radiation_type = Range.ULTRASOUND
-        msg.field_of_view = 0.1
-        msg.min_range = 0.0
-        msg.max_range = 4.5
-        msg.range = ride_height_m
+        msg.min_range = self.min_range_m
+        msg.max_range = self.max_range_m
+        msg.field_of_view = self.field_of_view_rad
+        msg.range = distance_mm / 1000.0
 
-        self.publisher_.publish(msg)
+        self.range_pub.publish(msg)
 
-        self.get_logger().info(f"{self.device_id}: publishing {msg.range} m")
+    # -----------------------
+    #   Release the serial connection
+    # -----------------------
+    def destroy_node(self):
+        if self.sensor is not None:
+            self.sensor.close()
+        return super().destroy_node()
 
-        utc = datetime.now(timezone.utc).isoformat()
-        with open(self.csv_filepath, mode='a', newline='') as f:
-            csv.writer(f).writerow([
-                utc, self.device_id,
-                ride_height_m, float('nan'), float('nan'),
-            ])
 
 def main(args=None):
     rclpy.init(args=args)
-    node = CtrlNode()
+    node = None
     try:
+        node = UltrasonicNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
+        if node is not None:
+            node.destroy_node()
         rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

@@ -1,0 +1,32 @@
+# /ros2_ws/src/sensors/config/endpoints.yaml
+# Source of truth for sensor output topics.
+meta:
+  generate:
+    cpp: false
+    python: true
+
+topics:
+  ultrasonic_front: "/ultrasonic/front"
+  ultrasonic_back: "/ultrasonic/back"
+  gps_data: "/gps/data"
+  imu_data: "/imu/data"
+  compass_data: "/compass/data"
+  battery_data: "/battery/data"
+
+nodes:
+  ultrasonic_front_node:
+    pub:
+      range: "@ultrasonic_front"
+  ultrasonic_back_node:
+    pub:
+      range: "@ultrasonic_back"
+  gps_node:
+    pub:
+      gps_raw: "@gps_data"
+  i2c_sensors_node:
+    pub:
+      imu_raw: "@imu_data"
+      compass_raw: "@compass_data"
+  battery_node:
+    pub:
+      battery_low: "@battery_data"

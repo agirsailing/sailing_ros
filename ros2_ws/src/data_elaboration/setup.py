@@ -23,7 +23,12 @@ setup(
     description='Sensor data processing for the Agir Sailing Team',
     license='Apache-2.0',
     entry_points={
-        # Register future nodes as: name_node = package_name.name_node:main
-        'console_scripts': [],
+        'console_scripts': [
+            'ultrasonic_filter_node = data_elaboration.ultrasonic_filter_node:main',
+            'imu_node = data_elaboration.imu_node:main',
+            'heading_node = data_elaboration.heading_node:main',
+            'battery_monitor_node = data_elaboration.battery_monitor_node:main',
+            'csv_logger_node = data_elaboration.csv_logger_node:main',
+        ],
     },
 )

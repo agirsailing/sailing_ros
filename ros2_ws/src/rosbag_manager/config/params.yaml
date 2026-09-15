@@ -1,0 +1,5 @@
+rosbag_manager_node:
+  ros__parameters:
+    bag_prefix: "rosbag2_"
+    sigint_timeout: 5.0
+    # Omit record_dir to use ~/ros2_ws/rosbags/raw_recordings.

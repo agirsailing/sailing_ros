@@ -1,2 +1,41 @@
-# Add node_name_node sections with ros__parameters when nodes are implemented.
-{}
+# Processing configuration for nodes in data_elaboration.
+ultrasonic_filter_node:
+  ros__parameters:
+    max_pair_dt_s: 0.05
+    frame_id: ultrasonic_mean
+    qos_depth: 10
+
+imu_node:
+  ros__parameters:
+    calibration_samples: 200
+    gravity_mps2: 9.80665
+    complementary_alpha: 0.98
+    max_sample_dt_s: 0.2
+    qos_depth: 10
+
+heading_node:
+  ros__parameters:
+    rate_hz: 10.0
+    gps_speed_threshold_mps: 0.5
+    max_input_age_s: 1.0
+    # Compass axes/bias must be checked against the installed sensor.
+    compass_x_sign: 1.0
+    compass_y_sign: 1.0
+    compass_x_bias: 0.0
+    compass_y_bias: 0.0
+    heading_offset_deg: 0.0
+    qos_depth: 10
+
+battery_monitor_node:
+  ros__parameters:
+    shutdown_enabled: true
+    low_samples_required: 1
+    # Preserves the existing shutdown request; host behaviour depends on Docker.
+    shutdown_command: [sudo, shutdown, "-h", now]
+    qos_depth: 10
+
+csv_logger_node:
+  ros__parameters:
+    enabled: true
+    directory: ~/ros2_ws/CSVs
+    qos_depth: 10

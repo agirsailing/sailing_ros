@@ -1,0 +1,24 @@
+# Sensor inputs are imported from sensors.generated.ros_endpoints.
+# Do not duplicate the sensor topic strings here.
+meta:
+  generate:
+    cpp: false
+    python: true
+
+topics:
+  ultrasonic_mean: /ctrl_mean
+  imu_processed: /imu/data
+  heading_deg: /navigation/heading_deg
+  gps_summary: /gps
+
+nodes:
+  ultrasonic_filter_node:
+    pub:
+      mean: "@ultrasonic_mean"
+  imu_node:
+    pub:
+      imu: "@imu_processed"
+  heading_node:
+    pub:
+      heading_deg: "@heading_deg"
+      gps_summary: "@gps_summary"

@@ -1,12 +1,77 @@
-# Keys must match the node names in sensors_launch.py.
-ultrasonic_left_node:
+# Acquisition configuration for nodes in the sensors package.
+# Topic names live exclusively in each package's endpoints.yaml.
+ultrasonic_front_node:
   ros__parameters:
+    enabled: true
+    # Provisional USB assignment; confirm against the installed hardware.
+    endpoint_group: ULTRASONIC_FRONT_NODE
     port: /dev/ttyUSB0
-    topic: ctrl_raw_left
-    device_id: ultrasonic_left
+    baudrate: 9600
+    timeout_s: 0.1
+    rate_hz: 3.3333333333333335
+    frame_id: ultrasonic_front
+    min_range_m: 0.0
+    max_range_m: 4.5
+    field_of_view_rad: 0.1
+    qos_depth: 10
 
-ultrasonic_right_node:
+ultrasonic_back_node:
   ros__parameters:
+    # Enable only if the rear sensor is installed.
+    enabled: false
+    # Provisional USB assignment; confirm before enabling.
+    endpoint_group: ULTRASONIC_BACK_NODE
     port: /dev/ttyUSB1
-    topic: ctrl_raw_right
-    device_id: ultrasonic_right
+    baudrate: 9600
+    timeout_s: 0.1
+    rate_hz: 3.3333333333333335
+    frame_id: ultrasonic_back
+    min_range_m: 0.0
+    max_range_m: 4.5
+    field_of_view_rad: 0.1
+    qos_depth: 10
+
+gps_node:
+  ros__parameters:
+    port: /dev/ttyUSB2
+    baudrate: 230400
+    timeout_s: 0.1
+    rate_hz: 10.0
+    frame_id: gps
+    qos_depth: 10
+
+i2c_sensors_node:
+  ros__parameters:
+    bus: 1
+    mux_address: 0x70
+    mux_channel_count: 4
+    qos_depth: 10
+    retry_interval_s: 2.0
+    imu:
+      enabled: true
+      channel: 2
+      address: 0x6A
+      frame_id: imu
+      rate_hz: 50.0
+      odr_hz: 104.0
+      accel_range_g: 4
+      gyro_range_dps: 500
+    compass:
+      enabled: true
+      channel: 0
+      address: 0x0E
+      frame_id: compass
+      rate_hz: 10.0
+      reset_value: 0x01
+      measurement_value: 0x01
+      reset_delay_s: 0.1
+      conversion_delay_s: 0.02
+
+battery_node:
+  ros__parameters:
+    gpio_chip: 0
+    gpio_line: 13
+    active_level: 0
+    pull: up
+    rate_hz: 10.0
+    qos_depth: 10

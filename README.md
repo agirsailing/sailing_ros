@@ -6,13 +6,28 @@ ROS 2 Jazzy workspace for the KTH Agir Sailing Team.
 - Sensor package: `ros2_ws/src/sensors`
 - Web communication package: `ros2_ws/src/communication_web`
 - Data processing package: `ros2_ws/src/data_elaboration`
+- Shared messages and services: `ros2_ws/src/sail_msgs`
+- Live and replay launch package: `ros2_ws/src/orchestrator`
 
 Inside the configured container:
 
 ```bash
 bash /home/ros/ros2_ws/scripts/build.sh
 bash /home/ros/ros2_ws/scripts/run.sh live
+bash /home/ros/ros2_ws/scripts/run.sh replay
 ```
 
-The launch requires the actual ultrasonic, GPS, I2C and GPIO hardware.
-The IMU node is available separately and is not launched by default.
+The build script cleans previous artifacts, loads ROS Jazzy, runs
+`tools/gen_endpoints.py`, builds `sail_msgs`, then builds the complete workspace.
+Set `PARALLEL_WORKERS` to override the default of two workers.
+
+The run script selects the corresponding launch in `orchestrator` and forwards
+additional ROS launch arguments. Both modes now include sensor acquisition and
+data processing. The live and replay sensor launches are intentionally identical
+for now: both require the actual ultrasonic, GPS, I2C and GPIO hardware.
+Replay does not start the battery shutdown policy and is not yet a bag-only mode.
+
+Acquisition parameters live in `sensors/config/params.yaml`; processing parameters
+live in `data_elaboration/config/params.yaml`. Each package's `endpoints.yaml`
+defines its output topic names. Processing imports the generated sensor constants
+for its inputs. See the package READMEs for the wiring and current limitations.

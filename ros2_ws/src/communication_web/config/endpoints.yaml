@@ -1,0 +1,39 @@
+# /ros2_ws/src/communication_web/config/endpoints.yaml
+# AUTO: single source of truth per topic names + “wiring” per nodo.
+# Nota: i valori tipo "@imu_data" sono reference a "topics.<key>".
+
+# /ros2_ws/src/can_bus/config/endpoints.yaml
+meta:
+  generate:
+    cpp: false
+    python: true
+
+topics:
+  # ====== INPUT (comandi esterni) ======
+  can_command: "/can_command"
+
+  # ====== INPUT (replay mode) ======
+  serial_raw_rx: "/serial/raw_rx" # Usato sia come SUB (Replay) che PUB (Live)
+
+  # ====== OUTPUT (dati parsati) ======
+  imu_data: "/imu_data"
+  wand_angle: "/wand_angle"
+  windex_data: "/windex_data"
+  local_cmd_update: "/local_cmd/update" # Nuovo topic per i comandi da pulsantiera
+  ultrasound_data: "/ultrasound_data" # Nuovo topic per i dati degli ultrasuoni
+
+nodes:
+  central_node:
+    sub:
+      # In modalità replay ascolta serial_raw_rx
+      # In modalità live ascolta can_command
+      serial_raw_rx: "@serial_raw_rx"
+      can_command: "@can_command"
+    pub:
+      # In modalità live pubblica serial_raw_rx
+      serial_raw_rx: "@serial_raw_rx"
+      imu_data: "@imu_data"
+      wand_angle: "@wand_angle"
+      windex_data: "@windex_data"
+      local_cmd_update: "@local_cmd_update"
+      ultrasound_data: "@ultrasound_data"

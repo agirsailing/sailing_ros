@@ -2,7 +2,7 @@ name: agir-raspi
 
 services:
   jazzy:
-    build: .
+    build: ./
     image: agirsailing:jazzy-raspi
     container_name: agir-ros-raspi
     user: "ros"
@@ -15,6 +15,7 @@ services:
       - ../../ros2_ws:/home/ros/ros2_ws
       # Match the host desktop user; the target follows XDG_RUNTIME_DIR.
       - /run/user/1000/wayland-0:/tmp/runtime-ros/wayland-0
+      # GPU acceleration and X11 access.
       - /dev/dri:/dev/dri
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
@@ -25,8 +26,9 @@ services:
     group_add:
       - "dialout"
       - "tty"
-      # Match host device ownership (check with: stat -c '%g' /dev/i2c-1).
-      # Uncomment after setting these to the actual host device group IDs.
+      # Optional host device groups; uncomment after setting the actual IDs.
+      # I2C_GID: stat -c '%g' /dev/i2c-1
+      # GPIO_GID: stat -c '%g' /dev/gpiochip0
       # - "${I2C_GID}"
       # - "${GPIO_GID}"
     network_mode: host
@@ -34,4 +36,3 @@ services:
     privileged: true
     stdin_open: true
     tty: true
-    command: bash

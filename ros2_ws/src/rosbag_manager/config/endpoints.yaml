@@ -1,0 +1,20 @@
+# /ros2_ws/src/rosbag_manager/config/endpoints.yaml
+meta:
+  generate:
+    cpp: false
+    python: true
+
+topics:
+  recording_state: "/local_state/recording_state"
+
+services:
+  start_recording: "/local_cmd/start_recording"
+  stop_recording: "/local_cmd/stop_recording"
+
+nodes:
+  rosbag_manager_node:
+    srv:
+      start_recording: "@start_recording"
+      stop_recording: "@stop_recording"
+    pub:
+      recording_state: "@recording_state"
