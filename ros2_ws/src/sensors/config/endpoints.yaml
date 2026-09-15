@@ -22,11 +22,11 @@ nodes:
       range: "@ultrasonic_back"
   gps_node:
     pub:
-      gps_raw: "@gps_data"
+      gps_data: "@gps_data"
   i2c_sensors_node:
     pub:
-      imu_raw: "@imu_data"
-      compass_raw: "@compass_data"
+      imu_data: "@imu_data"
+      compass_data: "@compass_data"
   battery_node:
     pub:
-      battery_low: "@battery_data"
+      battery_data: "@battery_data"

@@ -12,50 +12,26 @@ class UltrasonicNode(Node):
     def __init__(self):
         super().__init__('ultrasonic_node')
 
-        # 1. Declare ROS parameters (values are provided by params.yaml).
-        self.declare_parameter('enabled', Parameter.Type.BOOL)
-        self.declare_parameter('endpoint_group', Parameter.Type.STRING)
-        self.declare_parameter('port', Parameter.Type.STRING)
-        self.declare_parameter('baudrate', Parameter.Type.INTEGER)
-        self.declare_parameter('timeout_s', Parameter.Type.DOUBLE)
-        self.declare_parameter('rate_hz', Parameter.Type.DOUBLE)
-        self.declare_parameter('frame_id', Parameter.Type.STRING)
-        self.declare_parameter('min_range_m', Parameter.Type.DOUBLE)
-        self.declare_parameter('max_range_m', Parameter.Type.DOUBLE)
-        self.declare_parameter('field_of_view_rad', Parameter.Type.DOUBLE)
-        self.declare_parameter('qos_depth', Parameter.Type.INTEGER)
+        # 1. Declare and read ROS parameters (values come from params.yaml).
+        self.enabled = self.declare_parameter('enabled', Parameter.Type.BOOL).value
+        self.endpoint_group = self.declare_parameter('endpoint_group', Parameter.Type.STRING).value
+        self.port = self.declare_parameter('port', Parameter.Type.STRING).value
+        self.baudrate = self.declare_parameter('baudrate', Parameter.Type.INTEGER).value
+        self.timeout_s = self.declare_parameter('timeout_s', Parameter.Type.DOUBLE).value
+        self.rate_hz = self.declare_parameter('rate_hz', Parameter.Type.DOUBLE).value
+        self.frame_id = self.declare_parameter('frame_id', Parameter.Type.STRING).value
+        self.min_range_m = self.declare_parameter('min_range_m', Parameter.Type.DOUBLE).value
+        self.max_range_m = self.declare_parameter('max_range_m', Parameter.Type.DOUBLE).value
+        self.field_of_view_rad = self.declare_parameter('field_of_view_rad', Parameter.Type.DOUBLE).value
+        self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
 
-        # 2. Read parameters.
-        self.enabled = self.get_parameter('enabled').value
-        self.endpoint_group = self.get_parameter('endpoint_group').value
-        self.port = self.get_parameter('port').value
-        self.baudrate = self.get_parameter('baudrate').value
-        self.timeout_s = self.get_parameter('timeout_s').value
-        self.rate_hz = self.get_parameter('rate_hz').value
-        self.frame_id = self.get_parameter('frame_id').value
-        self.min_range_m = self.get_parameter('min_range_m').value
-        self.max_range_m = self.get_parameter('max_range_m').value
-        self.field_of_view_rad = self.get_parameter('field_of_view_rad').value
-        self.qos_depth = self.get_parameter('qos_depth').value
-
-        # 3. Validate configuration and select the generated topic constant.
-        if self.timeout_s <= 0:
-            raise ValueError('timeout_s must be positive')
-        if self.rate_hz <= 0:
-            raise ValueError('rate_hz must be positive')
-        if self.field_of_view_rad <= 0:
-            raise ValueError('field_of_view_rad must be positive')
-        if self.qos_depth <= 0:
-            raise ValueError('qos_depth must be positive')
-        if not 0 <= self.min_range_m < self.max_range_m:
-            raise ValueError('Invalid ultrasonic measurement range')
+        # 2. Validate configuration and select the generated topic constant.
+        self._validate_parameters()
 
         if self.endpoint_group == 'ULTRASONIC_FRONT_NODE':
             self.range_topic = Topics.ULTRASONIC_FRONT_NODE.PUB.RANGE
-        elif self.endpoint_group == 'ULTRASONIC_BACK_NODE':
-            self.range_topic = Topics.ULTRASONIC_BACK_NODE.PUB.RANGE
         else:
-            raise ValueError(f'Unknown endpoint_group: {self.endpoint_group}')
+            self.range_topic = Topics.ULTRASONIC_BACK_NODE.PUB.RANGE
 
         # A disabled sensor does not open a serial port or publish messages.
         self.sensor = None
@@ -65,14 +41,14 @@ class UltrasonicNode(Node):
             )
             return
 
-        # 4. Distance publisher.
+        # 3. Distance publisher.
         self.range_pub = self.create_publisher(
             Range,
             self.range_topic,
             self.qos_depth
         )
 
-        # 5. Open the sensor driver and set software measurement limits.
+        # 4. Open the sensor driver and set software measurement limits.
         self.sensor = DFRobot_A02_Distance(
             self.port,
             self.baudrate,
@@ -83,7 +59,7 @@ class UltrasonicNode(Node):
             self.max_range_m * 1000
         )
 
-        # 6. Timer for reading and publishing the distance.
+        # 5. Timer for reading and publishing the distance.
         self.distance_timer = self.create_timer(
             1.0 / self.rate_hz,
             self.publish_distance
@@ -93,6 +69,27 @@ class UltrasonicNode(Node):
             f'Ultrasonic node initialized: {self.port} -> {self.range_topic}, '
             f'reading at {self.rate_hz} Hz'
         )
+
+    # -----------------------
+    #   Validate ROS parameters
+    # -----------------------
+    def _validate_parameters(self):
+        # Typed declarations can return None if a YAML entry is missing.
+        # Reading all declared parameters raises a clear ROS error in that case.
+        self.get_parameters(self.list_parameters([], depth=0).names)
+
+        if self.endpoint_group not in ('ULTRASONIC_FRONT_NODE', 'ULTRASONIC_BACK_NODE'):
+            raise ValueError(f'Unknown endpoint_group: {self.endpoint_group}')
+        if self.timeout_s <= 0:
+            raise ValueError('timeout_s must be positive')
+        if self.rate_hz <= 0:
+            raise ValueError('rate_hz must be positive')
+        if self.field_of_view_rad <= 0:
+            raise ValueError('field_of_view_rad must be positive')
+        if self.qos_depth <= 0:
+            raise ValueError('qos_depth must be positive')
+        if not 0 <= self.min_range_m < self.max_range_m:
+            raise ValueError('Invalid ultrasonic measurement range')
 
     # -----------------------
     #   Read and publish distance

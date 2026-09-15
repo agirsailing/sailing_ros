@@ -19,13 +19,13 @@ class Topics:
 
     class GPS_NODE:
         class PUB:
-            GPS_RAW = '/gps/data'
+            GPS_DATA = '/gps/data'
 
     class I2C_SENSORS_NODE:
         class PUB:
-            IMU_RAW = '/imu/data'
-            COMPASS_RAW = '/compass/data'
+            IMU_DATA = '/imu/data'
+            COMPASS_DATA = '/compass/data'
 
     class BATTERY_NODE:
         class PUB:
-            BATTERY_LOW = '/battery/data'
+            BATTERY_DATA = '/battery/data'
