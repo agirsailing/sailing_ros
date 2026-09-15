@@ -10,6 +10,8 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>sensors</exec_depend>
   <exec_depend>data_elaboration</exec_depend>
+  <exec_depend>communication_web</exec_depend>
+  <exec_depend>rosbag_manager</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

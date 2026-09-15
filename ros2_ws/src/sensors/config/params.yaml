@@ -1,31 +1,31 @@
 # Acquisition configuration for nodes in the sensors package.
 # Topic names live exclusively in each package's endpoints.yaml.
-ultrasonic_front_node:
+ultrasonic_left_node:
   ros__parameters:
     enabled: true
     # Provisional USB assignment; confirm against the installed hardware.
-    endpoint_group: ULTRASONIC_FRONT_NODE
+    endpoint_group: ULTRASONIC_LEFT_NODE
     port: /dev/ttyUSB0
     baudrate: 9600
     timeout_s: 0.1
     rate_hz: 3.3333333333333335
-    frame_id: ultrasonic_front
+    frame_id: ultrasonic_left
     min_range_m: 0.0
     max_range_m: 4.5
     field_of_view_rad: 0.1
     qos_depth: 10
 
-ultrasonic_back_node:
+ultrasonic_right_node:
   ros__parameters:
-    # Enable only if the rear sensor is installed.
-    enabled: false
-    # Provisional USB assignment; confirm before enabling.
-    endpoint_group: ULTRASONIC_BACK_NODE
+    # Both bow sensors are enabled for attitude-dependent fusion.
+    enabled: true
+    # Provisional USB assignment; confirm against the installed hardware.
+    endpoint_group: ULTRASONIC_RIGHT_NODE
     port: /dev/ttyUSB1
     baudrate: 9600
     timeout_s: 0.1
     rate_hz: 3.3333333333333335
-    frame_id: ultrasonic_back
+    frame_id: ultrasonic_right
     min_range_m: 0.0
     max_range_m: 4.5
     field_of_view_rad: 0.1

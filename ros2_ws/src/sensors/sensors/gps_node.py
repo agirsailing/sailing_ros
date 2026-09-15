@@ -29,7 +29,7 @@ class GPSNode(Node):
         # 3. GPS data publisher.
         self.gps_pub = self.create_publisher(
             GpsData,
-            Topics.GPS_NODE.PUB.GPS_RAW,
+            Topics.GPS_NODE.PUB.GPS_DATA,
             self.qos_depth
         )
 

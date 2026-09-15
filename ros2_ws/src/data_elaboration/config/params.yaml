@@ -1,17 +1,68 @@
 # Processing configuration for nodes in data_elaboration.
 ultrasonic_filter_node:
   ros__parameters:
-    max_pair_dt_s: 0.05
-    frame_id: ultrasonic_mean
+    # Origin: fixed design-waterline point below the centre of mass.
+    # FLU coordinates [forward, left, up], metres, measured from that origin.
+    # REPLACE zero positions with measured bowsprit mounting coordinates.
+    left:
+      position_m: [0.0, 0.0, 0.0]
+      lateral_tilt_deg: 15.0
+      forward_tilt_deg: 0.0
+      frame_id: ultrasonic_left
+    right:
+      position_m: [0.0, 0.0, 0.0]
+      lateral_tilt_deg: -15.0
+      forward_tilt_deg: 0.0
+      frame_id: ultrasonic_right
+    # imu_mount_transformer_node aligns mounting axes before attitude estimation.
+    attitude_frame_id: imu_link_flu
+    reference_frame_id: boat_waterline
+    # Use ROS time; bag replay requires matching use_sim_time and /clock.
+    max_range_age_s: 0.5
+    max_attitude_age_s: 0.1
+    max_pair_dt_s: 0.15
+    # Reject beams farther than this angle from world-down.
+    max_incidence_deg: 60.0
+    # w = cos(incidence)^power; heuristic to tune against water measurements.
+    incidence_weight_power: 8.0
+    # On disagreement prefer the more vertical beam; suppress an equal-angle tie.
+    max_disagreement_m: 0.25
     qos_depth: 10
 
 imu_node:
   ros__parameters:
+    frame_base: base_link
+    frame_imu: imu
+    frame_robotic: imu_link_flu
+    frame_aero: imu_link_frd
+    # Mounting: sensor pose in base_link, [x, y, z, roll, pitch, yaw], m/deg.
+    # Current assumption: IMU is close to the COM; neglect the lever arm for now.
+    # Zero position approximates colocated mounting; rotation still needs confirmation.
+    tf_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    # Colocated aerospace axes: forward, right, down. This defines the convention.
+    tf_offset_aero: [0.0, 0.0, 0.0, 180.0, 0.0, 0.0]
+    # Complete the local up-to-down world conversion after the aero transformer.
+    world_rotation_rpy_deg: [180.0, 0.0, 0.0]
+    # Isotropic variances in robotic axes; zero means not yet characterized.
+    cov_orient: 0.0
+    cov_vel: 0.0
+    cov_acc: 0.0
     calibration_samples: 200
     gravity_mps2: 9.80665
     complementary_alpha: 0.98
     max_sample_dt_s: 0.2
     qos_depth: 10
+
+# target_frame must match imu_node.frame_robotic.
+imu_mount_transformer_node:
+  ros__parameters:
+    target_frame: imu_link_flu
+
+# This transformer changes body axes, retaining the original world reference.
+# target_frame must match imu_node.frame_aero.
+imu_aero_transformer_node:
+  ros__parameters:
+    target_frame: imu_link_frd
 
 heading_node:
   ros__parameters:
@@ -32,10 +83,4 @@ battery_monitor_node:
     low_samples_required: 1
     # Preserves the existing shutdown request; host behaviour depends on Docker.
     shutdown_command: [sudo, shutdown, "-h", now]
-    qos_depth: 10
-
-csv_logger_node:
-  ros__parameters:
-    enabled: true
-    directory: ~/ros2_ws/CSVs
     qos_depth: 10

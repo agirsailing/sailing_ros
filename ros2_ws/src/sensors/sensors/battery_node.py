@@ -27,7 +27,7 @@ class BatteryNode(Node):
         # 3. Low-battery state publisher.
         self.battery_pub = self.create_publisher(
             Bool,
-            Topics.BATTERY_NODE.PUB.BATTERY_LOW,
+            Topics.BATTERY_NODE.PUB.BATTERY_DATA,
             self.qos_depth
         )
 

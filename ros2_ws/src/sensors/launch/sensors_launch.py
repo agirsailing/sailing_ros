@@ -15,9 +15,9 @@ def generate_launch_description():
             default_value=PathJoinSubstitution([
                 FindPackageShare('sensors'), 'config', 'params.yaml'])),
         Node(package='sensors', executable='ultrasonic_node',
-             name='ultrasonic_front_node', parameters=[params], output='screen'),
+             name='ultrasonic_left_node', parameters=[params], output='screen'),
         Node(package='sensors', executable='ultrasonic_node',
-             name='ultrasonic_back_node', parameters=[params], output='screen'),
+             name='ultrasonic_right_node', parameters=[params], output='screen'),
         Node(package='sensors', executable='gps_node',
              name='gps_node', parameters=[params], output='screen'),
         Node(package='sensors', executable='i2c_sensors_node',

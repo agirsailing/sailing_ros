@@ -2,20 +2,20 @@
 
 class Topics:
     class Shared:
-        ULTRASONIC_FRONT = '/ultrasonic/front'
-        ULTRASONIC_BACK = '/ultrasonic/back'
+        ULTRASONIC_LEFT = '/ultrasonic/left'
+        ULTRASONIC_RIGHT = '/ultrasonic/right'
         GPS_DATA = '/gps/data'
         IMU_DATA = '/imu/data'
         COMPASS_DATA = '/compass/data'
         BATTERY_DATA = '/battery/data'
 
-    class ULTRASONIC_FRONT_NODE:
+    class ULTRASONIC_LEFT_NODE:
         class PUB:
-            RANGE = '/ultrasonic/front'
+            RANGE = '/ultrasonic/left'
 
-    class ULTRASONIC_BACK_NODE:
+    class ULTRASONIC_RIGHT_NODE:
         class PUB:
-            RANGE = '/ultrasonic/back'
+            RANGE = '/ultrasonic/right'
 
     class GPS_NODE:
         class PUB:

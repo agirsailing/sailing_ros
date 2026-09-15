@@ -28,7 +28,6 @@ setup(
             'imu_node = data_elaboration.imu_node:main',
             'heading_node = data_elaboration.heading_node:main',
             'battery_monitor_node = data_elaboration.battery_monitor_node:main',
-            'csv_logger_node = data_elaboration.csv_logger_node:main',
         ],
     },
 )

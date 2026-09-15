@@ -1,4 +1,4 @@
-"""Start the live sensor and processing pipelines."""
+"""Start every live package pipeline, including the recording manager."""
 
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
@@ -15,4 +15,10 @@ def generate_launch_description():
         IncludeLaunchDescription(PythonLaunchDescriptionSource(
             PathJoinSubstitution([FindPackageShare('data_elaboration'),
                                   'launch', 'live_data_elaboration.launch.py']))),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource(
+            PathJoinSubstitution([FindPackageShare('communication_web'),
+                                  'launch', 'live_communication.launch.py']))),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource(
+            PathJoinSubstitution([FindPackageShare('rosbag_manager'),
+                                  'launch', 'live_rosbag_manager.launch.py']))),
     ])

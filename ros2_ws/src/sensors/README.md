@@ -1,7 +1,7 @@
 # Sensors
 
 Hardware acquisition only. Nodes publish measurements; calibration, filtering,
-heading selection, CSV logging and shutdown policy belong to data_elaboration.
+heading selection and shutdown policy belong to data_elaboration.
 
 ## Configuration and endpoints
 
@@ -12,18 +12,18 @@ heading selection, CSV logging and shutdown policy belong to data_elaboration.
   and by downstream packages. build.sh regenerates it before colcon.
 - Register addresses, protocol frames and SI unit conversions remain in drivers:
   they define the protocol rather than the installation configuration.
-- The front/back ultrasonic instances select their generated endpoint group from YAML.
-  Front is enabled. Back is optional and defaults to enabled: false: its node
-  stays idle without opening the serial port, creating a publisher or a timer.
-  Set ultrasonic_back_node.ros__parameters.enabled to true when installed.
-  ttyUSB0 (front) and ttyUSB1 (back) are provisional assignments, not verified wiring.
+- The left/right bow sensors select generated endpoint groups from YAML.
+  Both are enabled. Set enabled: false for an absent sensor; the height estimator
+  can use a single valid sensor. ttyUSB0 (left) and ttyUSB1 (right) are provisional
+  assignments, not verified wiring. Beam angles and mounting positions belong
+  to data_elaboration/config/params.yaml; acquisition publishes slant ranges.
 
 ## Acquisition
 
 | Node | Interface | Message / topic |
 | --- | --- | --- |
-| ultrasonic_front_node | ttyUSB0 | sensor_msgs/Range /ultrasonic/front (m) |
-| ultrasonic_back_node | ttyUSB1 | sensor_msgs/Range /ultrasonic/back (m) |
+| ultrasonic_left_node | ttyUSB0 | sensor_msgs/Range /ultrasonic/left (m) |
+| ultrasonic_right_node | ttyUSB1 | sensor_msgs/Range /ultrasonic/right (m) |
 | gps_node | ttyUSB2, NAV-PVT | sail_msgs/GpsData /gps/data |
 | i2c_sensors_node | bus 1, mux 0x70, channel 2 | sensor_msgs/Imu /imu/data |
 | i2c_sensors_node | same mux, channel 0 | geometry_msgs/Vector3Stamped /compass/data |

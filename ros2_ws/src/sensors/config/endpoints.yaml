@@ -6,20 +6,20 @@ meta:
     python: true
 
 topics:
-  ultrasonic_front: "/ultrasonic/front"
-  ultrasonic_back: "/ultrasonic/back"
+  ultrasonic_left: "/ultrasonic/left"
+  ultrasonic_right: "/ultrasonic/right"
   gps_data: "/gps/data"
   imu_data: "/imu/data"
   compass_data: "/compass/data"
   battery_data: "/battery/data"
 
 nodes:
-  ultrasonic_front_node:
+  ultrasonic_left_node:
     pub:
-      range: "@ultrasonic_front"
-  ultrasonic_back_node:
+      range: "@ultrasonic_left"
+  ultrasonic_right_node:
     pub:
-      range: "@ultrasonic_back"
+      range: "@ultrasonic_right"
   gps_node:
     pub:
       gps_data: "@gps_data"

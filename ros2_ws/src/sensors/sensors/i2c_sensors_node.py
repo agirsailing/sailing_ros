@@ -68,14 +68,14 @@ class I2CSensorsNode(Node):
             if self.imu_enabled:
                 self.imu_pub = self.create_publisher(
                     Imu,
-                    Topics.I2C_SENSORS_NODE.PUB.IMU_RAW,
+                    Topics.I2C_SENSORS_NODE.PUB.IMU_DATA,
                     self.qos_depth
                 )
 
             if self.compass_enabled:
                 self.compass_pub = self.create_publisher(
                     Vector3Stamped,
-                    Topics.I2C_SENSORS_NODE.PUB.COMPASS_RAW,
+                    Topics.I2C_SENSORS_NODE.PUB.COMPASS_DATA,
                     self.qos_depth
                 )
 

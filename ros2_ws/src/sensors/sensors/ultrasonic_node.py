@@ -28,10 +28,10 @@ class UltrasonicNode(Node):
         # 2. Validate configuration and select the generated topic constant.
         self._validate_parameters()
 
-        if self.endpoint_group == 'ULTRASONIC_FRONT_NODE':
-            self.range_topic = Topics.ULTRASONIC_FRONT_NODE.PUB.RANGE
+        if self.endpoint_group == 'ULTRASONIC_LEFT_NODE':
+            self.range_topic = Topics.ULTRASONIC_LEFT_NODE.PUB.RANGE
         else:
-            self.range_topic = Topics.ULTRASONIC_BACK_NODE.PUB.RANGE
+            self.range_topic = Topics.ULTRASONIC_RIGHT_NODE.PUB.RANGE
 
         # A disabled sensor does not open a serial port or publish messages.
         self.sensor = None
@@ -78,7 +78,7 @@ class UltrasonicNode(Node):
         # Reading all declared parameters raises a clear ROS error in that case.
         self.get_parameters(self.list_parameters([], depth=0).names)
 
-        if self.endpoint_group not in ('ULTRASONIC_FRONT_NODE', 'ULTRASONIC_BACK_NODE'):
+        if self.endpoint_group not in ('ULTRASONIC_LEFT_NODE', 'ULTRASONIC_RIGHT_NODE'):
             raise ValueError(f'Unknown endpoint_group: {self.endpoint_group}')
         if self.timeout_s <= 0:
             raise ValueError('timeout_s must be positive')

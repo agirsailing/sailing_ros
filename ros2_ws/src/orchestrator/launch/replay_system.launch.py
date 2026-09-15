@@ -1,4 +1,4 @@
-"""Start the replay sensor and processing pipelines."""
+"""Start every replay package pipeline, excluding the recording manager."""
 
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
@@ -15,4 +15,7 @@ def generate_launch_description():
         IncludeLaunchDescription(PythonLaunchDescriptionSource(
             PathJoinSubstitution([FindPackageShare('data_elaboration'),
                                   'launch', 'replay_data_elaboration.launch.py']))),
+        IncludeLaunchDescription(PythonLaunchDescriptionSource(
+            PathJoinSubstitution([FindPackageShare('communication_web'),
+                                  'launch', 'replay_communication.launch.py']))),
     ])
