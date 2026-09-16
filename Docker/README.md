@@ -148,8 +148,10 @@ values in `Docker/raspi_container/.env` when running Compose from that directory
 The hardware container is `agir-ros-raspi`; it exposes `/dev` for the existing serial,
 I2C and GPIO code and retains privileged mode. Check serial device access through
 the `dialout` group. The current GPS code expects `/dev/ttyUSB2`, and the battery
-node expects `/dev/gpiochip0`. The original `/dev/ttyAMA0` device mapping is also
-retained. Verify these and the graphical mount paths against the actual Pi.
+node expects `/dev/gpiochip0`. No dedicated `/dev/ttyAMA0` mapping is required by
+the Agir USB/I2C/GPIO setup. Verify these and the graphical mount paths against the
+actual Pi. The [Pi 4 setup](../DAY_BEFORE_REGATTA/README.md) enables I2C at boot and
+installs the hardware permission rules.
 
 The Raspberry Pi image creates `/tmp/runtime-ros` with owner `ros` and permissions
 `700`. Compose mounts the Wayland socket at `/tmp/runtime-ros/wayland-0`, matching

@@ -21,8 +21,8 @@ services:
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
       # Linux hardware access: USB serial, I2C and GPIO.
       - /dev:/dev
-    devices:
-      - /dev/ttyAMA0:/dev/ttyAMA0
+    # Agir uses USB serial, I2C and GPIO through /dev above. Do not require
+    # a Polimi STM32 UART (/dev/ttyAMA0) to exist on this Raspberry Pi.
     group_add:
       - "dialout"
       - "tty"

@@ -7,6 +7,28 @@ set -e # Stop immediately if a command fails.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS_DIR="$(dirname "$SCRIPT_DIR")"
 PARALLEL_WORKERS="${PARALLEL_WORKERS:-2}"
+BUILD_MODE="${1:---clean}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "Usage: bash build.sh [--clean|--incremental]"
+  exit 1
+fi
+case "$BUILD_MODE" in
+  --clean|--incremental) ;;
+  -h|--help)
+    echo "Usage: bash build.sh [--clean|--incremental]"
+    echo "Default: --clean. Use --incremental to keep build/install/log."
+    exit 0
+    ;;
+  *)
+    echo "Unknown build mode: $BUILD_MODE"
+    exit 1
+    ;;
+esac
+if [[ ! "$PARALLEL_WORKERS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "PARALLEL_WORKERS must be a positive integer."
+  exit 1
+fi
 
 echo "Workspace: $WS_DIR"
 
@@ -23,10 +45,14 @@ fi
 # =========================
 # Clean previous build artifacts
 # =========================
-echo "Cleaning previous build artifacts..."
-rm -rf "$WS_DIR/build" "$WS_DIR/install" "$WS_DIR/log"
-rm -rf "$WS_DIR/src/build" "$WS_DIR/src/install" "$WS_DIR/src/log"
-rm -rf "$WS_DIR/scripts/build" "$WS_DIR/scripts/install" "$WS_DIR/scripts/log"
+if [[ "$BUILD_MODE" == "--clean" ]]; then
+  echo "Cleaning previous build artifacts..."
+  rm -rf "$WS_DIR/build" "$WS_DIR/install" "$WS_DIR/log"
+  rm -rf "$WS_DIR/src/build" "$WS_DIR/src/install" "$WS_DIR/src/log"
+  rm -rf "$WS_DIR/scripts/build" "$WS_DIR/scripts/install" "$WS_DIR/scripts/log"
+else
+  echo "Keeping previous build artifacts for an incremental build."
+fi
 
 # =========================
 # Load ROS and generate endpoints

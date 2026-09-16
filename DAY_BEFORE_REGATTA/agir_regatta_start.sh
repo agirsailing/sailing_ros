@@ -7,7 +7,7 @@ set -euo pipefail
 BASE_DIR="/home/agir/2025_SOFTWARE/sailing_ros"
 COMPOSE_DIR="$BASE_DIR/Docker/raspi_container"
 COMPOSE_FILE="$COMPOSE_DIR/compose.yaml"
-CONTAINER="ros-boat"
+CONTAINER="agir-ros-raspi"
 HOST_SCRIPT_PATH="$BASE_DIR/ros2_ws/scripts/run.sh"
 
 # IP address to ping to ensure the network is up.
@@ -35,16 +35,26 @@ if [ -f "$HOST_SCRIPT_PATH" ]; then
 fi
 
 cd "$COMPOSE_DIR"
+if ! docker compose version >/dev/null 2>&1; then
+    echo "Docker Compose plugin unavailable; run the Pi 4 setup first."
+    exit 1
+fi
 docker compose -f "$COMPOSE_FILE" up -d
 
 echo "⏳ Waiting for container $CONTAINER..."
+CONTAINER_READY=false
 for i in {1..30}; do
   if docker inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true; then
     echo "✅ Container active."
+    CONTAINER_READY=true
     break
   fi
   sleep 1
 done
+if [[ "$CONTAINER_READY" != true ]]; then
+  echo "Container $CONTAINER did not start within the timeout."
+  exit 1
+fi
 
 # ------------------------------------------------------------------------------
 # 2. ROS EXECUTION (Without sudo!)

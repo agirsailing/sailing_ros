@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "🚤 SETUP RASPBERRY SAILING TEAM — ROS container + workspace"
+echo "AGIR RASPBERRY PI 4 SETUP — USB sensors, I2C, GPIO and ROS"
 
 ########################################
 # ⚙️  PARAMETERS TO ADAPT
@@ -10,8 +10,8 @@ echo "🚤 SETUP RASPBERRY SAILING TEAM — ROS container + workspace"
 USER_HOME="/home/agir"
 BASE_DIR="$USER_HOME/2025_SOFTWARE"
 
-GIT_USER=""
-GIT_TOKEN="" 
+GIT_USER="INSERT_GITHUB_USERNAME"
+GIT_TOKEN="INSERT_GITHUB_TOKEN"
 REPO_SLUG="agirsailing/sailing_ros"
 
 REPO_DIR="$BASE_DIR/sailing_ros"
@@ -20,7 +20,45 @@ BRANCH="main"
 ROS_WS="$REPO_DIR/ros2_ws"
 CONTAINER_DIR="$REPO_DIR/Docker/raspi_container"
 COMPOSE_FILE="$CONTAINER_DIR/compose.yaml"
-CONTAINER_NAME="ros-boat"
+CONTAINER_NAME="agir-ros-raspi"
+IMAGE_NAME="agirsailing:jazzy-raspi"
+REGATTA_SERVICE="agir_regatta.service"
+
+# Run as the desktop user, not with sudo bash: individual privileged steps use sudo.
+if [[ "$EUID" -eq 0 || "$HOME" != "$USER_HOME" ]]; then
+  echo "Run this script as the user whose home is $USER_HOME."
+  exit 1
+fi
+if [[ -z "$GIT_USER" || "$GIT_USER" == INSERT_* || -z "$GIT_TOKEN" || "$GIT_TOKEN" == INSERT_* ]]; then
+  echo "Fill the GitHub username/token placeholders before running setup."
+  exit 1
+fi
+if [[ "$(uname -m)" != "aarch64" ]]; then
+  echo "This setup requires a 64-bit ARM operating system."
+  exit 1
+fi
+MODEL="$(tr -d '\0' < /proc/device-tree/model)"
+if [[ "$MODEL" != *"Raspberry Pi 4"* ]]; then
+  echo "This setup targets Raspberry Pi 4; detected: $MODEL"
+  exit 1
+fi
+if [[ -f /boot/firmware/config.txt ]]; then
+  BOOT_CONFIG=/boot/firmware/config.txt
+elif [[ -f /boot/config.txt ]]; then
+  BOOT_CONFIG=/boot/config.txt
+else
+  echo "Cannot find Raspberry Pi boot configuration."
+  exit 1
+fi
+
+# An explicit systemctl stop suppresses Restart=always without disabling boot startup.
+if systemctl cat "$REGATTA_SERVICE" >/dev/null 2>&1; then
+  sudo systemctl stop "$REGATTA_SERVICE"
+fi
+# Stopping the docker exec client alone does not guarantee that ROS has stopped.
+if command -v docker >/dev/null 2>&1 && sudo docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+  sudo docker stop "$CONTAINER_NAME"
+fi
 
 ########################################
 
@@ -54,30 +92,39 @@ sudo apt-get upgrade -y
 echo "📦 Installing base packages (SSH, git, curl, nano, tree, ca-certificates, lsb-release)..."
 sudo apt-get install -y \
   openssh-client openssh-server \
-  git curl nano tree ca-certificates lsb-release
+  git curl nano tree ca-certificates lsb-release i2c-tools gpiod
 
 echo "📡 Enabling SSH server..."
 sudo systemctl enable ssh
 sudo systemctl start ssh
 
 ########################################
-# 1.5) Hardware Permissions Configuration (UDEV Rules)
+# 1.5) Agir hardware: enable I2C and grant USB serial / I2C / GPIO access
 ########################################
 
-echo "🔌 Disabling system serial console to free up ports (ttyS0 / ttyAMA0)..."
-# We disable and mask the daemon that "steals" permissions from serial ports
-sudo systemctl stop serial-getty@ttyS0.service 2>/dev/null || true
-sudo systemctl mask serial-getty@ttyS0.service 2>/dev/null || true
-sudo systemctl stop serial-getty@ttyAMA0.service 2>/dev/null || true
-sudo systemctl mask serial-getty@ttyAMA0.service 2>/dev/null || true
+echo "Enabling the primary I2C bus for the IMU/compass multiplexer..."
+# Append an explicit [all] section so this setting is not trapped under a model filter.
+# Re-running setup replaces only our block; other boot settings remain intact.
+sudo sed -i '/^# BEGIN AGIR I2C$/,/^# END AGIR I2C$/d' "$BOOT_CONFIG"
+sudo tee -a "$BOOT_CONFIG" >/dev/null <<'EOF'
+
+# BEGIN AGIR I2C
+[all]
+dtparam=i2c_arm=on
+# END AGIR I2C
+EOF
+printf 'i2c-dev\n' | sudo tee /etc/modules-load.d/agir-i2c.conf >/dev/null
+sudo modprobe i2c-dev
+
+# Both ultrasonic sensors and GPS currently use USB adapters. No STM32 UART,
+# fixed 115200 baud rate, Bluetooth disable or Pi 5 overlay is needed here.
+# The node owns multiplexer channel switching; setup must not probe/select channels.
 
 echo "🔌 Configuring universal permanent permissions (666) for Serial, USB, I2C..."
 
 # We create a rules file using wildcards (*)
 sudo tee /etc/udev/rules.d/99-sailing-hardware.rules > /dev/null <<EOF
-# Permissions for ALL hardware serial ports and USB adapters
-KERNEL=="ttyS[0-9]*", MODE="0666"
-KERNEL=="ttyAMA[0-9]*", MODE="0666"
+# Permissions for the USB serial adapters used by ultrasonic sensors and GPS
 KERNEL=="ttyACM[0-9]*", MODE="0666"
 KERNEL=="ttyUSB[0-9]*", MODE="0666"
 
@@ -102,27 +149,21 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "🐋 Docker not found, installing it..."
   curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
   sudo sh /tmp/get-docker.sh
-  sudo systemctl enable docker
-  sudo systemctl start docker
 else
   echo "🐋 Docker already installed: $(docker --version)"
 fi
+sudo systemctl enable --now docker
 
-echo "🧩 Installing docker-compose-plugin (Compose v2, if missing)..."
-sudo apt-get install -y docker-compose-plugin || true
-
-COMPOSE_CMD="docker compose"
-if ! docker compose version >/dev/null 2>&1; then
-  echo "⚠️  docker compose (v2) not available, trying with docker-compose (v1)..."
-  sudo apt-get install -y docker-compose || true
-  if command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE_CMD="docker compose"
-  else
-    echo "❌ No Docker Compose available. Check APT/mirror."
-    exit 1
-  fi
+echo "Checking the Docker Compose plugin..."
+if ! sudo docker compose version >/dev/null 2>&1; then
+  sudo apt-get install -y docker-compose-plugin
 fi
-echo "✅ Will use: $COMPOSE_CMD"
+if ! sudo docker compose version >/dev/null 2>&1; then
+  echo "Docker Compose plugin unavailable. Install the plugin before continuing."
+  exit 1
+fi
+# Preserve the desktop user's HOME for the Compose Xauthority bind mount under sudo.
+compose() { sudo env HOME="$USER_HOME" docker compose -f "$COMPOSE_FILE" "$@"; }
 
 # docker group for current user
 if ! id -nG "$USER" | grep -q '\bdocker\b'; then
@@ -153,10 +194,6 @@ if [ -d "$REPO_DIR/.git" ]; then
   git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
 else
   echo "📥 Cloning repo into $REPO_DIR..."
-  if [ "$GIT_TOKEN" = "INSERT_YOUR_TOKEN_HERE" ]; then
-    echo "❌ You must set the GIT_TOKEN in the script before running it."
-    exit 1
-  fi
   git clone -b "$BRANCH" "https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git" "$REPO_DIR"
 fi
 
@@ -189,17 +226,16 @@ if [ ! -f "$COMPOSE_FILE" ]; then
 fi
 
 echo "🧱 Stopping any old container..."
-sudo $COMPOSE_CMD -f "$COMPOSE_FILE" down --remove-orphans -v || true
-
-echo "🧹 Removing unused docker images (dangling + unused)..."
-sudo docker image prune -af || true
+compose down --remove-orphans
 
 echo "⚙️  Building ROS container (directory: $CONTAINER_DIR)..."
 cd "$CONTAINER_DIR"
-sudo $COMPOSE_CMD -f "$COMPOSE_FILE" build --no-cache
+compose build --no-cache
 
 echo "🚀 Starting ROS container in background..."
-sudo $COMPOSE_CMD -f "$COMPOSE_FILE" up -d
+# Keep ROS stopped after a failed build as well as after a successful setup.
+trap 'compose stop || true' EXIT
+compose up -d
 
 ########################################
 # 6) colcon build inside container
@@ -222,7 +258,16 @@ sudo docker exec "$CONTAINER_NAME" bash -lc \
   "set -eo pipefail && \
    source /opt/ros/jazzy/setup.bash && \
    cd /home/ros/ros2_ws/scripts && \
-   ./build.sh"
+   ./build.sh --clean"
+
+# Record the image used by this successful workspace build (inside ignored build/).
+sudo docker image inspect --format '{{.Id}}' "$IMAGE_NAME" \
+  | sudo tee "$ROS_WS/build/.agir_image_id" >/dev/null
+
+# Refresh an already-installed boot entry point, without installing/starting a service.
+if [[ -f /usr/local/bin/agir_regatta_start.sh ]]; then
+  sudo install -m 0755 "$REPO_DIR/DAY_BEFORE_REGATTA/agir_regatta_start.sh" /usr/local/bin/agir_regatta_start.sh
+fi
 
 ########################################
 # 7) Stop and Shutdown
@@ -230,7 +275,11 @@ sudo docker exec "$CONTAINER_NAME" bash -lc \
 
 echo "✅ Compilation successfully completed."
 echo "🛑 Stopping setup container..."
-sudo docker compose -f "$COMPOSE_FILE" stop
+compose stop
+trap - EXIT
 
 echo "🎉 SETUP FINISHED! The system is ready but STOPPED."
 echo "👉 To start use the RUN script."
+echo "Reboot before running sensors so the I2C boot configuration takes effect."
+echo "USB port assignments in sensors/config/params.yaml still need hardware confirmation."
+echo "Wi-Fi guardian and boot-service installation remain separate steps; see DAY_BEFORE_REGATTA/README.md."
