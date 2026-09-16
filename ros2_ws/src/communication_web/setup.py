@@ -16,14 +16,16 @@ setup(
         (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'paho-mqtt>=2.0.0'],
     zip_safe=True,
     maintainer='Agir Sailing Team',
     maintainer_email='tech@agirsailing.se',
     description='Web communication for the Agir Sailing Team',
     license='Apache-2.0',
     entry_points={
-        # Register future nodes as: name_node = package_name.name_node:main
-        'console_scripts': [],
+        'console_scripts': [
+            'telemetry_gateway_node = communication_web.telemetry_gateway_node:main',
+            'command_gateway_node = communication_web.command_gateway_node:main',
+        ],
     },
 )

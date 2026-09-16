@@ -1,8 +1,14 @@
-"""Launch file for the communication_web package."""
+"""Compatibility entry point for the live communication pipeline."""
 
 from launch import LaunchDescription
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import PathJoinSubstitution
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    """Return an empty launch description until package nodes are implemented."""
-    return LaunchDescription([])
+    return LaunchDescription([
+        IncludeLaunchDescription(PythonLaunchDescriptionSource(PathJoinSubstitution([
+            FindPackageShare('communication_web'), 'launch', 'live_communication.launch.py']))),
+    ])

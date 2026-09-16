@@ -1,2 +1,46 @@
-# Add node_name_node sections with ros__parameters when nodes are implemented.
-{}
+telemetry_gateway_node:
+  ros__parameters:
+    # Match the processing nodes. Set true for an eventual /clock-driven bag replay.
+    use_sim_time: false
+    publish_rate_hz: 10.0
+    attitude_timeout_s: 0.5
+    height_timeout_s: 0.5
+    battery_timeout_s: 3.0
+    gps_timeout_s: 2.0
+    qos_depth: 10
+    mqtt:
+      # Set the broker reachable from the container/Pi; localhost is a placeholder.
+      broker: "localhost"
+      port: 1883
+      user: ""
+      password: ""
+      client_id: "agir_telemetry"
+      keepalive_s: 60
+      tls_enabled: false
+      ca_file: ""
+      qos: 0
+      reconnect_min_s: 1
+      reconnect_max_s: 60
+      max_queued_messages: 10
+
+command_gateway_node:
+  ros__parameters:
+    # Allow time for rosbag_manager to stop and flush its recording.
+    service_timeout_s: 15.0
+    poll_period_s: 0.05
+    command_queue_size: 32
+    response_cache_size: 128
+    max_payload_bytes: 4096
+    mqtt:
+      broker: "localhost"
+      port: 1883
+      user: ""
+      password: ""
+      client_id: "agir_commands"
+      keepalive_s: 60
+      tls_enabled: false
+      ca_file: ""
+      qos: 1
+      reconnect_min_s: 1
+      reconnect_max_s: 60
+      max_queued_messages: 32

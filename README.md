@@ -4,7 +4,7 @@ ROS 2 Jazzy workspace for the KTH Agir Sailing Team.
 
 - [Docker setup for PC and Raspberry Pi](Docker/README.md)
 - Sensor package: `ros2_ws/src/sensors`
-- Web communication package: `ros2_ws/src/communication_web`
+- [Web communication: telemetry and rosbag commands](ros2_ws/src/communication_web/README.md)
 - Data processing package: `ros2_ws/src/data_elaboration`
 - Shared messages and services: `ros2_ws/src/sail_msgs`
 - Live and replay launch package: `ros2_ws/src/orchestrator`
@@ -31,3 +31,8 @@ Acquisition parameters live in `sensors/config/params.yaml`; processing paramete
 live in `data_elaboration/config/params.yaml`. Each package's `endpoints.yaml`
 defines its output topic names. Processing imports the generated sensor constants
 for its inputs. See the package READMEs for the wiring and current limitations.
+
+The communication package publishes `/web/telemetry` and `/web/position` and
+forwards them to MQTT under `agir_gui/data/`. Set the broker for both gateways in
+`communication_web/config/params.yaml` before using the web link. Live includes
+recording commands; replay includes only the telemetry gateway.

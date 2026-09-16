@@ -1,39 +1,53 @@
-# /ros2_ws/src/communication_web/config/endpoints.yaml
-# AUTO: single source of truth per topic names + “wiring” per nodo.
-# Nota: i valori tipo "@imu_data" sono reference a "topics.<key>".
-
-# /ros2_ws/src/can_bus/config/endpoints.yaml
+# ROS inputs/outputs and external MQTT contract for the Agir web app.
 meta:
   generate:
     cpp: false
     python: true
 
 topics:
-  # ====== INPUT (comandi esterni) ======
-  can_command: "/can_command"
+  attitude: "/processed/imu/rpy/aero"
+  height: "/processed/boat_height"
+  battery: "/processed/battery/low"
+  gps: "/processed/gps/summary"
+  recording_state: "/local_state/recording_state"
+  telemetry: "/web/telemetry"
+  position: "/web/position"
+  mqtt_telemetry: "agir_gui/data/telemetry"
+  mqtt_position: "agir_gui/data/position"
+  mqtt_recording_state: "agir_gui/data/recording_state"
+  mqtt_start_recording: "agir_gui/cmd/start_recording"
+  mqtt_stop_recording: "agir_gui/cmd/stop_recording"
+  mqtt_start_response: "agir_gui/rsp/start_recording"
+  mqtt_stop_response: "agir_gui/rsp/stop_recording"
 
-  # ====== INPUT (replay mode) ======
-  serial_raw_rx: "/serial/raw_rx" # Usato sia come SUB (Replay) che PUB (Live)
-
-  # ====== OUTPUT (dati parsati) ======
-  imu_data: "/imu_data"
-  wand_angle: "/wand_angle"
-  windex_data: "/windex_data"
-  local_cmd_update: "/local_cmd/update" # Nuovo topic per i comandi da pulsantiera
-  ultrasound_data: "/ultrasound_data" # Nuovo topic per i dati degli ultrasuoni
+services:
+  start_recording: "/local_cmd/start_recording"
+  stop_recording: "/local_cmd/stop_recording"
 
 nodes:
-  central_node:
+  telemetry_gateway_node:
     sub:
-      # In modalità replay ascolta serial_raw_rx
-      # In modalità live ascolta can_command
-      serial_raw_rx: "@serial_raw_rx"
-      can_command: "@can_command"
+      attitude: "@attitude"
+      height: "@height"
+      battery: "@battery"
+      gps: "@gps"
+      recording_state: "@recording_state"
     pub:
-      # In modalità live pubblica serial_raw_rx
-      serial_raw_rx: "@serial_raw_rx"
-      imu_data: "@imu_data"
-      wand_angle: "@wand_angle"
-      windex_data: "@windex_data"
-      local_cmd_update: "@local_cmd_update"
-      ultrasound_data: "@ultrasound_data"
+      telemetry: "@telemetry"
+      position: "@position"
+    mqtt:
+      pub:
+        telemetry: "@mqtt_telemetry"
+        position: "@mqtt_position"
+        recording_state: "@mqtt_recording_state"
+  command_gateway_node:
+    srv:
+      start_recording: "@start_recording"
+      stop_recording: "@stop_recording"
+    mqtt:
+      sub:
+        start_recording: "@mqtt_start_recording"
+        stop_recording: "@mqtt_stop_recording"
+      rsp:
+        start_recording: "@mqtt_start_response"
+        stop_recording: "@mqtt_stop_response"
