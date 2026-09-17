@@ -1,0 +1,35 @@
+# Copy to mqtt_config.yaml and replace placeholders before use.
+# This example is public. mqtt_config.yaml is local and ignored by Git.
+# Raspberry connection: native MQTT over TLS, not the browser WSS URL.
+
+telemetry_gateway_node:
+  ros__parameters:
+    mqtt:
+      broker: "broker.example.invalid"
+      port: 8883
+      user: "REPLACE_WITH_BOAT_USERNAME"
+      password: "REPLACE_WITH_BOAT_PASSWORD"
+      client_id: "agir_telemetry"
+      keepalive_s: 60
+      tls_enabled: true
+      ca_file: ""
+      qos: 0
+      reconnect_min_s: 1
+      reconnect_max_s: 60
+      max_queued_messages: 10
+
+command_gateway_node:
+  ros__parameters:
+    mqtt:
+      broker: "broker.example.invalid"
+      port: 8883
+      user: "REPLACE_WITH_BOAT_USERNAME"
+      password: "REPLACE_WITH_BOAT_PASSWORD"
+      client_id: "agir_commands"
+      keepalive_s: 60
+      tls_enabled: true
+      ca_file: ""
+      qos: 1
+      reconnect_min_s: 1
+      reconnect_max_s: 60
+      max_queued_messages: 32

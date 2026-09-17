@@ -9,3 +9,6 @@ __pycache__/
 ros2/
 src/eclipse-cyclonedds/
 src/examples/
+
+# Local broker credentials. Keep only the example in version control.
+**/mqtt_config.yaml

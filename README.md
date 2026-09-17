@@ -38,5 +38,5 @@ for its inputs. See the package READMEs for the wiring and current limitations.
 
 The communication package publishes `/web/telemetry` and `/web/position` and
 forwards them to MQTT under `agir_gui/data/`. Set the broker for both gateways in
-`communication_web/config/params.yaml` before using the web link. Live includes
+`communication_web/config/mqtt_config.yaml` before using the web link. Live includes
 recording commands; replay includes only the telemetry gateway.

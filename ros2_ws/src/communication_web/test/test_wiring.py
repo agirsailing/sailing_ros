@@ -82,6 +82,8 @@ class FakeNode:
     def __init__(self, name):
         self.name = name
         self.config = flatten(mapping_file(ROOT / 'config/params.yaml')[name]['ros__parameters'])
+        self.config.update(flatten(
+            mapping_file(ROOT / 'config/mqtt_config.example.yaml')[name]['ros__parameters']))
         self.declared = set()
         self.subscriptions = {}
         self.publishers = {}
@@ -201,7 +203,7 @@ class WiringTests(unittest.TestCase):
         node = self.command_node()
         transport = node.mqtt
         client = transport.client
-        client.connect_async.assert_called_once_with('localhost', 1883, 60)
+        client.connect_async.assert_called_once_with('broker.example.invalid', 8883, 60)
         client.loop_start.assert_called_once()
         transport._on_connect(client, None, None, NS(is_failure=False), None)
         self.assertEqual(client.subscribe.call_count, 2)

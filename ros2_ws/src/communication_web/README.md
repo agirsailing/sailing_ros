@@ -113,16 +113,36 @@ to retrieve its cached response. Sending a command alone never proves success.
 ## Configuration and launch
 
 All ROS/MQTT names are in `config/endpoints.yaml` and its matching generated Python
-constants. All node settings are in `config/params.yaml`; launch files accept
-`communication_web_params_file` to select an alternative configuration.
+constants. Configuration is split into:
 
-Set **both** `mqtt.broker` entries to the address reachable from the ROS container
-or Raspberry Pi. `localhost:1883` is a placeholder for a broker in the same network
-namespace. On a remote Pi, use the broker server's reachable hostname/IP.
-Configure port, authentication and optional verified TLS in the same file; an
-empty CA path with TLS enabled uses system trust. No broker or web server is
-started by this package. Paho MQTT >= 2 is required and already installed by the
-Agir Dockerfiles. Each gateway adds a unique suffix to its MQTT client ID.
+- `config/params.yaml`: normal node settings, tracked in Git.
+- `config/mqtt_config.example.yaml`: public template with placeholders.
+- `config/mqtt_config.yaml`: local broker settings and credentials, ignored by Git.
+
+Copy the example to `mqtt_config.yaml` on each machine, then configure **both**
+gateway sections before building. A placeholder copy is provided in this working
+tree; it contains no real credentials. The native MQTT/TLS hostname and port are
+for the Raspberry, not the browser's WebSocket URL. The example enables verified
+TLS on port 8883; confirm the port with your provider. An empty CA path uses
+system trust. Replace the `.invalid` hostname and placeholder username/password.
+
+Both launchers load the normal parameters followed by the MQTT file. They accept
+`communication_web_params_file` and `communication_web_mqtt_config_file` for
+absolute-path overrides. A missing MQTT file produces an explicit setup error;
+the example is not used as a silent fallback. Local YAML files are copied into
+the ROS install by the existing `setup.py`; rebuild after edits, or use the
+absolute-path override.
+**The local source and install copies contain credentials**: keep them on the
+development machine/Pi, restrict access, and do not publish build artifacts.
+Gitignore protects new files from accidental commits; it cannot remove secrets
+already committed in history. Do not put this file in the web app.
+
+No broker or web server is started here. Paho MQTT >= 2 is installed by the Agir
+Dockerfiles. Each gateway adds a unique suffix to its MQTT client ID.
+
+The sibling `sailing_web` dashboard uses the same MQTT contract. Browser operators
+enter their own broker client credentials at connection time. Give boat and
+operator credentials separate permissions; neither needs broker-admin access.
 
 MQTT connection/reconnection is asynchronous. ROS snapshots remain available
 without a broker. Data is non-retained, defaults to QoS 0 and is not buffered

@@ -92,7 +92,7 @@ ROS sensor acquisition itself does not need a graphical login. If these mounts
 cause boot problems, separate optional graphical access from the boot Compose
 configuration; this change has not been made here.
 
-Configure the MQTT broker in `communication_web/config/params.yaml` before the
+Configure the MQTT broker in `communication_web/config/mqtt_config.yaml` before the
 regatta. Wi-Fi credentials, Git credentials, broker details and adapter identities
 are deployment values to be decided; placeholders are deliberate.
 
