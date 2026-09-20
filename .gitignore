@@ -1,14 +1,36 @@
-build/
-install/
-log/
-CSVs/
+# =========================
+# ROS 2 (Colcon Workspace)
+# =========================
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# =========================
+# Environment variables (if any)
+# =========================
+mqtt_config.yaml
+**/.core/
+
+# =========================
+# Python
+# =========================
 *.pyc
 __pycache__/
 .vscode/
 
-ros2/
-src/eclipse-cyclonedds/
-src/examples/
+# =========================
+# Rosbags (Dati registrati)
+# =========================
+ros2_ws/rosbags/*
 
-# Local broker credentials. Keep only the example in version control.
-**/mqtt_config.yaml
+
+# =========================
+# IDEs, OS, and Editors
+# =========================
+**/.DS_Store
+.project
+.cproject
+CMakeLists.txt.user
+*.user
+*~
+.#*
