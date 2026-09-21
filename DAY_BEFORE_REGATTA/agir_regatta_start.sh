@@ -4,7 +4,7 @@ set -euo pipefail
 # ==============================================================================
 # CONFIGURATION PARAMETERS
 # ==============================================================================
-BASE_DIR="/home/agir/2025_SOFTWARE/sailing_ros"
+BASE_DIR="/home/boat/2025_SOFTWARE/sailing_ros"
 COMPOSE_DIR="$BASE_DIR/Docker/raspi_container"
 COMPOSE_FILE="$COMPOSE_DIR/compose.yaml"
 CONTAINER="agir-ros-raspi"

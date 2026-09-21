@@ -7,7 +7,7 @@ echo "AGIR RASPBERRY PI 4 SETUP — USB sensors, I2C, GPIO and ROS"
 # ⚙️  PARAMETERS TO ADAPT
 ########################################
 
-USER_HOME="/home/agir"
+USER_HOME="/home/boat"
 BASE_DIR="$USER_HOME/2025_SOFTWARE"
 
 GIT_USER="INSERT_GITHUB_USERNAME"

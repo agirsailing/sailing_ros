@@ -7,7 +7,7 @@ echo "AGIR UPDATE — cached Docker build and incremental ROS build"
 # ⚙️  PARAMETERS
 ########################################
 
-USER_HOME="/home/agir"
+USER_HOME="/home/boat"
 BASE_DIR="$USER_HOME/2025_SOFTWARE"
 REPO_DIR="$BASE_DIR/sailing_ros"
 BRANCH="main"
