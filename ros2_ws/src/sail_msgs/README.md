@@ -26,7 +26,8 @@ the topic selects robotic FLU/up-world or aerodynamic FRD/down-world convention.
 Yaw is relative to initialization and is not an absolute compass heading.
 
 WebTelemetry aggregates aerospace angles in degrees, waterline-reference height
-in metres, a low-battery alarm and SOG in m/s, with independent validity flags.
+in metres, raw left/right ultrasonic beam distances (`ultrasonic_left_m` and
+`ultrasonic_right_m`), a low-battery alarm and SOG in m/s, with independent validity flags.
 BoatPosition contains latitude/longitude in degrees, SOG in m/s and GPS validity.
 Both carry a snapshot timestamp; BoatPosition also preserves the source GPS stamp.
 The communication gateway converts unavailable floating-point values from ROS NaN

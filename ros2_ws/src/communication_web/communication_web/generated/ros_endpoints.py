@@ -6,6 +6,8 @@ class Topics:
         HEIGHT = '/processed/boat_height'
         BATTERY = '/processed/battery/low'
         GPS = '/processed/gps/summary'
+        ULTRASONIC_LEFT = '/ultrasonic/left'
+        ULTRASONIC_RIGHT = '/ultrasonic/right'
         RECORDING_STATE = '/local_state/recording_state'
         TELEMETRY = '/web/telemetry'
         POSITION = '/web/position'
@@ -23,6 +25,8 @@ class Topics:
             HEIGHT = '/processed/boat_height'
             BATTERY = '/processed/battery/low'
             GPS = '/processed/gps/summary'
+            ULTRASONIC_LEFT = '/ultrasonic/left'
+            ULTRASONIC_RIGHT = '/ultrasonic/right'
             RECORDING_STATE = '/local_state/recording_state'
 
         class PUB:

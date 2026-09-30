@@ -7,6 +7,7 @@ telemetry_gateway_node:
     height_timeout_s: 0.5
     battery_timeout_s: 3.0
     gps_timeout_s: 2.0
+    ultrasonic_timeout_s: 0.5
     qos_depth: 10
 
 command_gateway_node:

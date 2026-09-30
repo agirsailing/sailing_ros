@@ -9,6 +9,7 @@ from sail_msgs.msg import (
     BoatHeight, BoatPosition, GpsSummary, RecordingState, RollPitchYaw, WebTelemetry,
 )
 from std_msgs.msg import Bool
+from sensor_msgs.msg import Range
 
 from communication_web.gateway.mqtt_client import MqttClientWrapper
 from communication_web.gateway.telemetry import TelemetrySnapshot
@@ -25,11 +26,12 @@ class TelemetryGatewayNode(Node):
         self.height_timeout_s = self.declare_parameter('height_timeout_s', Parameter.Type.DOUBLE).value
         self.battery_timeout_s = self.declare_parameter('battery_timeout_s', Parameter.Type.DOUBLE).value
         self.gps_timeout_s = self.declare_parameter('gps_timeout_s', Parameter.Type.DOUBLE).value
+        self.ultrasonic_timeout_s = self.declare_parameter('ultrasonic_timeout_s', Parameter.Type.DOUBLE).value
         self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
         self._validate_parameters()
         self.snapshot = TelemetrySnapshot(
             self.attitude_timeout_s, self.height_timeout_s,
-            self.battery_timeout_s, self.gps_timeout_s)
+            self.battery_timeout_s, self.gps_timeout_s, self.ultrasonic_timeout_s)
         self.rt = Topics.TELEMETRY_GATEWAY_NODE
         self.mqtt = MqttClientWrapper(self)
 
@@ -55,6 +57,12 @@ class TelemetryGatewayNode(Node):
         self.recording_sub = self.create_subscription(
             RecordingState, self.rt.SUB.RECORDING_STATE,
             self._publish_recording_state, self.qos_depth)
+        self.ultrasonic_left_sub = self.create_subscription(
+            Range, self.rt.SUB.ULTRASONIC_LEFT,
+            lambda msg: self._receive('ultrasonic_left', msg), self.qos_depth)
+        self.ultrasonic_right_sub = self.create_subscription(
+            Range, self.rt.SUB.ULTRASONIC_RIGHT,
+            lambda msg: self._receive('ultrasonic_right', msg), self.qos_depth)
 
         # 4. Publish periodic snapshots and start the asynchronous MQTT loop.
         self.timer = self.create_timer(1.0 / self.publish_rate_hz, self.publish_snapshot)
@@ -63,7 +71,7 @@ class TelemetryGatewayNode(Node):
     def _validate_parameters(self):
         self.get_parameters(self.list_parameters([], depth=0).names)
         for name in ('publish_rate_hz', 'attitude_timeout_s', 'height_timeout_s',
-                     'battery_timeout_s', 'gps_timeout_s'):
+                     'battery_timeout_s', 'gps_timeout_s', 'ultrasonic_timeout_s'):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f'{name} must be finite and positive')

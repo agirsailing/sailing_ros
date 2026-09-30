@@ -32,6 +32,13 @@ empty because these aggregates mix quantities expressed in different frames.
   `battery_valid=false` means unknown; a false low-alarm bit is not a charge
   percentage, voltage measurement or confirmation of overall battery health.
 - `sog_mps` and `sog_valid`, from `/processed/gps/summary`.
+- `ultrasonic_left_m` / `ultrasonic_left_valid` and
+  `ultrasonic_right_m` / `ultrasonic_right_valid`, from `sensor_msgs/Range`
+  on `/ultrasonic/left` and `/ultrasonic/right`. These are raw beam distances
+  in metres, not the attitude-corrected height. Each side must be finite, within
+  its sensor's min/max range and fresh by both source and reception time.
+  `ultrasonic_timeout_s` defaults to 0.5 seconds; one missing sensor does not
+  invalidate the other sensor or the rest of the telemetry.
 
 `BoatPosition` contains `latitude_deg`, `longitude_deg`, `sog_mps`, `fix_valid`
 and the original `gps_stamp`. Invalid, non-finite, out-of-range or expired GPS
@@ -58,7 +65,11 @@ Example MQTT telemetry payload:
   "battery_valid": true,
   "battery_low": false,
   "sog_valid": true,
-  "sog_mps": 6.0
+  "sog_mps": 6.0,
+  "ultrasonic_left_valid": true,
+  "ultrasonic_left_m": 0.62,
+  "ultrasonic_right_valid": true,
+  "ultrasonic_right_m": 0.58
 }
 ```
 
@@ -75,7 +86,21 @@ Example MQTT position payload:
 }
 ```
 
+## Rebuild after interface changes
+
+After updating `WebTelemetry.msg`, rebuild the interfaces and gateway in the ROS
+environment before restarting the nodes. From `ros2_ws`:
+
+```bash
+colcon build --packages-select sail_msgs communication_web
+source install/setup.bash
+```
+
+Restart running publishers/subscribers of `WebTelemetry` against the rebuilt
+interfaces. The web app's new sensor cards remain unknown with an older gateway.
+
 ## Recording commands
+
 
 | MQTT request | ROS service | MQTT response |
 | --- | --- | --- |

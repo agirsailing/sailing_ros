@@ -13,3 +13,8 @@ bool battery_valid
 bool battery_low
 bool sog_valid
 float64 sog_mps
+# Independent raw ultrasonic beam distances, in metres (not corrected height).
+bool ultrasonic_left_valid
+float64 ultrasonic_left_m
+bool ultrasonic_right_valid
+float64 ultrasonic_right_m

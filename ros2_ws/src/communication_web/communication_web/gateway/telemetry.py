@@ -20,10 +20,12 @@ def json_safe(value):
 
 class TelemetrySnapshot:
     def __init__(self, attitude_timeout_s, height_timeout_s,
-                 battery_timeout_s, gps_timeout_s):
+                 battery_timeout_s, gps_timeout_s, ultrasonic_timeout_s=0.5):
         self.timeouts = dict(attitude=attitude_timeout_s, height=height_timeout_s,
                              battery=battery_timeout_s, gps=gps_timeout_s)
         self.samples = {}
+        self.timeouts.update(ultrasonic_left=ultrasonic_timeout_s,
+                             ultrasonic_right=ultrasonic_timeout_s)
         self.last_time = None
 
     def _check_clock(self, now):
@@ -59,6 +61,15 @@ class TelemetrySnapshot:
                          sog_valid=False, sog_mps=nan)
         position = dict(fix_valid=False, latitude_deg=nan,
                         longitude_deg=nan, sog_mps=nan)
+        for side in ('left', 'right'):
+            name = 'ultrasonic_' + side
+            reading = self._fresh(name, now)
+            valid = (reading is not None and all(math.isfinite(v) for v in (
+                reading.range, reading.min_range, reading.max_range))
+                and 0 <= reading.min_range < reading.max_range
+                and reading.min_range <= reading.range <= reading.max_range)
+            telemetry[name + '_valid'] = valid
+            telemetry[name + '_m'] = reading.range if valid else nan
         attitude = self._fresh('attitude', now)
         if attitude is not None and all(math.isfinite(v) for v in (
                 attitude.roll_deg, attitude.pitch_deg, attitude.yaw_deg)):

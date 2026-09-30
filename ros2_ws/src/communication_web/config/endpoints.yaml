@@ -9,6 +9,8 @@ topics:
   height: "/processed/boat_height"
   battery: "/processed/battery/low"
   gps: "/processed/gps/summary"
+  ultrasonic_left: "/ultrasonic/left"
+  ultrasonic_right: "/ultrasonic/right"
   recording_state: "/local_state/recording_state"
   telemetry: "/web/telemetry"
   position: "/web/position"
@@ -31,6 +33,8 @@ nodes:
       height: "@height"
       battery: "@battery"
       gps: "@gps"
+      ultrasonic_left: "@ultrasonic_left"
+      ultrasonic_right: "@ultrasonic_right"
       recording_state: "@recording_state"
     pub:
       telemetry: "@telemetry"

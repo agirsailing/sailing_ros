@@ -151,7 +151,7 @@ class WiringTests(unittest.TestCase):
             ROOT / 'communication_web/telemetry_gateway_node.py', 'TelemetryGatewayNode',
             Node=FakeNode, math=math, Parameter=self.parameter,
             Topics=Topics, MqttClientWrapper=self.transport,
-            TelemetrySnapshot=TelemetrySnapshot, Bool=NS, **self.messages)
+            TelemetrySnapshot=TelemetrySnapshot, Bool=NS, Range=NS, **self.messages)
         return cls()
 
     def command_node(self):
@@ -168,16 +168,24 @@ class WiringTests(unittest.TestCase):
         node = self.telemetry_node()
         self.assertEqual(set(node.config) - {'use_sim_time'}, node.declared)
         rt = Topics.TELEMETRY_GATEWAY_NODE
-        self.assertEqual(len(node.subscriptions), 5)
+        self.assertEqual(len(node.subscriptions), 7)
         angle = self.messages['RollPitchYaw']()
         angle.header.stamp.sec = 100
         angle.roll_deg, angle.pitch_deg, angle.yaw_deg = 12.0, 3.0, 75.0
         node.subscriptions[rt.SUB.ATTITUDE](angle)
+        node.subscriptions[rt.SUB.ULTRASONIC_LEFT](NS(
+            header=NS(stamp=NS(sec=100, nanosec=0)), range=0.6, min_range=0.03, max_range=4.5))
+        node.subscriptions[rt.SUB.ULTRASONIC_RIGHT](NS(
+            header=NS(stamp=NS(sec=100, nanosec=0)), range=0.8, min_range=0.03, max_range=4.5))
         node.publish_snapshot()
         message = node.publishers[rt.PUB.TELEMETRY].publish.call_args.args[0]
         self.assertEqual(message.header.stamp.sec, 100)
         self.assertEqual(message.roll_deg, 12.0)
         self.assertTrue(message.attitude_valid)
+        self.assertTrue(message.ultrasonic_left_valid)
+        self.assertTrue(message.ultrasonic_right_valid)
+        self.assertEqual(message.ultrasonic_left_m, 0.6)
+        self.assertEqual(message.ultrasonic_right_m, 0.8)
         position = node.publishers[rt.PUB.POSITION].publish.call_args.args[0]
         self.assertFalse(position.fix_valid)
         self.assertTrue(math.isnan(position.latitude_deg))
@@ -248,8 +256,11 @@ class WiringTests(unittest.TestCase):
             exec(compile(path.read_text(), str(path), 'exec'), scope)
             return scope
         processing = constants('data_elaboration')['Topics']
+        sensors = constants('sensors')['Topics']
         recorder = constants('rosbag_manager')
         rt = Topics.TELEMETRY_GATEWAY_NODE
+        self.assertEqual(rt.SUB.ULTRASONIC_LEFT, sensors.ULTRASONIC_LEFT_NODE.PUB.RANGE)
+        self.assertEqual(rt.SUB.ULTRASONIC_RIGHT, sensors.ULTRASONIC_RIGHT_NODE.PUB.RANGE)
         self.assertEqual(rt.SUB.ATTITUDE, processing.IMU_NODE.PUB.RPY_AERO)
         self.assertEqual(rt.SUB.HEIGHT, processing.ULTRASONIC_FILTER_NODE.PUB.HEIGHT)
         self.assertEqual(rt.SUB.BATTERY, processing.BATTERY_MONITOR_NODE.PUB.BATTERY_LOW)

@@ -22,6 +22,29 @@ def sample(**fields):
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_ultrasonic_distances_expire_and_validate_independently(self):
+        self.state.update('ultrasonic_left', sample(range=0.62, min_range=0.03, max_range=4.5), 100)
+        data, _, _ = self.state.build(100.1)
+        self.assertTrue(data['ultrasonic_left_valid'])
+        self.assertEqual(data['ultrasonic_left_m'], 0.62)
+        self.assertFalse(data['ultrasonic_right_valid'])
+        right = sample(range=0.71, min_range=0.03, max_range=4.5)
+        right.header.stamp = stamp(100.4)
+        self.state.update('ultrasonic_right', right, 100.4)
+        data, _, _ = self.state.build(100.6)
+        self.assertFalse(data['ultrasonic_left_valid'])
+        self.assertTrue(data['ultrasonic_right_valid'])
+        self.assertEqual(data['ultrasonic_right_m'], 0.71)
+
+    def test_ultrasonic_rejects_invalid_ranges_and_old_source_stamps(self):
+        for distance in (float('nan'), float('inf'), -0.1, 0.02, 5.0):
+            self.state.update('ultrasonic_left', sample(range=distance, min_range=0.03, max_range=4.5), 100)
+            data, _, _ = self.state.build(100)
+            self.assertFalse(data['ultrasonic_left_valid'])
+            self.assertIsNone(json_safe(data)['ultrasonic_left_m'])
+        self.state.update('ultrasonic_left', sample(range=0.6, min_range=0.03, max_range=4.5), 101)
+        self.assertFalse(self.state.build(101)[0]['ultrasonic_left_valid'])
+
     def setUp(self):
         self.state = TelemetrySnapshot(0.5, 0.5, 3.0, 2.0)
 
