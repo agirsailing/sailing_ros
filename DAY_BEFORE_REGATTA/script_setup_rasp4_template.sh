@@ -135,9 +135,30 @@ KERNEL=="i2c-[0-9]*", MODE="0666"
 KERNEL=="gpiochip[0-9]*", MODE="0666"
 EOF
 
-# Apply rules immediately
+# Stable names follow the physical USB ports on this Raspberry Pi 4.
+# Keep each sensor connected to its assigned port; USB enumeration may change.
+# Replace the same file on every setup run so rules are never duplicated.
+sudo tee /etc/udev/rules.d/99-boat-serial.rules >/dev/null <<'EOF'
+# Ultrasonic left - port 1.4
+SUBSYSTEM=="tty", KERNELS=="1-1.4:1.0", SYMLINK+="ultrasonic_left", MODE="0666"
+# Ultrasonic right - port 1.3
+SUBSYSTEM=="tty", KERNELS=="1-1.3:1.0", SYMLINK+="ultrasonic_right", MODE="0666"
+# GPS - port 1.2
+SUBSYSTEM=="tty", KERNELS=="1-1.2:1.0", SYMLINK+="gps", MODE="0666"
+EOF
+
+# Apply rules immediately and wait for device links to be created.
 sudo udevadm control --reload-rules
 sudo udevadm trigger
+sudo udevadm settle
+
+for sensor_device in /dev/ultrasonic_left /dev/ultrasonic_right /dev/gps; do
+  if [[ -c "$sensor_device" ]]; then
+    echo "USB sensor: $sensor_device -> $(readlink -f "$sensor_device")"
+  else
+    echo "Warning: $sensor_device is missing; check the sensor and its physical USB port before starting ROS."
+  fi
+done
 
 echo "✅ UDEV hardware rules successfully applied."
 
@@ -186,6 +207,9 @@ fi
 if [ -d "$REPO_DIR/.git" ]; then
   echo "🔄 Existing repo in $REPO_DIR, aligning to origin/$BRANCH..."
 
+  # Ignore executable-bit changes before updating an existing checkout.
+  git -C "$REPO_DIR" config --local core.fileMode false
+
   # --- Update the token even if the repo exists ---
   git -C "$REPO_DIR" remote set-url origin "https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git"
 
@@ -196,6 +220,10 @@ else
   echo "📥 Cloning repo into $REPO_DIR..."
   git clone -b "$BRANCH" "https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git" "$REPO_DIR"
 fi
+
+# Persist for both new clones and existing checkouts. The workspace chmod below
+# must not make unchanged source files appear modified in Git.
+git -C "$REPO_DIR" config --local core.fileMode false
 
 ########################################
 # 4) Workspace permissions fix + build cleanup
@@ -281,5 +309,5 @@ trap - EXIT
 echo "🎉 SETUP FINISHED! The system is ready but STOPPED."
 echo "👉 To start use the RUN script."
 echo "Reboot before running sensors so the I2C boot configuration takes effect."
-echo "USB port assignments in sensors/config/params.yaml still need hardware confirmation."
+echo "Keep USB sensors on their assigned ports: left=1.4, right=1.3, GPS=1.2."
 echo "Wi-Fi guardian and boot-service installation remain separate steps; see DAY_BEFORE_REGATTA/README.md."

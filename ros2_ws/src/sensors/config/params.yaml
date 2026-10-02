@@ -3,12 +3,12 @@
 ultrasonic_left_node:
   ros__parameters:
     enabled: true
-    # Provisional USB assignment; confirm against the installed hardware.
+    # Stable udev alias: physical USB port 1.4 on the Raspberry Pi 4.
     endpoint_group: ULTRASONIC_LEFT_NODE
-    port: /dev/ttyUSB0
+    port: /dev/ultrasonic_left
     baudrate: 9600
     timeout_s: 0.1
-    rate_hz: 3.3333333333333335
+    rate_hz: 10.0
     frame_id: ultrasonic_left
     min_range_m: 0.0
     max_range_m: 4.5
@@ -19,12 +19,12 @@ ultrasonic_right_node:
   ros__parameters:
     # Both bow sensors are enabled for attitude-dependent fusion.
     enabled: true
-    # Provisional USB assignment; confirm against the installed hardware.
+    # Stable udev alias: physical USB port 1.3 on the Raspberry Pi 4.
     endpoint_group: ULTRASONIC_RIGHT_NODE
-    port: /dev/ttyUSB1
+    port: /dev/ultrasonic_right
     baudrate: 9600
     timeout_s: 0.1
-    rate_hz: 3.3333333333333335
+    rate_hz: 10.0
     frame_id: ultrasonic_right
     min_range_m: 0.0
     max_range_m: 4.5
@@ -33,7 +33,8 @@ ultrasonic_right_node:
 
 gps_node:
   ros__parameters:
-    port: /dev/ttyUSB2
+    # Stable udev alias: physical USB port 1.2 on the Raspberry Pi 4.
+    port: /dev/gps
     baudrate: 230400
     timeout_s: 0.1
     rate_hz: 10.0

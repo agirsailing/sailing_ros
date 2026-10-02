@@ -14,17 +14,18 @@ heading selection and shutdown policy belong to data_elaboration.
   they define the protocol rather than the installation configuration.
 - The left/right bow sensors select generated endpoint groups from YAML.
   Both are enabled. Set enabled: false for an absent sensor; the height estimator
-  can use a single valid sensor. ttyUSB0 (left) and ttyUSB1 (right) are provisional
-  assignments, not verified wiring. Beam angles and mounting positions belong
+  can use a single valid sensor. Full Pi setup installs stable udev names tied
+  to physical USB ports: left=1.4, right=1.3, GPS=1.2. Keep cables in these ports.
+  Beam angles and mounting positions belong
   to data_elaboration/config/params.yaml; acquisition publishes slant ranges.
 
 ## Acquisition
 
 | Node | Interface | Message / topic |
 | --- | --- | --- |
-| ultrasonic_left_node | ttyUSB0 | sensor_msgs/Range /ultrasonic/left (m) |
-| ultrasonic_right_node | ttyUSB1 | sensor_msgs/Range /ultrasonic/right (m) |
-| gps_node | ttyUSB2, NAV-PVT | sail_msgs/GpsData /gps/data |
+| ultrasonic_left_node | /dev/ultrasonic_left | sensor_msgs/Range /ultrasonic/left (m) |
+| ultrasonic_right_node | /dev/ultrasonic_right | sensor_msgs/Range /ultrasonic/right (m) |
+| gps_node | /dev/gps, NAV-PVT | sail_msgs/GpsData /gps/data |
 | i2c_sensors_node | bus 1, mux 0x70, channel 2 | sensor_msgs/Imu /imu/data |
 | i2c_sensors_node | same mux, channel 0 | geometry_msgs/Vector3Stamped /compass/data |
 | battery_node | gpiochip0 line 13 | std_msgs/Bool /battery/data |
