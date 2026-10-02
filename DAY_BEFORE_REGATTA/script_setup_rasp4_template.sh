@@ -10,8 +10,10 @@ echo "AGIR RASPBERRY PI 4 SETUP — USB sensors, I2C, GPIO and ROS"
 USER_HOME="/home/boat"
 BASE_DIR="$USER_HOME/2025_SOFTWARE"
 
-GIT_USER="INSERT_GITHUB_USERNAME"
-GIT_TOKEN="INSERT_GITHUB_TOKEN"
+# Optional overrides. Leave empty to reuse origin and Git's saved authentication.
+# Environment variables can also supply a new username/token without editing this file.
+GIT_USER="${GIT_USER:-}"
+GIT_TOKEN="${GIT_TOKEN:-}"
 REPO_SLUG="agirsailing/sailing_ros"
 
 REPO_DIR="$BASE_DIR/sailing_ros"
@@ -29,8 +31,11 @@ if [[ "$EUID" -eq 0 || "$HOME" != "$USER_HOME" ]]; then
   echo "Run this script as the user whose home is $USER_HOME."
   exit 1
 fi
-if [[ -z "$GIT_USER" || "$GIT_USER" == INSERT_* || -z "$GIT_TOKEN" || "$GIT_TOKEN" == INSERT_* ]]; then
-  echo "Fill the GitHub username/token placeholders before running setup."
+# Accept placeholders left in older local copies as unset values.
+if [[ "$GIT_USER" == INSERT_* ]]; then GIT_USER=""; fi
+if [[ "$GIT_TOKEN" == INSERT_* ]]; then GIT_TOKEN=""; fi
+if [[ ( -n "$GIT_USER" && -z "$GIT_TOKEN" ) || ( -z "$GIT_USER" && -n "$GIT_TOKEN" ) ]]; then
+  echo "Provide both GIT_USER and GIT_TOKEN to replace credentials, or leave both empty to reuse Git authentication."
   exit 1
 fi
 if [[ "$(uname -m)" != "aarch64" ]]; then
@@ -204,21 +209,42 @@ if [ -d "$REPO_DIR" ]; then
   sudo chown -R "$USER":"$USER" "$REPO_DIR"
 fi
 
+# With no override, Git itself uses any configured credential helper (or prompts
+# when needed). Existing origin URLs may also contain credentials or use SSH.
+REPO_URL="https://github.com/${REPO_SLUG}.git"
+if [[ -n "$GIT_USER" ]]; then
+  REPO_URL="https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git"
+fi
+
 if [ -d "$REPO_DIR/.git" ]; then
   echo "🔄 Existing repo in $REPO_DIR, aligning to origin/$BRANCH..."
 
   # Ignore executable-bit changes before updating an existing checkout.
   git -C "$REPO_DIR" config --local core.fileMode false
 
-  # --- Update the token even if the repo exists ---
-  git -C "$REPO_DIR" remote set-url origin "https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git"
+  # Rebase/reset do not remove .git/config. Preserve saved origin credentials
+  # and SSH URLs unless the user explicitly supplies a replacement pair.
+  if git -C "$REPO_DIR" remote get-url origin >/dev/null 2>&1; then
+    if [[ -n "$GIT_USER" ]]; then
+      git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
+      echo "Updated origin with the supplied GitHub credentials."
+    else
+      echo "Reusing existing origin and Git authentication."
+    fi
+  else
+    git -C "$REPO_DIR" remote add origin "$REPO_URL"
+  fi
 
-  git -C "$REPO_DIR" fetch --all --prune
+  if ! git -C "$REPO_DIR" fetch origin --prune; then
+    echo "Fetch failed: check connectivity, repository access and whether saved credentials have expired."
+    echo "For an HTTPS token replacement, supply both GIT_USER and GIT_TOKEN and rerun setup."
+    exit 1
+  fi
   git -C "$REPO_DIR" checkout -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || true
   git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
 else
   echo "📥 Cloning repo into $REPO_DIR..."
-  git clone -b "$BRANCH" "https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git" "$REPO_DIR"
+  git clone -b "$BRANCH" "$REPO_URL" "$REPO_DIR"
 fi
 
 # Persist for both new clones and existing checkouts. The workspace chmod below

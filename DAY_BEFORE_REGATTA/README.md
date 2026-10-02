@@ -8,8 +8,22 @@ The exact OS release and hardware identities still need confirmation on the Pi.
 
 ## First setup
 
-Fill `GIT_USER` and `GIT_TOKEN` in a local copy of
-`script_setup_rasp4_template.sh`, then run that copy. The script:
+Run a current local copy of `script_setup_rasp4_template.sh`. `GIT_USER` and
+`GIT_TOKEN` are optional: leave both empty to reuse the checkout's existing
+`origin` and Git authentication (saved URL credentials, a credential helper,
+or an SSH key for an SSH origin). Rebase and reset retain `.git/config`, so
+setup no longer requires re-entering credentials after updating the script.
+
+For a new clone or a checkout without `origin`, setup defaults to the HTTPS
+URL of `REPO_SLUG`. Git uses its configured credential helpers and may prompt
+if credentials are missing. Newly entered credentials are only saved if a
+credential helper is configured to save them. Alternatively, supply both
+`GIT_USER` and `GIT_TOKEN` in the environment or in a local script copy to set
+or replace the authenticated HTTPS URL. As in the previous setup, this explicit
+override stores the token in plaintext in the checkout's `.git/config`; it is
+not part of commits. Do not commit a script copy containing a real token.
+An expired token still needs replacement. A failed fetch stops setup before
+resetting tracked files. The script:
 
 1. Checks the board, 64-bit architecture, user and boot configuration path.
 2. Stops an existing regatta service and container before changing the system.
