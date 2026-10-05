@@ -34,31 +34,38 @@ class DFRobot_A02_Distance:
     def getDistance(self):
         if self.minimum is None:
             raise ValueError('Configure the measurement range before reading')
-        # Preserve partial frames across callbacks; limit blocking with the
-        # serial timeout and never return an old sample as a successful read.
-        self._buffer.extend(self._ser.read(max(1, self._ser.in_waiting)))
-        self.last_operate_status = self.STA_ERR_DATA
-        while self._buffer:
+        # Non-blocking: take only what has already arrived.
+        waiting = self._ser.in_waiting
+        if waiting:
+            self._buffer.extend(self._ser.read(waiting))
+
+        latest = None
+        status = self.STA_ERR_DATA
+        # Parse ALL complete frames; keep the newest valid one.
+        while len(self._buffer) >= 4:
             if self._buffer[0] != 0xFF:
                 del self._buffer[0]
                 continue
-            if len(self._buffer) < 4:
-                break
             frame = self._buffer[:4]
             if (sum(frame[:3]) & 0xFF) != frame[3]:
-                self.last_operate_status = self.STA_ERR_CHECKSUM
+                status = self.STA_ERR_CHECKSUM
                 del self._buffer[0]
                 continue
             del self._buffer[:4]
-            self.distance = (frame[1] << 8) | frame[2]
-            if self.distance < self.minimum:
-                self.last_operate_status = self.STA_ERR_CHECK_LOW_LIMIT
-            elif self.distance > self.maximum:
-                self.last_operate_status = self.STA_ERR_CHECK_OUT_LIMIT
-            else:
-                self.last_operate_status = self.STA_OK
-            return self.distance
-        return None
+            latest = (frame[1] << 8) | frame[2]
+        # Any trailing partial frame (<4 bytes) stays for the next call.
+
+        if latest is None:
+            self.last_operate_status = status
+            return None
+        self.distance = latest
+        if latest < self.minimum:
+            self.last_operate_status = self.STA_ERR_CHECK_LOW_LIMIT
+        elif latest > self.maximum:
+            self.last_operate_status = self.STA_ERR_CHECK_OUT_LIMIT
+        else:
+            self.last_operate_status = self.STA_OK
+        return latest
 
     def close(self):
         self._ser.close()
