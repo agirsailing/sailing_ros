@@ -16,16 +16,16 @@ class BatteryDriver:
         self.edges = []
         self.latest = None  # (volts, time received)
         lgpio.gpio_claim_alert(chip, line, lgpio.BOTH_EDGES, lgpio.SET_PULL_UP)
-        # No edge for 150 ms means the packet is over.
-        lgpio.gpio_set_watchdog_micros(chip, line, 150_000)
         self.cb = lgpio.callback(chip, line, lgpio.BOTH_EDGES, self._on_edge)
 
     def _on_edge(self, chip, line, level, timestamp):
         if level == WATCHDOG:
-            if self.edges:
-                self._decode()
-                self.edges = []
-        elif self.edges or level == 0:  # a falling edge starts a packet
+            return
+        # A packet lasts 20 bits; an edge after that belongs to the next one.
+        if self.edges and timestamp - self.edges[0][0] > 20 * BIT_NS:
+            self._decode()
+            self.edges = []
+        if self.edges or level == 0:  # a falling edge starts a packet
             self.edges.append((timestamp, level))
 
     def _level_at(self, t):

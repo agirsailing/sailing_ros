@@ -71,8 +71,9 @@ i2c_sensors_node:
 battery_node:
   ros__parameters:
     gpio_chip: 0
+    link_gpio_line: 6
     gpio_line: 13
-    active_level: 0
-    pull: up
+    active_level: 1
+    pull: down
     rate_hz: 10.0
     qos_depth: 10

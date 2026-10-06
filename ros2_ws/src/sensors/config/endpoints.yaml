@@ -12,6 +12,7 @@ topics:
   imu_data: "/imu/data"
   compass_data: "/compass/data"
   battery_data: "/battery/data"
+  battery_voltage: "/battery/voltage"  
 
 nodes:
   ultrasonic_left_node:
@@ -30,3 +31,4 @@ nodes:
   battery_node:
     pub:
       battery_data: "@battery_data"
+      battery_voltage: "@battery_voltage" 

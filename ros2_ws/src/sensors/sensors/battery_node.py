@@ -9,7 +9,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from std_msgs.msg import Bool, Float32
 
-from sensors.drivers.battery_link_driver import BatteryDriver
+from sensors.drivers.battery_driver import BatteryDriver
 from sensors.generated.ros_endpoints import Topics
 
 # Publish NaN if the ESP32 has not sent a valid packet for this long.
