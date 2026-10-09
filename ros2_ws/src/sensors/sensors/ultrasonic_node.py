@@ -100,6 +100,9 @@ class UltrasonicNode(Node):
         except OSError as error:
             self.get_logger().warning(f'Ultrasonic read failed: {error}')
             return
+        
+        if distance_mm is None and self.sensor.last_operate_status == self.sensor.STA_ERR_DATA:
+            return  # no new complete frame this tick; not an error
 
         if self.sensor.last_operate_status != self.sensor.STA_OK:
             self.get_logger().warning(

@@ -1,12 +1,19 @@
-"""Publish the digital low-battery signal; system policy lives elsewhere."""
+"""Publish the digital low-battery signal and the battery voltage; system policy lives elsewhere."""
+
+import math
+import time
 
 import lgpio
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32
 
+from sensors.drivers.battery_driver import BatteryDriver
 from sensors.generated.ros_endpoints import Topics
+
+# Publish NaN if the ESP32 has not sent a valid packet for this long.
+VOLTAGE_TIMEOUT_S = 5.0
 
 
 class BatteryNode(Node):
@@ -16,6 +23,7 @@ class BatteryNode(Node):
         # 1. Declare and read ROS parameters (values come from params.yaml).
         self.gpio_chip = self.declare_parameter('gpio_chip', Parameter.Type.INTEGER).value
         self.gpio_line = self.declare_parameter('gpio_line', Parameter.Type.INTEGER).value
+        self.link_gpio_line = self.declare_parameter('link_gpio_line', Parameter.Type.INTEGER).value
         self.active_level = self.declare_parameter('active_level', Parameter.Type.INTEGER).value
         self.pull = self.declare_parameter('pull', Parameter.Type.STRING).value
         self.rate_hz = self.declare_parameter('rate_hz', Parameter.Type.DOUBLE).value
@@ -24,10 +32,15 @@ class BatteryNode(Node):
         # 2. Validate configuration before accessing GPIO.
         self._validate_parameters()
 
-        # 3. Low-battery state publisher.
+        # 3. Low-battery state and voltage publishers.
         self.battery_pub = self.create_publisher(
             Bool,
             Topics.BATTERY_NODE.PUB.BATTERY_DATA,
+            self.qos_depth
+        )
+        self.voltage_pub = self.create_publisher(
+            Float32,
+            Topics.BATTERY_NODE.PUB.BATTERY_VOLTAGE,
             self.qos_depth
         )
 
@@ -42,8 +55,9 @@ class BatteryNode(Node):
         self.chip = lgpio.gpiochip_open(self.gpio_chip)
         try:
             lgpio.gpio_claim_input(self.chip, self.gpio_line, self.pull_flags)
+            self.link = BatteryDriver(self.chip, self.link_gpio_line)
 
-            # 5. Timer for reading and publishing the digital battery signal.
+            # 5. Timer for publishing the battery signal and voltage.
             self.battery_timer = self.create_timer(
                 1.0 / self.rate_hz,
                 self.publish_battery
@@ -54,7 +68,8 @@ class BatteryNode(Node):
 
         self.get_logger().info(
             f'Battery node initialized on GPIO chip {self.gpio_chip}, '
-            f'line {self.gpio_line}, reading at {self.rate_hz} Hz'
+            f'line {self.gpio_line}, voltage link on line {self.link_gpio_line}, '
+            f'publishing at {self.rate_hz} Hz'
         )
 
     # -----------------------
@@ -74,9 +89,17 @@ class BatteryNode(Node):
             raise ValueError('qos_depth must be positive')
 
     # -----------------------
-    #   Read and publish battery state
+    #   Read and publish battery state and voltage
     # -----------------------
     def publish_battery(self):
+        voltage = Float32()
+        latest = self.link.latest
+        if latest is None or time.monotonic() - latest[1] > VOLTAGE_TIMEOUT_S:
+            voltage.data = math.nan
+        else:
+            voltage.data = latest[0]
+        self.voltage_pub.publish(voltage)
+
         try:
             level = lgpio.gpio_read(self.chip, self.gpio_line)
             if level not in (0, 1):
@@ -94,6 +117,7 @@ class BatteryNode(Node):
     #   Release the GPIO chip
     # -----------------------
     def destroy_node(self):
+        self.link.close()
         lgpio.gpiochip_close(self.chip)
         return super().destroy_node()
 

@@ -8,9 +8,9 @@ ultrasonic_left_node:
     port: /dev/ultrasonic_left
     baudrate: 9600
     timeout_s: 0.1
-    rate_hz: 10.0
+    rate_hz: 20.0
     frame_id: ultrasonic_left
-    min_range_m: 0.0
+    min_range_m: 0.03
     max_range_m: 4.5
     field_of_view_rad: 0.1
     qos_depth: 10
@@ -24,9 +24,9 @@ ultrasonic_right_node:
     port: /dev/ultrasonic_right
     baudrate: 9600
     timeout_s: 0.1
-    rate_hz: 10.0
+    rate_hz: 20.0
     frame_id: ultrasonic_right
-    min_range_m: 0.0
+    min_range_m: 0.03
     max_range_m: 4.5
     field_of_view_rad: 0.1
     qos_depth: 10
@@ -71,8 +71,9 @@ i2c_sensors_node:
 battery_node:
   ros__parameters:
     gpio_chip: 0
+    link_gpio_line: 6
     gpio_line: 13
-    active_level: 0
-    pull: up
+    active_level: 1
+    pull: down
     rate_hz: 10.0
     qos_depth: 10

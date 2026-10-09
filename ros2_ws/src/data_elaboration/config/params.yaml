@@ -6,12 +6,12 @@ ultrasonic_filter_node:
     # REPLACE zero positions with measured bowsprit mounting coordinates.
     left:
       position_m: [0.0, 0.0, 0.0]
-      lateral_tilt_deg: 15.0
+      lateral_tilt_deg: 1.0
       forward_tilt_deg: 0.0
       frame_id: ultrasonic_left
     right:
       position_m: [0.0, 0.0, 0.0]
-      lateral_tilt_deg: -15.0
+      lateral_tilt_deg: -1.0
       forward_tilt_deg: 0.0
       frame_id: ultrasonic_right
     # imu_mount_transformer_node aligns mounting axes before attitude estimation.
@@ -47,7 +47,7 @@ imu_node:
     cov_orient: 0.0
     cov_vel: 0.0
     cov_acc: 0.0
-    calibration_samples: 200
+    calibration_samples: 0
     gravity_mps2: 9.80665
     complementary_alpha: 0.98
     max_sample_dt_s: 0.2

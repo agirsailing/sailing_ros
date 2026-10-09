@@ -2,7 +2,7 @@ telemetry_gateway_node:
   ros__parameters:
     # Match the processing nodes. Set true for an eventual /clock-driven bag replay.
     use_sim_time: false
-    publish_rate_hz: 10.0
+    publish_rate_hz: 4.0
     attitude_timeout_s: 0.5
     height_timeout_s: 0.5
     battery_timeout_s: 3.0
