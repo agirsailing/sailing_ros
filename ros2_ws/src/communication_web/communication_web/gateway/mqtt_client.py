@@ -76,7 +76,8 @@ class MqttClientWrapper:
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties):
         self.connected = False
-
+        self.node.get_logger().warning(f'MQTT disconnected: {reason_code}')
+        
     def _on_message(self, client, userdata, message):
         if self.on_message is not None:
             self.on_message(message.topic, bytes(message.payload), message.retain)
