@@ -31,13 +31,20 @@ lateral offset and height above the design waterline. The zero positions in YAML
 are **placeholders to replace with measured installation dimensions**. They do
 not represent a calibrated installation.
 
+Each sensor uses one `mounting` array:
+`[x_m, y_m, z_m, lateral_tilt_deg, forward_tilt_deg]`.
+For example, `left.mounting: [2.0, 0.2, 0.6, 15.0, 0.0]` means 2 m forward,
+0.2 m left and 0.6 m above O, with a 15-degree leftward beam tilt and no forward
+tilt. Use decimal values for all five entries (ROS double array). Custom parameter
+files must replace the former separate position and tilt parameters with this array.
+
 Both sensors are on the bow. Positive lateral_tilt_deg points the beam left
 from body-down; negative points right. Positive forward_tilt_deg tilts towards
 the bow. With lateral angle a and forward angle b, the unit beam is:
 
     u = [sin(b), cos(b) sin(a), -cos(b) cos(a)]
 
-Defaults are +15 degrees left, -15 degrees right, zero forward tilt. These are
+Defaults are +1 degree left, -1 degree right, zero forward tilt. These are
 central-ray approximations; sensor field of view is not an installation angle.
 Both sensor instances are enabled in sensors/config/params.yaml. Port assignments
 remain provisional.
