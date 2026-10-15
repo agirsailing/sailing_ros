@@ -1,4 +1,4 @@
-"""Launch hardware acquisition, including IMU and compass via one mux owner."""
+"""Launch hardware acquisition with battery shutdown disabled during replay."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -23,5 +23,5 @@ def generate_launch_description():
         Node(package='sensors', executable='i2c_sensors_node',
              name='i2c_sensors_node', parameters=[params], output='screen'),
         Node(package='sensors', executable='battery_node',
-             name='battery_node', parameters=[params], output='screen'),
+             name='battery_node', parameters=[params, {'shutdown_enabled': False}], output='screen'),
     ])

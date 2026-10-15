@@ -13,7 +13,6 @@ class Topics:
         IMU_RPY_AERO = '/processed/imu/rpy/aero'
         HEADING_DEG = '/processed/heading_deg'
         GPS_SUMMARY = '/processed/gps/summary'
-        BATTERY_LOW = '/processed/battery/low'
 
     class ULTRASONIC_FILTER_NODE:
         class PUB:
@@ -45,7 +44,3 @@ class Topics:
         class PUB:
             HEADING_DEG = '/processed/heading_deg'
             GPS_SUMMARY = '/processed/gps/summary'
-
-    class BATTERY_MONITOR_NODE:
-        class PUB:
-            BATTERY_LOW = '/processed/battery/low'

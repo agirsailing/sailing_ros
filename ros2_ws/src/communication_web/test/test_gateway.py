@@ -51,7 +51,7 @@ class TelemetryTests(unittest.TestCase):
     def populate(self):
         self.state.update('attitude', sample(roll_deg=12.0, pitch_deg=-3.0, yaw_deg=375.0), 100)
         self.state.update('height', sample(height_m=-0.05), 100)
-        self.state.update('battery', NS(data=False), 100)
+        self.state.update('battery', sample(low=False, voltage_v=12.4), 100)
         self.state.update('gps', sample(gps_stamp=stamp(), fix_valid=True,
                                        latitude_deg=59.3, longitude_deg=18.0, sog_mps=6.2), 100)
 
@@ -72,6 +72,7 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(data['height_m'], -0.05)
         self.assertTrue(data['battery_valid'])
         self.assertFalse(data['battery_low'])
+        self.assertEqual(data['battery_voltage_v'], 12.4)
         self.assertEqual(data['sog_mps'], 6.2)
         self.assertEqual(position['sog_mps'], 6.2)
         self.assertEqual(source_stamp.sec, 100)
@@ -94,6 +95,24 @@ class TelemetryTests(unittest.TestCase):
         self.assertFalse(position['fix_valid'])
         self.assertFalse(data['sog_valid'])
         self.assertEqual(source_stamp.sec, 90)
+
+    def test_missing_voltage_does_not_hide_low_alarm(self):
+        self.state.update('battery', sample(low=True, voltage_v=math.nan), 100)
+        data, _, _ = self.state.build(100)
+        self.assertTrue(data['battery_valid'])
+        self.assertTrue(data['battery_low'])
+        self.assertIsNone(json_safe(data)['battery_voltage_v'])
+
+    def test_battery_uses_source_stamp_and_expires_both_fields(self):
+        for source_time, now in ((90, 100), (102, 100), (100, 104)):
+            with self.subTest(source_time=source_time, now=now):
+                self.state = TelemetrySnapshot(0.5, 0.5, 3.0, 2.0)
+                msg = sample(low=True, voltage_v=12.4)
+                msg.header.stamp = stamp(source_time)
+                self.state.update('battery', msg, 100)
+                data, _, _ = self.state.build(now)
+                self.assertFalse(data['battery_valid'])
+                self.assertIsNone(json_safe(data)['battery_voltage_v'])
 
     def test_invalid_coordinates_fix_speed_and_nonfinite_values(self):
         for fields in (dict(latitude_deg=91), dict(longitude_deg=181),

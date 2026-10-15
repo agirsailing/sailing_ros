@@ -1,5 +1,4 @@
-# Input topic names are imported from sensors.generated.ros_endpoints.
-# This registry owns only processing outputs.
+# Raw input names are imported from sensors.generated.ros_endpoints.
 meta:
   generate:
     cpp: false
@@ -19,7 +18,6 @@ topics:
   imu_rpy_aero: /processed/imu/rpy/aero
   heading_deg: /processed/heading_deg
   gps_summary: /processed/gps/summary
-  battery_low: /processed/battery/low
 
 nodes:
   ultrasonic_filter_node:
@@ -46,6 +44,3 @@ nodes:
     pub:
       heading_deg: "@heading_deg"
       gps_summary: "@gps_summary"
-  battery_monitor_node:
-    pub:
-      battery_low: "@battery_low"

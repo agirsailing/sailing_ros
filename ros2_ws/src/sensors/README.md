@@ -1,7 +1,7 @@
 # Sensors
 
-Hardware acquisition only. Nodes publish measurements; calibration, filtering,
-heading selection and shutdown policy belong to data_elaboration.
+Nodes acquire hardware measurements. battery_node also owns the low-battery
+shutdown policy; calibration, filtering and heading selection belong to data_elaboration.
 
 ## Configuration and endpoints
 
@@ -28,7 +28,27 @@ heading selection and shutdown policy belong to data_elaboration.
 | gps_node | /dev/gps, NAV-PVT | sail_msgs/GpsData /gps/data |
 | i2c_sensors_node | bus 1, mux 0x70, channel 2 | sensor_msgs/Imu /imu/data |
 | i2c_sensors_node | same mux, channel 0 | geometry_msgs/Vector3Stamped /compass/data |
-| battery_node | gpiochip0 line 13 | std_msgs/Bool /battery/data |
+| battery_node | gpiochip0 line 13 (alarm), line 6 (ESP32 voltage link) | sail_msgs/BatteryData /battery/data |
+
+BatteryData contains only `header`, `voltage_v` (volts) and `low` (raw GPIO alarm).
+`header.stamp` is the ROS time of the GPIO reading; `header.frame_id` stays empty
+because these scalars have no spatial frame. Voltage is the latest ESP32 reading,
+not necessarily acquired at that timestamp; absent or older-than-5-second voltage
+is NaN. A GPIO read failure suppresses the entire snapshot, so consumers must
+expire missing messages rather than treating a missing alarm as false.
+There are no per-field validity booleans and no charge-percentage estimate.
+The separate `/battery/voltage` publisher has been removed.
+
+battery_node also counts consecutive `low=true` samples and, once the configured
+threshold is reached, requests shutdown at most once per node execution.
+`BatteryData.low` remains the raw GPIO alarm, not the confirmation result.
+In config/params.yaml, `shutdown_enabled` defaults to true,
+`low_samples_required` to 1 and `shutdown_command` to `[sudo, shutdown, "-h", now]`.
+A valid `low=false` sample clears the counter. Missing voltage does not suppress
+a GPIO alarm or the shutdown request. GPIO read errors produce no new sample
+and do not advance the counter. A failed shutdown command is logged, without
+repeated execution on every sample. Its effect on the host depends on Docker.
+There is no separate monitoring node or `/processed/battery/low` topic.
 
 Compass values are signed raw counts, not tesla: the exact model and sensitivity
 still need hardware confirmation. IMU acceleration is m/s^2 and gyro is rad/s.
@@ -45,8 +65,9 @@ conversion scheduling may be considered after hardware timing measurements.
 
 ## Launch
 
-live_sensors.launch.py and replay_sensors.launch.py are intentionally identical:
-both start all acquisition nodes, including IMU via i2c_sensors_node.
+live_sensors.launch.py and replay_sensors.launch.py both start all acquisition
+nodes, including IMU via i2c_sensors_node. Replay explicitly overrides
+`shutdown_enabled=false` for battery_node after loading the shared YAML.
 sensors_launch.py is a compatibility entry point with the same acquisition set.
 Replay is not yet a hardware-free bag pipeline. Do not start both modes together.
 

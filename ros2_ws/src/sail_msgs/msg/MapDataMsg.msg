@@ -1,11 +1,8 @@
-# ros2_ws/src/sail_msgs/msg/MapDataMsg.msg
-
-builtin_interfaces/Time stamp
-float32 lat
-float32 lon
-float32 yaw
-float32 twd
-float32 tws
-float32 dtl   # Perpendicular distance to the line, in metres.
-float32 ttl   # Time to the line, in seconds.
-sail_msgs/Mark[] marks
+# Snapshot time and original GPS sample time, respectively (ROS clock).
+std_msgs/Header header
+builtin_interfaces/Time gps_stamp
+# False when position/speed are missing, invalid or stale; numbers then are NaN.
+bool fix_valid
+float64 latitude_deg
+float64 longitude_deg
+float64 sog_mps

@@ -1,4 +1,4 @@
-"""Launch processing and live battery monitoring."""
+"""Launch sensor data processing."""
 
 from data_elaboration.generated.ros_endpoints import Topics
 from sensors.generated.ros_endpoints import Topics as SensorTopics
@@ -39,6 +39,4 @@ def generate_launch_description():
              ]),
         Node(package='data_elaboration', executable='heading_node',
              name='heading_node', parameters=[params], output='screen'),
-        Node(package='data_elaboration', executable='battery_monitor_node',
-             name='battery_monitor_node', parameters=[params], output='screen'),
     ])

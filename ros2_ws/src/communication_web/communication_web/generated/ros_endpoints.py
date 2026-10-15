@@ -4,16 +4,15 @@ class Topics:
     class Shared:
         ATTITUDE = '/processed/imu/rpy/aero'
         HEIGHT = '/processed/boat_height'
-        BATTERY = '/processed/battery/low'
-        BATTERY_VOLTAGE = '/battery/voltage'
+        BATTERY = '/battery/data'
         GPS = '/processed/gps/summary'
         ULTRASONIC_LEFT = '/ultrasonic/left'
         ULTRASONIC_RIGHT = '/ultrasonic/right'
         RECORDING_STATE = '/local_state/recording_state'
-        TELEMETRY = '/web/telemetry'
-        POSITION = '/web/position'
-        MQTT_TELEMETRY = 'agir_gui/data/telemetry'
-        MQTT_POSITION = 'agir_gui/data/position'
+        TELEMETRY = '/web/ros/dashboard'
+        POSITION = '/web/ros/map'
+        MQTT_TELEMETRY = 'agir_gui/data/dashboard'
+        MQTT_POSITION = 'agir_gui/data/map'
         MQTT_RECORDING_STATE = 'agir_gui/data/recording_state'
         MQTT_START_RECORDING = 'agir_gui/cmd/start_recording'
         MQTT_STOP_RECORDING = 'agir_gui/cmd/stop_recording'
@@ -24,24 +23,23 @@ class Topics:
         class SUB:
             ATTITUDE = '/processed/imu/rpy/aero'
             HEIGHT = '/processed/boat_height'
-            BATTERY = '/processed/battery/low'
-            BATTERY_VOLTAGE = '/battery/voltage'
+            BATTERY = '/battery/data'
             GPS = '/processed/gps/summary'
             ULTRASONIC_LEFT = '/ultrasonic/left'
             ULTRASONIC_RIGHT = '/ultrasonic/right'
             RECORDING_STATE = '/local_state/recording_state'
 
         class PUB:
-            TELEMETRY = '/web/telemetry'
-            POSITION = '/web/position'
+            TELEMETRY = '/web/ros/dashboard'
+            POSITION = '/web/ros/map'
 
         class MQTT:
             class SUB:
                 pass
 
             class PUB:
-                TELEMETRY = 'agir_gui/data/telemetry'
-                POSITION = 'agir_gui/data/position'
+                TELEMETRY = 'agir_gui/data/dashboard'
+                POSITION = 'agir_gui/data/map'
                 RECORDING_STATE = 'agir_gui/data/recording_state'
 
             class RSP:

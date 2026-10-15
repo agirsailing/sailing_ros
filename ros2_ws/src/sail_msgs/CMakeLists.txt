@@ -14,15 +14,15 @@ find_package(builtin_interfaces REQUIRED)
 # 2. Message and service definitions
 # Register every .msg and .srv file here.
 set(msg_files
-  "msg/WebTelemetry.msg"
-  "msg/BoatPosition.msg"
+  "msg/BatteryData.msg"
+  "msg/DashboardDataMsg.msg"
+  "msg/MapDataMsg.msg"
   "msg/BoatHeight.msg"
   "msg/RollPitchYaw.msg"
   "msg/GpsData.msg"
   "msg/GpsSummary.msg"
   "msg/SerialMsg.msg"
   "msg/Mark.msg"
-  "msg/MapDataMsg.msg"
   "msg/RecordingState.msg"
 )
 

@@ -5,9 +5,10 @@ Wants=docker.service
 
 [Service]
 Type=simple
-User=agir
-WorkingDirectory=/home/agir/2025_SOFTWARE/sailing_ros/DAY_BEFORE_REGATTA
-ExecStart=/usr/local/bin/agir_regatta_start.sh
+User=boat
+Environment="HOME=/home/boat"
+WorkingDirectory=/home/boat/2025_SOFTWARE/sailing_ros/DAY_BEFORE_REGATTA
+ExecStart=/bin/bash /home/boat/2025_SOFTWARE/sailing_ros/DAY_BEFORE_REGATTA/run.sh
 Restart=always
 RestartSec=5
 

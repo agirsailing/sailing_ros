@@ -8,7 +8,6 @@ class Topics:
         IMU_DATA = '/imu/data'
         COMPASS_DATA = '/compass/data'
         BATTERY_DATA = '/battery/data'
-        BATTERY_VOLTAGE = '/battery/voltage'
 
     class ULTRASONIC_LEFT_NODE:
         class PUB:
@@ -30,4 +29,3 @@ class Topics:
     class BATTERY_NODE:
         class PUB:
             BATTERY_DATA = '/battery/data'
-            BATTERY_VOLTAGE = '/battery/voltage'
