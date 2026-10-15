@@ -143,8 +143,8 @@ class WiringTests(unittest.TestCase):
             json=json, uuid=uuid, mqtt=self.fake_mqtt, Parameter=self.parameter,
             json_safe=json_safe, message_to_ordereddict=lambda msg: {'test': float('nan')})
         self.messages = {name: message_type(name) for name in (
-            'BoatHeight', 'BoatPosition', 'GpsSummary', 'RecordingState',
-            'RollPitchYaw', 'WebTelemetry')}
+            'BatteryData', 'BoatHeight', 'MapDataMsg', 'GpsSummary', 'RecordingState',
+            'RollPitchYaw', 'DashboardDataMsg')}
 
     def telemetry_node(self):
         cls = load_class(
@@ -173,6 +173,10 @@ class WiringTests(unittest.TestCase):
         angle.header.stamp.sec = 100
         angle.roll_deg, angle.pitch_deg, angle.yaw_deg = 12.0, 3.0, 75.0
         node.subscriptions[rt.SUB.ATTITUDE](angle)
+        battery = self.messages['BatteryData']()
+        battery.header.stamp.sec = 100
+        battery.voltage_v, battery.low = 12.4, True
+        node.subscriptions[rt.SUB.BATTERY](battery)
         node.subscriptions[rt.SUB.ULTRASONIC_LEFT](NS(
             header=NS(stamp=NS(sec=100, nanosec=0)), range=0.6, min_range=0.03, max_range=4.5))
         node.subscriptions[rt.SUB.ULTRASONIC_RIGHT](NS(
@@ -182,6 +186,9 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(message.header.stamp.sec, 100)
         self.assertEqual(message.roll_deg, 12.0)
         self.assertTrue(message.attitude_valid)
+        self.assertTrue(message.battery_valid)
+        self.assertTrue(message.battery_low)
+        self.assertEqual(message.battery_voltage_v, 12.4)
         self.assertTrue(message.ultrasonic_left_valid)
         self.assertTrue(message.ultrasonic_right_valid)
         self.assertEqual(message.ultrasonic_left_m, 0.6)
@@ -263,7 +270,7 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(rt.SUB.ULTRASONIC_RIGHT, sensors.ULTRASONIC_RIGHT_NODE.PUB.RANGE)
         self.assertEqual(rt.SUB.ATTITUDE, processing.IMU_NODE.PUB.RPY_AERO)
         self.assertEqual(rt.SUB.HEIGHT, processing.ULTRASONIC_FILTER_NODE.PUB.HEIGHT)
-        self.assertEqual(rt.SUB.BATTERY, processing.BATTERY_MONITOR_NODE.PUB.BATTERY_LOW)
+        self.assertEqual(rt.SUB.BATTERY, sensors.BATTERY_NODE.PUB.BATTERY_DATA)
         self.assertEqual(rt.SUB.GPS, processing.HEADING_NODE.PUB.GPS_SUMMARY)
         self.assertEqual(rt.SUB.RECORDING_STATE,
                          recorder['Topics'].ROSBAG_MANAGER_NODE.PUB.RECORDING_STATE)

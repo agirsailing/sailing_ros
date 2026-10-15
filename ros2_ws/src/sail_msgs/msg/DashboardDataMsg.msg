@@ -8,9 +8,12 @@ float64 pitch_deg
 float64 yaw_deg
 bool height_valid
 float64 height_m
-# The hardware only reports a low-battery alarm, not charge percentage.
+# Fresh BatteryData received; battery_low is the raw hardware alarm.
+# If false, the alarm is unknown (do not interpret battery_low as healthy).
 bool battery_valid
 bool battery_low
+# Volts, NaN when unavailable even if the low alarm remains valid. No percentage.
+float32 battery_voltage_v
 bool sog_valid
 float64 sog_mps
 # Independent raw ultrasonic beam distances, in metres (not corrected height).

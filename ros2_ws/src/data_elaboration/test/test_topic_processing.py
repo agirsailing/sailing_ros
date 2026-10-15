@@ -1,7 +1,7 @@
 """Offline callback regressions: real algorithms, simulated ROS messages.
 
-Load only each node class from its source so these checks never initialize ROS,
-open hardware or execute the battery shutdown command.
+Load only each node class from its source so these checks never initialize ROS
+or open hardware.
 """
 
 import ast
@@ -48,7 +48,7 @@ def load_node(filename):
     tree = ast.parse((PACKAGE / 'data_elaboration' / filename).read_text())
     cls = next(item for item in tree.body if isinstance(item, ast.ClassDef))
     scope = dict(Node=object, math=math, copy=copy, BoatHeight=Message,
-                 RollPitchYaw=Message, Bool=Message, subprocess=Mock(),
+                 RollPitchYaw=Message,
                  deque=deque, vertical_row=vertical_row, beam_direction=beam_direction,
                  project_height=project_height, fuse_estimates=fuse_estimates,
                  quaternion_from_degrees=quaternion_from_degrees, rotation_matrix=rotation_matrix,
@@ -354,33 +354,6 @@ class TopicProcessingTests(unittest.TestCase):
         self.assertFalse(msg.direction_valid)
         self.assertEqual(msg.direction_source, Message.DIRECTION_NONE)
         self.assertTrue(math.isnan(msg.direction_deg))
-
-    def test_battery_confirms_alarm_without_inventing_charge_percentage(self):
-        node, scope = load_node('battery_monitor_node.py')
-        node.low_samples = 0
-        node.low_samples_required = 2
-        node.shutdown_requested = False
-        node.shutdown_enabled = False
-        node.battery_pub = Mock()
-        for raw, expected in ((True, False), (False, False), (True, False),
-                              (True, True), (False, False)):
-            node.publish_battery_state(SimpleNamespace(data=raw))
-            self.assertIs(node.battery_pub.publish.call_args.args[0].data, expected)
-        scope['subprocess'].run.assert_not_called()
-
-    def test_battery_shutdown_is_requested_once_while_status_keeps_publishing(self):
-        node, scope = load_node('battery_monitor_node.py')
-        node.low_samples = 0
-        node.low_samples_required = 1
-        node.shutdown_requested = False
-        node.shutdown_enabled = True
-        node.shutdown_command = ['simulated-shutdown']
-        node.battery_pub = Mock()
-        scope['subprocess'].run.return_value.returncode = 0
-        for _ in range(3):
-            node.publish_battery_state(SimpleNamespace(data=True))
-        scope['subprocess'].run.assert_called_once_with(['simulated-shutdown'], check=False)
-        self.assertEqual(node.battery_pub.publish.call_count, 3)
 
 
 if __name__ == '__main__':

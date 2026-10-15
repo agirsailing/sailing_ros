@@ -3,7 +3,7 @@
 Two gateways inspired by Polimi's `web_communication`: one for telemetry, one
 for commands. The existing Agir package name remains `communication_web`.
 
-`telemetry_gateway_node` aggregates processed data, publishes two custom ROS
+`telemetry_gateway_node` aggregates processed data and raw battery snapshots, publishes two custom ROS
 messages from `sail_msgs`, and forwards the same structures as MQTT JSON.
 `command_gateway_node` exposes only the existing rosbag start/stop services.
 There are no mark, actuator, update or shutdown commands in this gateway.
@@ -12,15 +12,26 @@ There are no mark, actuator, update or shutdown commands in this gateway.
 
 | ROS output | Message | MQTT output |
 | --- | --- | --- |
-| `/web/telemetry` | `sail_msgs/WebTelemetry` | `agir_gui/data/telemetry` |
-| `/web/position` | `sail_msgs/BoatPosition` | `agir_gui/data/position` |
+| `/web/ros/dashboard` | `sail_msgs/DashboardDataMsg` | `agir_gui/data/dashboard` |
+| `/web/ros/map` | `sail_msgs/MapDataMsg` | `agir_gui/data/map` |
+
+ROS and MQTT receive the same snapshot independently. The ROS outputs allow
+local inspection and recording: rosbag_manager uses `ros2 bag record -a`, which
+records ROS topics, not MQTT traffic. MQTT delivers JSON to the browser.
+
+The MQTT names replace `agir_gui/data/telemetry` and `agir_gui/data/position`;
+deploy the gateway and web app together and update any broker topic ACLs.
+The ROS outputs are `/web/ros/dashboard` and `/web/ros/map`, with types
+DashboardDataMsg and MapDataMsg respectively. Rebuild consumers; old bags retain their original message types.
+MapDataMsg now uses the existing Agir position fields below, replacing the unused
+legacy definition with wind/marks fields. JSON payload fields are unchanged.
 
 Both snapshots default to 10 Hz and contain `header.stamp.sec` and
 `header.stamp.nanosec` in ROS time. In live mode this is system time; when all
 participating nodes use simulated time it follows `/clock`. Their `frame_id` is
 empty because these aggregates mix quantities expressed in different frames.
 
-`WebTelemetry` contains:
+`DashboardDataMsg` contains:
 
 - `roll_deg`, `pitch_deg`, `yaw_deg` and `attitude_valid`, sourced from
   `/processed/imu/rpy/aero`. Positive roll means right side down; positive pitch
@@ -28,9 +39,12 @@ empty because these aggregates mix quantities expressed in different frames.
   **not geographic heading**. The gateway performs no additional conversion.
 - `height_m` and `height_valid`, from `/processed/boat_height`: signed vertical
   clearance of the design-waterline reference below the centre of mass.
-- `battery_low` and `battery_valid`, from `/processed/battery/low`.
-  `battery_valid=false` means unknown; a false low-alarm bit is not a charge
-  percentage, voltage measurement or confirmation of overall battery health.
+- `battery_low`, `battery_voltage_v` and `battery_valid`, directly from
+  `/battery/data` (`sail_msgs/BatteryData`). The gateway displays the raw GPIO
+  alarm; battery_node itself confirms alarms and requests shutdown.
+  `battery_valid` indicates a fresh snapshot and known alarm, not voltage validity
+  or overall health. Voltage can independently be NaN (JSON null), even while
+  the low alarm remains valid. No charge percentage is calculated.
 - `sog_mps` and `sog_valid`, from `/processed/gps/summary`.
 - `ultrasonic_left_m` / `ultrasonic_left_valid` and
   `ultrasonic_right_m` / `ultrasonic_right_valid`, from `sensor_msgs/Range`
@@ -40,11 +54,11 @@ empty because these aggregates mix quantities expressed in different frames.
   `ultrasonic_timeout_s` defaults to 0.5 seconds; one missing sensor does not
   invalidate the other sensor or the rest of the telemetry.
 
-`BoatPosition` contains `latitude_deg`, `longitude_deg`, `sog_mps`, `fix_valid`
+`MapDataMsg` contains `latitude_deg`, `longitude_deg`, `sog_mps`, `fix_valid`
 and the original `gps_stamp`. Invalid, non-finite, out-of-range or expired GPS
 fixes invalidate all three values. GPS freshness uses `gps_stamp`, not the
 summary's periodically refreshed header. Attitude and height freshness use their
-source headers. The un-stamped battery Bool uses reception time.
+source headers. Battery freshness uses both its header and reception time.
 
 Each input expires independently using the timeouts in `config/params.yaml`.
 Missing/stale numbers are NaN in ROS and **null in JSON**, with false validity
@@ -64,6 +78,7 @@ Example MQTT telemetry payload:
   "height_m": 0.45,
   "battery_valid": true,
   "battery_low": false,
+  "battery_voltage_v": 12.4,
   "sog_valid": true,
   "sog_mps": 6.0,
   "ultrasonic_left_valid": true,
@@ -88,16 +103,22 @@ Example MQTT position payload:
 
 ## Rebuild after interface changes
 
-After updating `WebTelemetry.msg`, rebuild the interfaces and gateway in the ROS
-environment before restarting the nodes. From `ros2_ws`:
+BatteryData replaces Bool on `/battery/data`; `/battery/voltage` is removed.
+Rebuild and restart sensors and the gateway together.
+Old bags containing Bool on `/battery/data` are not directly compatible with
+this new subscriber type. Update the dashboard alongside the gateway to show volts.
+
+After updating BatteryData or DashboardDataMsg, rebuild the interfaces and all
+consumers before restarting the nodes. Inside the ROS container, from `ros2_ws`:
 
 ```bash
-colcon build --packages-select sail_msgs communication_web
+bash scripts/build.sh --clean
 source install/setup.bash
 ```
 
-Restart running publishers/subscribers of `WebTelemetry` against the rebuilt
-interfaces. The web app's new sensor cards remain unknown with an older gateway.
+This also regenerates endpoint constants and builds sensors, data_elaboration
+and communication_web. Restart their publishers/subscribers against the rebuilt
+interfaces. The web app's voltage display remains unknown with an older gateway.
 
 ## Recording commands
 

@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ==============================================================================
-# CONFIGURATION PARAMETERS
-# ==============================================================================
-BASE_DIR="/home/boat/2025_SOFTWARE/sailing_ros"
-COMPOSE_DIR="$BASE_DIR/Docker/raspi_container"
-COMPOSE_FILE="$COMPOSE_DIR/compose.yaml"
-CONTAINER="agir-ros-raspi"
-HOST_SCRIPT_PATH="$BASE_DIR/ros2_ws/scripts/run.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+COMPOSE_DIR="$CONTAINER_DIR"
+CONTAINER="$CONTAINER_NAME"
+HOST_SCRIPT_PATH="$ROS_WS/scripts/run.sh"
 
 # IP address to ping to ensure the network is up.
 # Replace 8.8.8.8 with the local router's IP if there is no internet during the regatta!
-TARGET_IP="8.8.8.8"
+TARGET_IP="${AGIR_TARGET_IP:-8.8.8.8}"
 
 echo "🚀 Starting Sailing Team ROS System..."
 

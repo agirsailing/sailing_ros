@@ -111,7 +111,9 @@ Rebuild the workspace after changing configuration to refresh the installed file
 
 ### 4. Check the Graphical Interface (X Server)
 
-The final step is to verify that the container can display graphical applications (e.g., rqt, rviz2) on your host computer.
+This optional PC-only step verifies that the PC container can display graphical
+applications (e.g., rqt, rviz2) on your host computer. It is not part of Raspberry
+Pi setup or boat autostart.
 
 To test this:
 
@@ -121,9 +123,9 @@ To test this:
 On Windows/macOS, the default display is `host.docker.internal:0`; override `DISPLAY`
 if your X server uses a different address. On Linux, enable the optional X11 socket
 and Xauthority mounts in `pc_container/compose.yaml` if those paths exist. The GPU
-mount is optional on PC. The Raspberry Pi configuration retains its Wayland, X11
-and GPU mounts. Its Wayland socket target matches `/tmp/runtime-ros/wayland-0`.
-Check that the host paths exist and that `/run/user/1000` matches the desktop user.
+mount is optional on PC. The Raspberry Pi configuration runs headless: it has no
+Wayland/X11 sockets, Xauthority file, desktop runtime directory or explicit GPU
+mount. Sensors, processing, MQTT and rosbag recording do not need a desktop login.
 
 Both configurations use host networking for ROS discovery. Docker Desktop requires
 enabling this under **Settings > Resources > Network > Enable host networking**;
@@ -147,16 +149,15 @@ Run these commands from the repository root. You can also save those two numeric
 values in `Docker/raspi_container/.env` when running Compose from that directory.
 The hardware container is `agir-ros-raspi`; it exposes `/dev` for the existing serial,
 I2C and GPIO code and retains privileged mode. Check serial device access through
-the `dialout` group. The current GPS code expects `/dev/ttyUSB2`, and the battery
+the `dialout` group. The GPS configuration uses the stable `/dev/gps` alias, and the battery
 node expects `/dev/gpiochip0`. No dedicated `/dev/ttyAMA0` mapping is required by
-the Agir USB/I2C/GPIO setup. Verify these and the graphical mount paths against the
+the Agir USB/I2C/GPIO setup. Verify the device access against the
 actual Pi. The [Pi 4 setup](../DAY_BEFORE_REGATTA/README.md) enables I2C at boot and
 installs the hardware permission rules.
 
-The Raspberry Pi image creates `/tmp/runtime-ros` with owner `ros` and permissions
-`700`. Compose mounts the Wayland socket at `/tmp/runtime-ros/wayland-0`, matching
-`XDG_RUNTIME_DIR` and `WAYLAND_DISPLAY`. This prepares the container directory;
-access to the mounted socket still depends on the host socket permissions.
+Manual startup over SSH and system-level autostart use the same headless Compose
+file. No monitor, Wayland session, display server or interactive login is needed
+at boot. Network access is still required by the startup script's ping check.
 Both teams use the same optional I2C/GPIO group examples. They remain commented
 until the actual host group IDs are known; `dialout` and `tty` are enabled.
 

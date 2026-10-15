@@ -36,7 +36,7 @@ live in `data_elaboration/config/params.yaml`. Each package's `endpoints.yaml`
 defines its output topic names. Processing imports the generated sensor constants
 for its inputs. See the package READMEs for the wiring and current limitations.
 
-The communication package publishes `/web/telemetry` and `/web/position` and
+The communication package publishes `/web/ros/dashboard` and `/web/ros/map` and
 forwards them to MQTT under `agir_gui/data/`. Set the broker for both gateways in
 `communication_web/config/mqtt_config.yaml` before using the web link. Live includes
 recording commands; replay includes only the telemetry gateway.

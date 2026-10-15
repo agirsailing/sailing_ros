@@ -1,4 +1,4 @@
-"""Launch processing; replay never starts the shutdown policy."""
+"""Launch sensor data processing for replay."""
 
 from data_elaboration.generated.ros_endpoints import Topics
 from sensors.generated.ros_endpoints import Topics as SensorTopics

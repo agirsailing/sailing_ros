@@ -131,12 +131,6 @@ RUN apt-get update \
 # Agir GPS driver: read UBX messages directly in Python.
 RUN pip3 install --no-cache-dir --break-system-packages pyubx2
 
-# Prepare the private runtime directory used by Wayland applications.
-# Compose mounts the host socket at /tmp/runtime-ros/wayland-0.
-RUN mkdir -p /tmp/runtime-ros \
-    && chown ${USER_UID}:${USER_GID} /tmp/runtime-ros \
-    && chmod 700 /tmp/runtime-ros
-
 # Copy the entrypoint after dependencies to preserve their build cache.
 COPY entrypoint.sh /entrypoint.sh
 

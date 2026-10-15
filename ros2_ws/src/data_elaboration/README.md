@@ -12,7 +12,6 @@ No node in this package opens serial, I2C or GPIO devices.
 | imu_node | /internal/imu/mounted and /internal/imu/aero_body (Imu), handled by separate callbacks | /processed/imu/data and /processed/imu/data/aero (Imu); /processed/imu/rpy and /processed/imu/rpy/aero (RollPitchYaw) |
 | imu_aero_transformer_node (imu_transformer) | /processed/imu/data (Imu) | /internal/imu/aero_body (Imu, FRD body axes) |
 | heading_node | /gps/data (GpsData), /compass/data (Vector3Stamped) | /processed/heading_deg (Float64), /processed/gps/summary (sail_msgs/GpsSummary) |
-| battery_monitor_node | /battery/data (Bool) | /processed/battery/low (Bool) |
 
 Configuration belongs in config/params.yaml. Output names belong in
 config/endpoints.yaml and its generated Python module. Raw input names are
@@ -234,12 +233,13 @@ and DOP remain in the raw GpsData message.
 
 ## Battery
 
-The only battery input is a low-battery GPIO alarm. The monitor confirms it after
-low_samples_required consecutive true samples (default 1). False clears the
-published alarm. It cannot infer voltage, percentage, charging status or health.
-The existing configurable shutdown policy remains, requested at most once per
-run. Replay excludes this monitor, so recorded alarms do not request shutdown.
-Host shutdown behaviour depends on container/system configuration.
+Battery acquisition, alarm confirmation and shutdown now all belong to
+`sensors/battery_node`. The separate battery monitor and `/processed/battery/low`
+output have been removed. Configure `shutdown_enabled`, `low_samples_required`
+and `shutdown_command` under `battery_node` in `sensors/config/params.yaml`.
+The telemetry gateway continues to subscribe directly to `/battery/data`.
+The sensors replay launch explicitly disables shutdown. Rebuild the workspace
+with `scripts/build.sh --clean` to remove the old installed node entry point.
 
 ## Recording and replay
 
@@ -254,7 +254,7 @@ tools/bag_replay_to_csv.py still targets older Polimi topic names and message
 layouts; it must be adapted before exporting the current Agir streams.
 
 live_data_elaboration.launch.py and the compatibility data_elaboration_launch.py
-start six nodes, including both transformer instances. replay_data_elaboration.launch.py excludes the battery monitor.
+start five nodes, including both transformer instances, as does replay_data_elaboration.launch.py.
 The sensors replay launch still accesses hardware until that pipeline is
 implemented. Rebuild sail_msgs and the workspace before using new interfaces.
 

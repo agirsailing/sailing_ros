@@ -3,6 +3,7 @@
 ROS 2 interface package based on the Polimi Sailing Team definitions.
 It contains 10 messages and 3 recording services:
 
+- BatteryData
 - SerialMsg
 - Mark
 - MapDataMsg
@@ -11,11 +12,11 @@ It contains 10 messages and 3 recording services:
 - GpsSummary
 - BoatHeight
 - RollPitchYaw
-- WebTelemetry
-- BoatPosition
+- DashboardDataMsg
 
-Existing interface names, fields and constants are preserved, including the
-original COMITATO and BOLINA constants in Mark.msg.
+DashboardDataMsg is the dashboard snapshot. MapDataMsg replaces the unused
+legacy map definition with the position snapshot actually consumed by Agir.
+The original COMITATO and BOLINA constants in Mark.msg are preserved.
 
 GpsData carries the Agir receiver solution with explicit units and fix validity,
 before compass selection. GpsSummary carries structured position, SOG in m/s,
@@ -25,11 +26,11 @@ and attitude, in metres. RollPitchYaw carries timestamped roll_deg, pitch_deg an
 the topic selects robotic FLU/up-world or aerodynamic FRD/down-world convention.
 Yaw is relative to initialization and is not an absolute compass heading.
 
-WebTelemetry aggregates aerospace angles in degrees, waterline-reference height
+DashboardDataMsg aggregates aerospace angles in degrees, waterline-reference height
 in metres, raw left/right ultrasonic beam distances (`ultrasonic_left_m` and
-`ultrasonic_right_m`), a low-battery alarm and SOG in m/s, with independent validity flags.
-BoatPosition contains latitude/longitude in degrees, SOG in m/s and GPS validity.
-Both carry a snapshot timestamp; BoatPosition also preserves the source GPS stamp.
+`ultrasonic_right_m`), battery voltage, a low-battery alarm and SOG in m/s, with independent validity flags.
+MapDataMsg contains latitude/longitude in degrees, SOG in m/s and GPS validity.
+Both carry a snapshot timestamp; MapDataMsg also preserves the source GPS stamp.
 The communication gateway converts unavailable floating-point values from ROS NaN
 to JSON null for the web app.
 

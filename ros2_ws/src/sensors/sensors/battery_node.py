@@ -1,13 +1,14 @@
-"""Publish the digital low-battery signal and the battery voltage; system policy lives elsewhere."""
+"""Publish battery data and request shutdown after a confirmed low-battery alarm."""
 
 import math
+import subprocess
 import time
 
 import lgpio
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from std_msgs.msg import Bool, Float32
+from sail_msgs.msg import BatteryData
 
 from sensors.drivers.battery_driver import BatteryDriver
 from sensors.generated.ros_endpoints import Topics
@@ -28,19 +29,19 @@ class BatteryNode(Node):
         self.pull = self.declare_parameter('pull', Parameter.Type.STRING).value
         self.rate_hz = self.declare_parameter('rate_hz', Parameter.Type.DOUBLE).value
         self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
+        self.shutdown_enabled = self.declare_parameter('shutdown_enabled', Parameter.Type.BOOL).value
+        self.low_samples_required = self.declare_parameter('low_samples_required', Parameter.Type.INTEGER).value
+        self.shutdown_command = self.declare_parameter('shutdown_command', Parameter.Type.STRING_ARRAY).value
 
         # 2. Validate configuration before accessing GPIO.
         self._validate_parameters()
+        self.low_samples = 0
+        self.shutdown_requested = False
 
-        # 3. Low-battery state and voltage publishers.
+        # 3. One hardware snapshot for both voltage and the raw low alarm.
         self.battery_pub = self.create_publisher(
-            Bool,
+            BatteryData,
             Topics.BATTERY_NODE.PUB.BATTERY_DATA,
-            self.qos_depth
-        )
-        self.voltage_pub = self.create_publisher(
-            Float32,
-            Topics.BATTERY_NODE.PUB.BATTERY_VOLTAGE,
             self.qos_depth
         )
 
@@ -87,19 +88,15 @@ class BatteryNode(Node):
             raise ValueError('rate_hz must be positive')
         if self.qos_depth <= 0:
             raise ValueError('qos_depth must be positive')
+        if self.low_samples_required < 1:
+            raise ValueError('low_samples_required must be positive')
+        if not self.shutdown_command:
+            raise ValueError('shutdown_command must not be empty')
 
     # -----------------------
     #   Read and publish battery state and voltage
     # -----------------------
     def publish_battery(self):
-        voltage = Float32()
-        latest = self.link.latest
-        if latest is None or time.monotonic() - latest[1] > VOLTAGE_TIMEOUT_S:
-            voltage.data = math.nan
-        else:
-            voltage.data = latest[0]
-        self.voltage_pub.publish(voltage)
-
         try:
             level = lgpio.gpio_read(self.chip, self.gpio_line)
             if level not in (0, 1):
@@ -108,10 +105,42 @@ class BatteryNode(Node):
             self.get_logger().error(f'Battery GPIO read failed: {error}')
             return
 
-        msg = Bool()
-        msg.data = level == self.active_level
+        msg = BatteryData()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        # Leave frame_id empty: these scalars do not refer to spatial axes.
+        msg.low = level == self.active_level
+        latest = self.link.latest
+        if latest is None or not 0 <= time.monotonic() - latest[1] <= VOLTAGE_TIMEOUT_S:
+            msg.voltage_v = math.nan
+        else:
+            msg.voltage_v = latest[0]
 
         self.battery_pub.publish(msg)
+        self._check_shutdown(msg.low)
+
+    def _check_shutdown(self, low):
+        # Keep publishing the raw alarm; confirmation only controls shutdown.
+        if low:
+            self.low_samples = min(self.low_samples + 1, self.low_samples_required)
+        else:
+            self.low_samples = 0
+
+        if self.low_samples < self.low_samples_required or self.shutdown_requested:
+            return
+        self.shutdown_requested = True
+        if not self.shutdown_enabled:
+            self.get_logger().warning('Battery low; shutdown is disabled')
+            return
+        self._request_shutdown()
+
+    def _request_shutdown(self):
+        self.get_logger().fatal('Battery low; requesting system shutdown')
+        try:
+            result = subprocess.run(self.shutdown_command, check=False)
+            if result.returncode:
+                self.get_logger().error(f'Shutdown returned {result.returncode}')
+        except OSError as error:
+            self.get_logger().error(f'Failed to request shutdown: {error}')
 
     # -----------------------
     #   Release the GPIO chip

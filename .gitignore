@@ -9,6 +9,7 @@ ros2_ws/log/
 # Environment variables (if any)
 # =========================
 mqtt_config.yaml
+DAY_BEFORE_REGATTA/config.local.sh
 **/.core/
 
 # =========================

@@ -6,9 +6,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sail_msgs.msg import (
-    BoatHeight, BoatPosition, GpsSummary, RecordingState, RollPitchYaw, WebTelemetry,
+    BatteryData, BoatHeight, MapDataMsg, GpsSummary, RecordingState, RollPitchYaw, DashboardDataMsg,
 )
-from std_msgs.msg import Bool
 from sensor_msgs.msg import Range
 
 from communication_web.gateway.mqtt_client import MqttClientWrapper
@@ -37,9 +36,9 @@ class TelemetryGatewayNode(Node):
 
         # 2. The same structured snapshot is available to ROS and the web app.
         self.telemetry_pub = self.create_publisher(
-            WebTelemetry, self.rt.PUB.TELEMETRY, self.qos_depth)
+            DashboardDataMsg, self.rt.PUB.TELEMETRY, self.qos_depth)
         self.position_pub = self.create_publisher(
-            BoatPosition, self.rt.PUB.POSITION, self.qos_depth)
+            MapDataMsg, self.rt.PUB.POSITION, self.qos_depth)
 
         # 3. Consume processed data; aerospace angles are already in degrees.
         self.attitude_sub = self.create_subscription(
@@ -49,7 +48,7 @@ class TelemetryGatewayNode(Node):
             BoatHeight, self.rt.SUB.HEIGHT,
             lambda msg: self._receive('height', msg), self.qos_depth)
         self.battery_sub = self.create_subscription(
-            Bool, self.rt.SUB.BATTERY,
+            BatteryData, self.rt.SUB.BATTERY,
             lambda msg: self._receive('battery', msg), self.qos_depth)
         self.gps_sub = self.create_subscription(
             GpsSummary, self.rt.SUB.GPS,
@@ -84,11 +83,11 @@ class TelemetryGatewayNode(Node):
     def publish_snapshot(self):
         now = self.get_clock().now()
         data, location, gps_stamp = self.snapshot.build(now.nanoseconds / 1e9)
-        telemetry = WebTelemetry()
+        telemetry = DashboardDataMsg()
         telemetry.header.stamp = now.to_msg()
         for name, value in data.items():
             setattr(telemetry, name, value)
-        position = BoatPosition()
+        position = MapDataMsg()
         position.header.stamp = now.to_msg()
         if gps_stamp is not None:
             position.gps_stamp = gps_stamp

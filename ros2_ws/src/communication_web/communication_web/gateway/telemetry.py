@@ -46,10 +46,9 @@ class TelemetrySnapshot:
         age_limit = self.timeouts[name]
         if not 0 <= now - received <= age_limit:
             return None
-        if name != 'battery':
-            stamp = message.gps_stamp if name == 'gps' else message.header.stamp
-            if not 0 <= now - seconds(stamp) <= age_limit:
-                return None
+        stamp = message.gps_stamp if name == 'gps' else message.header.stamp
+        if not 0 <= now - seconds(stamp) <= age_limit:
+            return None
         return message
 
     def build(self, now):
@@ -57,7 +56,7 @@ class TelemetrySnapshot:
         nan = float('nan')
         telemetry = dict(attitude_valid=False, roll_deg=nan, pitch_deg=nan,
                          yaw_deg=nan, height_valid=False, height_m=nan,
-                         battery_valid=False, battery_low=False,
+                         battery_valid=False, battery_low=False, battery_voltage_v=nan,
                          sog_valid=False, sog_mps=nan)
         position = dict(fix_valid=False, latitude_deg=nan,
                         longitude_deg=nan, sog_mps=nan)
@@ -80,7 +79,9 @@ class TelemetrySnapshot:
             telemetry.update(height_valid=True, height_m=height.height_m)
         battery = self._fresh('battery', now)
         if battery is not None:
-            telemetry.update(battery_valid=True, battery_low=bool(battery.data))
+            telemetry.update(battery_valid=True, battery_low=bool(battery.low),
+                             battery_voltage_v=battery.voltage_v
+                             if math.isfinite(battery.voltage_v) else nan)
         gps = self._fresh('gps', now)
         if (gps is not None and gps.fix_valid
                 and all(math.isfinite(v) for v in (
