@@ -101,6 +101,27 @@ class TopicProcessingTests(unittest.TestCase):
         msg.orientation_covariance[0] = 0
         return msg
 
+    def test_height_mounting_requires_five_finite_values_and_valid_tilts(self):
+        node = self.height_node()
+        node.get_parameters = Mock()
+        node.list_parameters = Mock(return_value=SimpleNamespace(names=[]))
+        node.left_mounting = [2.0, 0.2, 0.6, 15.0, 0.0]
+        node.right_mounting = [2.0, -0.2, 0.6, -15.0, 0.0]
+        node.left_frame_id, node.right_frame_id = 'ultrasonic_left', 'ultrasonic_right'
+        node.max_incidence_deg, node.qos_depth = 60.0, 10
+        node._validate_parameters()
+        for side in ('left', 'right'):
+            original = getattr(node, side + '_mounting')
+            for invalid in ([0.0] * 3, [0.0] * 6,
+                            [0.0, float('nan'), 0.0, 0.0, 0.0],
+                            [0.0, 0.0, 0.0, 90.0, 0.0],
+                            [0.0, 0.0, 0.0, 0.0, -90.0]):
+                with self.subTest(side=side, mounting=invalid):
+                    setattr(node, side + '_mounting', invalid)
+                    with self.assertRaises(ValueError):
+                        node._validate_parameters()
+            setattr(node, side + '_mounting', original)
+
     @staticmethod
     def range_sample(side, distance, nanosec=0):
         msg = Message()

@@ -22,13 +22,10 @@ class UltrasonicFilterNode(Node):
         super().__init__('ultrasonic_filter_node')
 
         # 1. Mounting coordinates, angles and timing come from this package's YAML.
-        self.left_position_m = self.declare_parameter('left.position_m', Parameter.Type.DOUBLE_ARRAY).value
-        self.left_lateral_deg = self.declare_parameter('left.lateral_tilt_deg', Parameter.Type.DOUBLE).value
-        self.left_forward_deg = self.declare_parameter('left.forward_tilt_deg', Parameter.Type.DOUBLE).value
+        # Each mounting: [x_m, y_m, z_m, lateral_tilt_deg, forward_tilt_deg].
+        self.left_mounting = self.declare_parameter('left.mounting', Parameter.Type.DOUBLE_ARRAY).value
         self.left_frame_id = self.declare_parameter('left.frame_id', Parameter.Type.STRING).value
-        self.right_position_m = self.declare_parameter('right.position_m', Parameter.Type.DOUBLE_ARRAY).value
-        self.right_lateral_deg = self.declare_parameter('right.lateral_tilt_deg', Parameter.Type.DOUBLE).value
-        self.right_forward_deg = self.declare_parameter('right.forward_tilt_deg', Parameter.Type.DOUBLE).value
+        self.right_mounting = self.declare_parameter('right.mounting', Parameter.Type.DOUBLE_ARRAY).value
         self.right_frame_id = self.declare_parameter('right.frame_id', Parameter.Type.STRING).value
         self.attitude_frame_id = self.declare_parameter('attitude_frame_id', Parameter.Type.STRING).value
         self.reference_frame_id = self.declare_parameter('reference_frame_id', Parameter.Type.STRING).value
@@ -42,10 +39,10 @@ class UltrasonicFilterNode(Node):
 
         # 2. Validate configuration and prepare fixed mounting geometry.
         self._validate_parameters()
-        self.positions = {'left': self.left_position_m, 'right': self.right_position_m}
+        self.positions = {'left': self.left_mounting[:3], 'right': self.right_mounting[:3]}
         self.beams = {
-            'left': beam_direction(self.left_lateral_deg, self.left_forward_deg),
-            'right': beam_direction(self.right_lateral_deg, self.right_forward_deg),
+            'left': beam_direction(*self.left_mounting[3:]),
+            'right': beam_direction(*self.right_mounting[3:]),
         }
         self.frames = {'left': self.left_frame_id, 'right': self.right_frame_id}
         self.min_downward_cosine = math.cos(math.radians(self.max_incidence_deg))
@@ -70,12 +67,11 @@ class UltrasonicFilterNode(Node):
 
     def _validate_parameters(self):
         self.get_parameters(self.list_parameters([], depth=0).names)
-        for position in (self.left_position_m, self.right_position_m):
-            if len(position) != 3 or not all(math.isfinite(v) for v in position):
-                raise ValueError('Each position_m must contain three finite FLU coordinates')
-        for angle in (self.left_lateral_deg, self.right_lateral_deg,
-                      self.left_forward_deg, self.right_forward_deg):
-            if not math.isfinite(angle) or not -90 < angle < 90:
+        for side, mounting in (('left', self.left_mounting), ('right', self.right_mounting)):
+            if len(mounting) != 5 or not all(math.isfinite(v) for v in mounting):
+                raise ValueError(f'{side}.mounting must contain five finite values: '
+                                 '[x_m, y_m, z_m, lateral_tilt_deg, forward_tilt_deg]')
+            if not all(-90 < angle < 90 for angle in mounting[3:]):
                 raise ValueError('Mounting tilts must lie strictly between -90 and 90 degrees')
         for value in (self.max_range_age_s, self.max_attitude_age_s,
                       self.max_pair_dt_s, self.max_disagreement_m):
