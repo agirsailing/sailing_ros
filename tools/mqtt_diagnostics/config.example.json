@@ -1,0 +1,13 @@
+{
+  "publisher": {
+    "host": "REPLACE_WITH_EMQX_HOST",
+    "port": 8883,
+    "tls": true,
+    "username_env": "MQTT_USER",
+    "password_env": "MQTT_PASSWORD"
+  },
+  "subscribers": [
+    {"name": "tcp", "transport": "tcp", "port": 8883},
+    {"name": "websocket", "transport": "websockets", "port": 8084, "ws_path": "/mqtt"}
+  ]
+}

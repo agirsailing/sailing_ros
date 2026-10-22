@@ -1,0 +1,7 @@
+{
+  "publisher": {"host": "127.0.0.1", "port": 18883, "tls": false},
+  "subscribers": [
+    {"name": "tcp", "transport": "tcp", "port": 18883},
+    {"name": "websocket", "transport": "websockets", "port": 19001, "ws_path": "/mqtt"}
+  ]
+}

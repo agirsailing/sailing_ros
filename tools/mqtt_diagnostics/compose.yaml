@@ -1,0 +1,9 @@
+name: agir-mqtt-diagnostics
+services:
+  broker:
+    image: eclipse-mosquitto:2
+    ports:
+      - "127.0.0.1:18883:1883"
+      - "127.0.0.1:19001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
