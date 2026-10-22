@@ -63,7 +63,7 @@ class RosbagManagerNode(Node):
         )
 
         # Timer publishing
-        self.state_timer = self.create_timer(0.5, self.publish_state)
+        self.state_timer = self.create_timer(2.0, self.publish_state)
 
         self.get_logger().info(f'RosbagManager Initialized. Ready to record to {self.record_dir}')
 

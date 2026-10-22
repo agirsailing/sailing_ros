@@ -1,18 +1,20 @@
 # Processing configuration for nodes in data_elaboration.
 ultrasonic_filter_node:
   ros__parameters:
-    # Origin: fixed design-waterline point below the centre of mass.
-    # FLU coordinates [forward, left, up], metres, measured from that origin.
-    # REPLACE zero positions with measured bowsprit mounting coordinates.
+    # Origin: fixed point on the design waterline below the centre of mass.
+    # mounting: [x_m, y_m, z_m, lateral_tilt_deg, forward_tilt_deg].
+    # Position from the origin in boat-fixed axes: +x forward, +y left, +z up.
+    # Tilts are relative to a downward beam: positive lateral points left,
+    # positive forward points towards the bow. Last two values [0.0, 0.0] = downward beam.
+    # Example: [2.0, 0.2, 0.6, 15.0, 0.0] = 2 m forward, 20 cm left,
+    # 60 cm above the origin, with a 15-degree leftward beam tilt.
+    # REPLACE positions and angles with measured values; zeros are NOT a calibration.
+    # Write all values with a decimal point (ROS double array).
     left:
-      position_m: [0.0, 0.0, 0.0]
-      lateral_tilt_deg: 1.0
-      forward_tilt_deg: 0.0
+      mounting: [0.0, 0.0, 0.0, 1.0, 0.0]
       frame_id: ultrasonic_left
     right:
-      position_m: [0.0, 0.0, 0.0]
-      lateral_tilt_deg: -1.0
-      forward_tilt_deg: 0.0
+      mounting: [0.0, 0.0, 0.0, -1.0, 0.0]
       frame_id: ultrasonic_right
     # imu_mount_transformer_node aligns mounting axes before attitude estimation.
     attitude_frame_id: imu_link_flu

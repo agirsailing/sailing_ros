@@ -1,0 +1,7 @@
+{
+  "publisher": {},
+  "subscribers": [
+    {"name": "tcp", "transport": "tcp"},
+    {"name": "websocket", "transport": "websockets", "port": 8084, "ws_path": "/mqtt"}
+  ]
+}

@@ -40,3 +40,8 @@ The communication package publishes `/web/ros/dashboard` and `/web/ros/map` and
 forwards them to MQTT under `agir_gui/data/`. Set the broker for both gateways in
 `communication_web/config/mqtt_config.yaml` before using the web link. Live includes
 recording commands; replay includes only the telemetry gateway.
+
+For MQTT latency/disconnection tests without ROS or a Raspberry, use
+[the standalone MQTT diagnostics](tools/mqtt_diagnostics/README.md). It includes
+a local Mosquitto broker, synthetic dashboard/map data, native and WebSocket
+observers, and CSV/JSON reports for comparing local and cloud brokers.
