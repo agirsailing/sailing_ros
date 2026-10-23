@@ -6,6 +6,7 @@ class Topics:
         ULTRASONIC_RIGHT = '/ultrasonic/right'
         GPS_DATA = '/gps/data'
         IMU_DATA = '/imu/data'
+        IMU_MAG = '/imu/mag'
         COMPASS_DATA = '/compass/data'
         BATTERY_DATA = '/battery/data'
 
@@ -24,6 +25,7 @@ class Topics:
     class I2C_SENSORS_NODE:
         class PUB:
             IMU_DATA = '/imu/data'
+            IMU_MAG = '/imu/mag'
             COMPASS_DATA = '/compass/data'
 
     class BATTERY_NODE:

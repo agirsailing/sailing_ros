@@ -51,12 +51,15 @@ i2c_sensors_node:
     imu:
       enabled: true
       channel: 2
-      address: 0x6A
+      address: 0x4A
       frame_id: imu
-      rate_hz: 50.0
-      odr_hz: 104.0
-      accel_range_g: 4
-      gyro_range_dps: 500
+      rate_hz: 100.0
+      report_rate_hz: 100.0
+      magnetometer_rate_hz: 50.0
+      orientation_report: rotation_vector
+      roll_pitch_variance_rad2: 0.0
+      reset_delay_s: 0.5
+      stale_timeout_s: 1.0
     compass:
       enabled: true
       channel: 0
