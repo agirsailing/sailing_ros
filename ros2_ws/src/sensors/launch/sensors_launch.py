@@ -1,4 +1,4 @@
-"""Launch hardware acquisition, including IMU and compass via one mux owner."""
+"""Launch hardware acquisition: USB sensors (ultrasonic, GPS, IMU) and the I2C compass."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -20,6 +20,8 @@ def generate_launch_description():
              name='ultrasonic_right_node', parameters=[params], output='screen'),
         Node(package='sensors', executable='gps_node',
              name='gps_node', parameters=[params], output='screen'),
+        Node(package='sensors', executable='imu_sensor_node',
+             name='imu_sensor_node', parameters=[params], output='screen'),
         Node(package='sensors', executable='i2c_sensors_node',
              name='i2c_sensors_node', parameters=[params], output='screen'),
         Node(package='sensors', executable='battery_node',

@@ -1,4 +1,8 @@
-"""Estimate or pass through robotic attitude, complete the aero world conversion, publish TF."""
+"""Estimate or pass through robotic attitude, complete the aero world conversion, publish TF.
+
+A fusing IMU (BNO085) supplies orientation; it is passed through unchanged.
+Raw 6-DOF input (orientation_covariance[0] == -1) still uses the complementary filter.
+"""
 
 import copy
 import math

@@ -24,10 +24,12 @@ nodes:
   gps_node:
     pub:
       gps_data: "@gps_data"
-  i2c_sensors_node:
+  imu_sensor_node:
     pub:
       imu_data: "@imu_data"
       imu_mag: "@imu_mag"
+  i2c_sensors_node:
+    pub:
       compass_data: "@compass_data"
   battery_node:
     pub:

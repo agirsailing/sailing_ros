@@ -1,4 +1,4 @@
-"""Launch sensor data processing."""
+"""Launch sensor data processing for replay."""
 
 from data_elaboration.generated.ros_endpoints import Topics
 from sensors.generated.ros_endpoints import Topics as SensorTopics
@@ -24,7 +24,7 @@ def generate_launch_description():
         Node(package='imu_transformer', executable='imu_transformer_node',
              name='imu_mount_transformer_node', parameters=[params], output='screen',
              remappings=[
-                 ('imu_in', SensorTopics.I2C_SENSORS_NODE.PUB.IMU_DATA),
+                 ('imu_in', SensorTopics.IMU_SENSOR_NODE.PUB.IMU_DATA),
                  ('imu_out', Topics.IMU_MOUNT_TRANSFORMER_NODE.PUB.IMU_OUT),
                  ('mag_in', Topics.Shared.TRANSFORMER_MAG_IN),
                  ('mag_out', Topics.Shared.TRANSFORMER_MAG_OUT),

@@ -1,23 +1,23 @@
-"""BNO085 acquisition over SHTP/I2C: fused orientation plus 9-DOF measurements.
+"""BNO085 acquisition (SH-2 over SHTP): fused orientation plus 9-DOF data.
 
 The sensor runs CEVA (Hillcrest) SH-2 firmware. The host enables reports at a
-chosen interval and the sensor streams them; this driver only frames SHTP
-packets and decodes the reports it enabled. No filtering or frame conversion
-happens here.
+chosen interval and the sensor streams them; this driver frames SHTP packets
+and decodes the reports it enabled. No filtering or frame conversion here.
+
+Transport: full SHTP UART mode (PS1/P1 high, PS0/P0 low), fixed 3 Mbaud,
+through a USB-UART converter. This is NOT UART-RVC mode (P0 high), which has
+no gyroscope output. The transport only moves complete SHTP packets, so
+another one (I2C, SPI) can be added without touching the SH-2 layer.
 
 Axes are the breakout's printed X/Y/Z. The rotation vector is the body
 orientation relative to an East-North-Up world referenced to MAGNETIC north
-and gravity (not true north). The game rotation vector has no heading
-reference: roll/pitch are gravity-referenced, yaw is relative and drifts.
-
+and gravity. The game rotation vector has no heading reference.
 """
 
 from dataclasses import dataclass
 import math
 import struct
 import time
-
-from smbus2 import i2c_msg
 
 # SHTP channels.
 CHANNEL_COMMAND = 0
@@ -56,7 +56,116 @@ HEADING_ACCURACY_Q = 12
 MAX_PACKET_BYTES = 1024
 SHTP_HEADER_BYTES = 4
 
+# SHTP-over-UART framing (HDLC-like).
+UART_FLAG = 0x7E
+UART_ESCAPE = 0x7D
+UART_PROTOCOL_SHTP = 0x01
+UART_BAUDRATE = 3_000_000
 
+
+def shtp_length(packet):
+    return (packet[0] | packet[1] << 8) & 0x7FFF
+
+
+# -----------------------
+#   UART transport: send/receive complete SHTP packets (header included)
+# -----------------------
+class UartFrameDecoder:
+    """Turn the 0x7E-delimited, byte-stuffed UART stream into SHTP packets."""
+
+    def __init__(self):
+        self.in_frame = False
+        self.escape = False
+        self.buffer = bytearray()
+        self.dropped_frames = 0
+
+    def feed(self, data):
+        packets = []
+        for byte in data:
+            if byte == UART_FLAG:
+                # A flag ends the current frame and may start the next one.
+                if self.in_frame and self.buffer:
+                    packet = self._finish(bytes(self.buffer))
+                    if packet is not None:
+                        packets.append(packet)
+                self.in_frame, self.escape = True, False
+                self.buffer.clear()
+            elif not self.in_frame:
+                continue                      # Discard bytes before the first flag.
+            elif self.escape:
+                self.buffer.append(byte ^ 0x20)
+                self.escape = False
+            elif byte == UART_ESCAPE:
+                self.escape = True
+            else:
+                self.buffer.append(byte)
+                if len(self.buffer) > MAX_PACKET_BYTES + 1:
+                    self.dropped_frames += 1  # Lost flag: resynchronize.
+                    self.in_frame = False
+                    self.buffer.clear()
+        return packets
+
+    def _finish(self, frame):
+        # Frame: protocol ID, then an SHTP packet. Other protocols are ignored.
+        if frame[0] != UART_PROTOCOL_SHTP or len(frame) < 1 + SHTP_HEADER_BYTES:
+            self.dropped_frames += 1
+            return None
+        packet = frame[1:]
+        length = shtp_length(packet)
+        if not SHTP_HEADER_BYTES <= length <= len(packet):
+            self.dropped_frames += 1
+            return None
+        return packet[:length]
+
+
+def uart_frame(packet):
+    stuffed = bytearray([UART_FLAG, UART_PROTOCOL_SHTP])
+    for byte in packet:
+        if byte in (UART_FLAG, UART_ESCAPE):
+            stuffed += bytes([UART_ESCAPE, byte ^ 0x20])
+        else:
+            stuffed.append(byte)
+    stuffed.append(UART_FLAG)
+    return bytes(stuffed)
+
+
+class UartTransport:
+    def __init__(self, port, baudrate=UART_BAUDRATE, inter_byte_delay_s=0.001,
+                 serial_factory=None):
+        if serial_factory is None:
+            import serial
+            serial_factory = serial.Serial
+        self.inter_byte_delay_s = inter_byte_delay_s
+        self.decoder = UartFrameDecoder()
+        self.serial = serial_factory(port, baudrate, timeout=0)
+        try:
+            # Reduce USB-serial buffering latency where the driver supports it.
+            self.serial.set_low_latency_mode(True)
+        except (AttributeError, OSError, ValueError):
+            pass
+        self.serial.reset_input_buffer()
+
+    def send(self, packet):
+        # The sensor's UART receiver needs a gap between host bytes. Writes only
+        # happen during initialization, so a slow byte-by-byte write is fine.
+        for byte in uart_frame(packet):
+            self.serial.write(bytes([byte]))
+            self.serial.flush()
+            time.sleep(self.inter_byte_delay_s)
+
+    def receive(self):
+        waiting = self.serial.in_waiting
+        if not waiting:
+            return []
+        return self.decoder.feed(self.serial.read(waiting))
+
+    def close(self):
+        self.serial.close()
+
+
+# -----------------------
+#   SH-2 protocol
+# -----------------------
 @dataclass(frozen=True)
 class ImuSample:
     orientation: tuple            # (x, y, z, w): body -> world quaternion
@@ -69,18 +178,16 @@ class ImuSample:
 
 
 class ImuDriver:
-    def __init__(self, mux, channel, address, report_interval_s,
-                 magnetometer_interval_s, orientation_report='rotation_vector',
-                 reset_delay_s=0.5, response_timeout_s=1.0,
-                 stale_timeout_s=1.0, max_packets_per_read=16):
+    def __init__(self, transport, report_interval_s, magnetometer_interval_s,
+                 orientation_report='rotation_vector', reset_delay_s=0.5,
+                 response_timeout_s=1.0, stale_timeout_s=1.0):
         if orientation_report not in ORIENTATION_REPORTS:
             raise ValueError(f'Unknown orientation report: {orientation_report}')
         if not report_interval_s > 0 or not magnetometer_interval_s > 0:
             raise ValueError('Report intervals must be positive')
-        self.mux, self.channel, self.address = mux, channel, address
+        self.transport = transport
         self.orientation_id = ORIENTATION_REPORTS[orientation_report]
         self.stale_timeout_s = stale_timeout_s
-        self.max_packets = max_packets_per_read
         self._sequence = [0] * CHANNEL_COUNT
         self._latest = {}            # report ID -> (values, accuracy)
         self._fresh_orientation = False
@@ -89,34 +196,30 @@ class ImuDriver:
         self._ready = False
 
         # Soft reset, then drain the advertisement and reset-complete packets.
-        with self._access() as bus:
-            self._write(bus, CHANNEL_EXECUTABLE, [EXECUTABLE_RESET])
+        self._send(CHANNEL_EXECUTABLE, [EXECUTABLE_RESET])
         time.sleep(reset_delay_s)
-        with self._access() as bus:
-            while self._poll(bus):
-                pass
+        while self._poll():
+            pass
 
-        # Confirm an SH-2 device answers before enabling reports.
-        with self._access() as bus:
-            self._write(bus, CHANNEL_CONTROL, [PRODUCT_ID_REQUEST, 0])
+        # Confirm an SH-2 device answers before enabling reports. Packets queued
+        # before its reply (e.g. a late reset-complete) are consumed here.
+        self._send(CHANNEL_CONTROL, [PRODUCT_ID_REQUEST, 0])
         deadline = time.monotonic() + response_timeout_s
         while not self._product_seen:
             if time.monotonic() > deadline:
-                raise OSError('No SH-2 product ID response; check address, wiring '
-                              'and whether the device is a BNO08x')
+                raise OSError('No SH-2 product ID response; check wiring, the '
+                              'PS0/PS1 mode pins and the converter baud rate')
             time.sleep(0.01)
-            with self._access() as bus:
-                self._poll(bus)
+            self._poll()
 
-        with self._access() as bus:
-            for report_id, interval in (
-                    (self.orientation_id, report_interval_s),
-                    (REPORT_ACCELEROMETER, report_interval_s),
-                    (REPORT_GYROSCOPE, report_interval_s),
-                    (REPORT_MAGNETOMETER, magnetometer_interval_s)):
-                self._write(bus, CHANNEL_CONTROL, struct.pack(
-                    '<BBBHIII', SET_FEATURE_COMMAND, report_id, 0, 0,
-                    int(round(interval * 1e6)), 0, 0))
+        for report_id, interval in (
+                (self.orientation_id, report_interval_s),
+                (REPORT_ACCELEROMETER, report_interval_s),
+                (REPORT_GYROSCOPE, report_interval_s),
+                (REPORT_MAGNETOMETER, magnetometer_interval_s)):
+            self._send(CHANNEL_CONTROL, struct.pack(
+                '<BBBHIII', SET_FEATURE_COMMAND, report_id, 0, 0,
+                int(round(interval * 1e6)), 0, 0))
         self._ready = True
         self._last_packet_s = time.monotonic()
 
@@ -124,11 +227,9 @@ class ImuDriver:
     #   Public API
     # -----------------------
     def read(self):
-        """Process queued packets; return a sample when a new orientation arrived."""
+        """Process received packets; return a sample when a new orientation arrived."""
         now = time.monotonic()
-        with self._access() as bus:
-            count = self._poll(bus)
-        if count:
+        if self._poll():
             self._last_packet_s = now
         elif now - self._last_packet_s > self.stale_timeout_s:
             raise OSError('BNO085 stopped reporting')
@@ -152,52 +253,25 @@ class ImuDriver:
             magnetic_field=magnetic_field,
             magnetic_accuracy=magnetic_accuracy)
 
-    # -----------------------
-    #   Transport
-    # -----------------------
-    def _access(self):
-        # Hold the mux lock for the whole transaction, as the other drivers do.
-        if self.channel < 0:
-            return self.mux.upstream()
-        return self.mux.channel(self.channel)
+    def close(self):
+        self.transport.close()
 
-    def _i2c_read(self, bus, length):
-        msg = i2c_msg.read(self.address, length)
-        bus.i2c_rdwr(msg)
-        return bytes(msg)
-
-    def _write(self, bus, channel, payload):
+    # -----------------------
+    #   SHTP packets
+    # -----------------------
+    def _send(self, channel, payload):
         payload = bytes(payload)
         length = len(payload) + SHTP_HEADER_BYTES
         sequence = self._sequence[channel]
         self._sequence[channel] = (sequence + 1) & 0xFF
-        header = bytes([length & 0xFF, length >> 8, channel, sequence])
-        bus.i2c_rdwr(i2c_msg.write(self.address, header + payload))
+        self.transport.send(bytes([length & 0xFF, length >> 8, channel, sequence]) + payload)
 
-    def _read_packet(self, bus):
-        # Every I2C read starts with the SHTP header: read it, then the packet.
-        header = self._i2c_read(bus, SHTP_HEADER_BYTES)
-        length = (header[0] | header[1] << 8) & 0x7FFF
-        if length < SHTP_HEADER_BYTES:
-            return None
-        if length > MAX_PACKET_BYTES:
-            raise OSError(f'Invalid SHTP packet length: {length}')
-        data = self._i2c_read(bus, length)
-        return data[2], data[SHTP_HEADER_BYTES:length]
+    def _poll(self):
+        packets = self.transport.receive()
+        for packet in packets:
+            self._handle(packet[2], packet[SHTP_HEADER_BYTES:])
+        return len(packets)
 
-    def _poll(self, bus):
-        count = 0
-        for _ in range(self.max_packets):
-            packet = self._read_packet(bus)
-            if packet is None:
-                break
-            self._handle(*packet)
-            count += 1
-        return count
-
-    # -----------------------
-    #   SH-2 decoding
-    # -----------------------
     def _handle(self, channel, payload):
         if not payload:
             return
