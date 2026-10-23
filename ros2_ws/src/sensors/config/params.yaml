@@ -8,7 +8,13 @@ ultrasonic_left_node:
     port: /dev/ultrasonic_left
     baudrate: 9600
     timeout_s: 0.1
-    rate_hz: 20.0
+    # 0.0: wait for incoming serial data; positive: poll at this rate in Hz.
+    # This does not change the sensor's physical measurement frequency.
+    read_rate_hz: 0.0
+    # Publish the latest sample every 50 ms, keeping its original timestamp.
+    publish_rate_hz: 20.0
+    # Stop publishing if no valid new sample arrives within this interval.
+    max_sample_age_s: 0.5
     frame_id: ultrasonic_left
     min_range_m: 0.03
     max_range_m: 4.5
@@ -24,7 +30,13 @@ ultrasonic_right_node:
     port: /dev/ultrasonic_right
     baudrate: 9600
     timeout_s: 0.1
-    rate_hz: 20.0
+    # 0.0: wait for incoming serial data; positive: poll at this rate in Hz.
+    # This does not change the sensor's physical measurement frequency.
+    read_rate_hz: 0.0
+    # Publish the latest sample every 50 ms, keeping its original timestamp.
+    publish_rate_hz: 20.0
+    # Stop publishing if no valid new sample arrives within this interval.
+    max_sample_age_s: 0.5
     frame_id: ultrasonic_right
     min_range_m: 0.03
     max_range_m: 4.5
@@ -37,7 +49,13 @@ gps_node:
     port: /dev/gps
     baudrate: 230400
     timeout_s: 0.1
-    rate_hz: 10.0
+    # 0.0: decode serial packets as they arrive; positive: drain on each poll.
+    # This does not configure the receiver's NAV-PVT measurement/output rate.
+    read_rate_hz: 0.0
+    # Repeat the newest NAV-PVT at 10 Hz, preserving its timestamp and fix_valid.
+    publish_rate_hz: 10.0
+    # Missing NAV-PVT expires; a new fix_valid=false packet is still published.
+    max_sample_age_s: 1.0
     frame_id: gps
     qos_depth: 10
 
@@ -53,7 +71,17 @@ i2c_sensors_node:
       channel: 2
       address: 0x6A
       frame_id: imu
-      rate_hz: 50.0
+      # Raspberry register reads per second, independent of ROS publication.
+      # Positive rates only: this driver does not implement data-ready interrupts.
+      read_rate_hz: 50.0
+      # Publish the latest sample, preserving its acquisition timestamp on repeats.
+      publish_rate_hz: 50.0
+      # Stop publishing when the last successful read exceeds this age (seconds).
+      max_sample_age_s: 0.5
+      # ODR = Output Data Rate: how often the sensor generates measurements internally.
+      # Separate from Raspberry polling and ROS publication; hardware-supported values only.
+      # 104 Hz applies to the current LSM6DS3TR-C driver, not the replacement BNO085.
+      # BNO085 requires its own driver and requested report intervals; migration pending.
       odr_hz: 104.0
       accel_range_g: 4
       gyro_range_dps: 500
@@ -62,10 +90,17 @@ i2c_sensors_node:
       channel: 0
       address: 0x0E
       frame_id: compass
-      rate_hz: 10.0
+      # Measurement/read cycles per second, independent of ROS publication.
+      read_rate_hz: 10.0
+      # Publication does not trigger another measurement or conversion delay.
+      publish_rate_hz: 10.0
+      max_sample_age_s: 0.5
       reset_value: 0x01
       measurement_value: 0x01
       reset_delay_s: 0.1
+      # Wait after the measurement command before reading registers (current driver).
+      # This is not a polling period or a freshness check. Confirm the chip's timing
+      # or implement its data-ready protocol before reducing/removing this wait.
       conversion_delay_s: 0.02
 
 battery_node:
@@ -75,7 +110,15 @@ battery_node:
     gpio_line: 13
     active_level: 1
     pull: down
-    rate_hz: 10.0
+    # Poll the low-alarm GPIO; must be positive (no on-data mode).
+    # ESP32 voltage reception remains callback-driven in the driver.
+    read_rate_hz: 10.0
+    # Independent periodic publication; must be positive.
+    publish_rate_hz: 10.0
+    # Maximum age of the cached low-alarm reading.
+    max_sample_age_s: 0.5
+    # Maximum age of the voltage value reported by the driver.
+    voltage_max_age_s: 5.0
     qos_depth: 10
     shutdown_enabled: true
     low_samples_required: 1

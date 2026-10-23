@@ -9,12 +9,10 @@ import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sail_msgs.msg import BatteryData
+from sail_common.freshness import is_fresh
 
 from sensors.drivers.battery_driver import BatteryDriver
 from sensors.generated.ros_endpoints import Topics
-
-# Publish NaN if the ESP32 has not sent a valid packet for this long.
-VOLTAGE_TIMEOUT_S = 5.0
 
 
 class BatteryNode(Node):
@@ -27,7 +25,10 @@ class BatteryNode(Node):
         self.link_gpio_line = self.declare_parameter('link_gpio_line', Parameter.Type.INTEGER).value
         self.active_level = self.declare_parameter('active_level', Parameter.Type.INTEGER).value
         self.pull = self.declare_parameter('pull', Parameter.Type.STRING).value
-        self.rate_hz = self.declare_parameter('rate_hz', Parameter.Type.DOUBLE).value
+        self.read_rate_hz = self.declare_parameter('read_rate_hz', Parameter.Type.DOUBLE).value
+        self.publish_rate_hz = self.declare_parameter('publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.max_sample_age_s = self.declare_parameter('max_sample_age_s', Parameter.Type.DOUBLE).value
+        self.voltage_max_age_s = self.declare_parameter('voltage_max_age_s', Parameter.Type.DOUBLE).value
         self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
         self.shutdown_enabled = self.declare_parameter('shutdown_enabled', Parameter.Type.BOOL).value
         self.low_samples_required = self.declare_parameter('low_samples_required', Parameter.Type.INTEGER).value
@@ -37,6 +38,7 @@ class BatteryNode(Node):
         self._validate_parameters()
         self.low_samples = 0
         self.shutdown_requested = False
+        self._sample = None
 
         # 3. One hardware snapshot for both voltage and the raw low alarm.
         self.battery_pub = self.create_publisher(
@@ -54,23 +56,32 @@ class BatteryNode(Node):
             self.pull_flags = lgpio.SET_PULL_NONE
 
         self.chip = lgpio.gpiochip_open(self.gpio_chip)
+        self.link = None
         try:
             lgpio.gpio_claim_input(self.chip, self.gpio_line, self.pull_flags)
             self.link = BatteryDriver(self.chip, self.link_gpio_line)
 
-            # 5. Timer for publishing the battery signal and voltage.
+            # 5. GPIO polling and shutdown checks are independent of publication.
+            # Both timers use the default mutually exclusive callback group.
+            self.read_timer = self.create_timer(
+                1.0 / self.read_rate_hz,
+                self.read_battery
+            )
             self.battery_timer = self.create_timer(
-                1.0 / self.rate_hz,
+                1.0 / self.publish_rate_hz,
                 self.publish_battery
             )
         except Exception:
+            if self.link is not None:
+                self.link.close()
             lgpio.gpiochip_close(self.chip)
             raise
 
         self.get_logger().info(
             f'Battery node initialized on GPIO chip {self.gpio_chip}, '
             f'line {self.gpio_line}, voltage link on line {self.link_gpio_line}, '
-            f'publishing at {self.rate_hz} Hz'
+            f'reading the alarm at {self.read_rate_hz} Hz, '
+            f'publishing at {self.publish_rate_hz} Hz'
         )
 
     # -----------------------
@@ -84,8 +95,11 @@ class BatteryNode(Node):
             raise ValueError('active_level must be 0 or 1')
         if self.pull not in ('up', 'down', 'none'):
             raise ValueError('pull must be up, down or none')
-        if self.rate_hz <= 0:
-            raise ValueError('rate_hz must be positive')
+        for name in ('read_rate_hz', 'publish_rate_hz',
+                     'max_sample_age_s', 'voltage_max_age_s'):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f'{name} must be finite and positive')
         if self.qos_depth <= 0:
             raise ValueError('qos_depth must be positive')
         if self.low_samples_required < 1:
@@ -94,29 +108,48 @@ class BatteryNode(Node):
             raise ValueError('shutdown_command must not be empty')
 
     # -----------------------
-    #   Read and publish battery state and voltage
+    #   Read the GPIO alarm and check shutdown once per successful read
     # -----------------------
-    def publish_battery(self):
+    def read_battery(self):
         try:
             level = lgpio.gpio_read(self.chip, self.gpio_line)
             if level not in (0, 1):
                 raise OSError(f'Invalid GPIO level: {level}')
         except Exception as error:
+            self._sample = None
             self.get_logger().error(f'Battery GPIO read failed: {error}')
             return
 
+        stamp = self.get_clock().now().to_msg()
+        low = level == self.active_level
+        # The voltage driver replaces its immutable (volts, decode-time) tuple.
+        # Its timestamp is independent of this GPIO read's ROS timestamp.
+        self._sample = (stamp, time.monotonic(), low, self.link.latest)
+        self._check_shutdown(low)
+
+    def publish_battery(self):
+        sample = self._sample
+        if sample is None:
+            return
+        stamp, received_at, low, latest = sample
+        now = time.monotonic()
+        # Check each clock domain separately, including when ROS time is paused.
+        if (not is_fresh(stamp, self.get_clock().now(), self.max_sample_age_s)
+                or not is_fresh(received_at, now, self.max_sample_age_s)):
+            return
+
         msg = BatteryData()
-        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.stamp = stamp
         # Leave frame_id empty: these scalars do not refer to spatial axes.
-        msg.low = level == self.active_level
-        latest = self.link.latest
-        if latest is None or not 0 <= time.monotonic() - latest[1] <= VOLTAGE_TIMEOUT_S:
+        msg.low = low
+        # Recheck voltage age on every publication; repeated GPIO reads or
+        # publications must not make an old voltage look freshly received.
+        if latest is None or not is_fresh(latest[1], now, self.voltage_max_age_s):
             msg.voltage_v = math.nan
         else:
             msg.voltage_v = latest[0]
 
         self.battery_pub.publish(msg)
-        self._check_shutdown(msg.low)
 
     def _check_shutdown(self, low):
         # Keep publishing the raw alarm; confirmation only controls shutdown.

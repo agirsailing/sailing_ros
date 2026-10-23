@@ -11,6 +11,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from geometry_msgs.msg import Vector3Stamped
 from sail_msgs.msg import GpsData, GpsSummary
+from sail_common.freshness import is_fresh
 from std_msgs.msg import Float64
 
 from sensors.generated.ros_endpoints import Topics as SensorTopics
@@ -141,7 +142,7 @@ class HeadingNode(Node):
             summary.header.frame_id = self.gps.header.frame_id
             summary.fix_valid = (
                 self.gps.fix_valid
-                and 0 <= now - seconds(self.gps.header.stamp) <= self.max_input_age_s
+                and is_fresh(self.gps.header.stamp, now, self.max_input_age_s)
                 and all(math.isfinite(v) for v in (
                     self.gps.latitude_deg, self.gps.longitude_deg,
                     self.gps.ground_speed_mps))

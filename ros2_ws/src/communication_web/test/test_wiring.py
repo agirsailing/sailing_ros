@@ -13,6 +13,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT.parent / 'sail_common'))
 from communication_web.gateway.recording_rpc import RecordingRpc
 from communication_web.gateway.telemetry import TelemetrySnapshot, json_safe
 from communication_web.generated.ros_endpoints import Services, Topics

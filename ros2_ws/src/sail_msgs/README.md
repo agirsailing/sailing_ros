@@ -14,6 +14,25 @@ It contains 10 messages and 3 recording services:
 - RollPitchYaw
 - DashboardDataMsg
 
+In Agir, `SerialMsg` is currently used only by `ros2_ws/tools/gen_bag_test.py`
+to write synthetic raw packets to `/serial/raw_rx` in test bags. No live Agir
+node publishes or subscribes to it. It contains `header`, a packet `id` and byte
+`payload`; ultrasound acquisition publishes `sensor_msgs/Range` directly instead.
+
+All measurement/telemetry messages use `std_msgs/Header header`, including raw
+`SerialMsg` packets. Header timestamps keep their documented acquisition or
+snapshot meaning. GPS source timestamps (`gps_stamp`, `direction_stamp`) remain
+additional fields: they identify the original inputs, not the aggregate's age.
+`Mark` describes a course landmark and `RecordingState` describes recorder state;
+neither is a sensor measurement, so their existing interfaces are unchanged.
+
+`SerialMsg.stamp` has moved to `SerialMsg.header.stamp`. The test bag generator
+uses the new field and leaves `header.frame_id` empty for multiplexed packets.
+Rebuild `sail_msgs` and its consumers together. Old SerialMsg bags and external
+producers/readers using the former layout need conversion or the old interface;
+they are not wire-compatible with the new layout. This does not change the
+dashboard/map MQTT payloads or any existing live measurement interface.
+
 DashboardDataMsg is the dashboard snapshot. MapDataMsg replaces the unused
 legacy map definition with the position snapshot actually consumed by Agir.
 The original COMITATO and BOLINA constants in Mark.msg are preserved.

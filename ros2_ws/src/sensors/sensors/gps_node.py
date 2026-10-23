@@ -1,13 +1,18 @@
 """Publish the receiver solution without compass access or heading fusion."""
 
+import math
+import threading
+import time
+
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from serial import Serial
 from pyubx2 import UBXReader
 from sail_msgs.msg import GpsData
+from sail_common.freshness import is_fresh
 
-from sensors.drivers.gps_driver import nav_pvt_values
+from sensors.drivers.gps_driver import InterruptibleSerialStream, nav_pvt_values
 from sensors.generated.ros_endpoints import Topics
 
 
@@ -19,7 +24,9 @@ class GPSNode(Node):
         self.port = self.declare_parameter('port', Parameter.Type.STRING).value
         self.baudrate = self.declare_parameter('baudrate', Parameter.Type.INTEGER).value
         self.timeout_s = self.declare_parameter('timeout_s', Parameter.Type.DOUBLE).value
-        self.rate_hz = self.declare_parameter('rate_hz', Parameter.Type.DOUBLE).value
+        self.read_rate_hz = self.declare_parameter('read_rate_hz', Parameter.Type.DOUBLE).value
+        self.publish_rate_hz = self.declare_parameter('publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.max_sample_age_s = self.declare_parameter('max_sample_age_s', Parameter.Type.DOUBLE).value
         self.frame_id = self.declare_parameter('frame_id', Parameter.Type.STRING).value
         self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
 
@@ -33,26 +40,31 @@ class GPSNode(Node):
             self.qos_depth
         )
 
-        # 4. Open the receiver serial connection and UBX parser.
-        self.stream = Serial(
-            self.port,
-            self.baudrate,
-            timeout=self.timeout_s
-        )
+        self.stream = None
+        self._reader_thread = None
+        self._stop = threading.Event()
+        self._sample_lock = threading.Lock()
+        self._latest_sample = None
+        # Read outside the ROS executor. Partial packets survive idle timeouts.
         try:
-            self.reader = UBXReader(self.stream)
-
-            # 5. Timer for reading and publishing receiver measurements.
+            self.stream = Serial(self.port, self.baudrate, timeout=self.timeout_s)
+            self.reader = UBXReader(InterruptibleSerialStream(self.stream, self._stop))
             self.gps_timer = self.create_timer(
-                1.0 / self.rate_hz,
+                1.0 / self.publish_rate_hz,
                 self.publish_gps
             )
+            self._reader_thread = threading.Thread(
+                target=self._read_loop, name='gps_reader', daemon=True
+            )
+            self._reader_thread.start()
         except Exception:
-            self.stream.close()
+            self.destroy_node()
             raise
 
+        read_mode = 'on data arrival' if self.read_rate_hz == 0 else f'at {self.read_rate_hz} Hz'
         self.get_logger().info(
-            f'GPS node initialized on {self.port}, reading at {self.rate_hz} Hz'
+            f'GPS node initialized on {self.port}, reading {read_mode}, '
+            f'publishing at {self.publish_rate_hz} Hz'
         )
 
     # -----------------------
@@ -62,28 +74,71 @@ class GPSNode(Node):
         # Reject missing YAML values before accessing hardware.
         self.get_parameters(self.list_parameters([], depth=0).names)
 
-        if self.timeout_s <= 0:
-            raise ValueError('timeout_s must be positive')
-        if self.rate_hz <= 0:
-            raise ValueError('rate_hz must be positive')
+        for name in ('timeout_s', 'publish_rate_hz', 'max_sample_age_s'):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f'{name} must be finite and positive')
+        if not math.isfinite(self.read_rate_hz) or self.read_rate_hz < 0:
+            raise ValueError('read_rate_hz must be zero (on arrival) or finite and positive')
         if self.qos_depth <= 0:
             raise ValueError('qos_depth must be positive')
 
     # -----------------------
-    #   Read and publish GPS measurements
+    #   Continuously decode; retain the latest NAV-PVT, including invalid fixes
     # -----------------------
-    def publish_gps(self):
+    def _read_loop(self):
+        period = 1.0 / self.read_rate_hz if self.read_rate_hz > 0 else 0.0
+        while not self._stop.is_set():
+            started = time.monotonic()
+            try:
+                if period == 0:
+                    self._read_packet()
+                else:
+                    # Drain the backlog on each poll, not just one packet/tick.
+                    while not self._stop.is_set() and self.stream.in_waiting:
+                        self._read_packet()
+            except Exception as error:
+                with self._sample_lock:
+                    self._latest_sample = None
+                if not self._stop.is_set():
+                    self.get_logger().warning(
+                        f'GPS read failed: {error}', throttle_duration_sec=5.0
+                    )
+                self._stop.wait(self.timeout_s)
+            self._stop.wait(max(0.0, period - (time.monotonic() - started)))
+
+    def _read_packet(self):
+        _, packet = self.reader.read()
+        if self._stop.is_set() or packet is None or packet.identity != 'NAV-PVT':
+            return
+        # Host decoding time, not receiver measurement time (nor UTC from GPS).
+        stamp = self.get_clock().now().to_msg()
+        received_at = time.monotonic()
         try:
-            _, packet = self.reader.read()
-            if packet is None or packet.identity != 'NAV-PVT':
-                return
             values = nav_pvt_values(packet)
-        except Exception as error:
-            self.get_logger().warning(f'GPS read failed: {error}')
+        except (AttributeError, TypeError, ValueError, OverflowError) as error:
+            with self._sample_lock:
+                self._latest_sample = None
+            self.get_logger().warning(
+                f'GPS NAV-PVT rejected: {error}', throttle_duration_sec=5.0
+            )
+            return
+        with self._sample_lock:
+            self._latest_sample = (values, stamp, received_at)
+
+    def publish_gps(self):
+        with self._sample_lock:
+            sample = self._latest_sample
+        if sample is None:
+            return
+        values, stamp, received_at = sample
+        if (not is_fresh(stamp, self.get_clock().now(), self.max_sample_age_s)
+                or not is_fresh(received_at, time.monotonic(), self.max_sample_age_s)):
             return
 
         msg = GpsData()
-        msg.header.stamp = self.get_clock().now().to_msg()
+        # Cached publications preserve acquisition time and receiver fix status.
+        msg.header.stamp = stamp
         msg.header.frame_id = self.frame_id
 
         # The driver decodes the receiver fields and converts physical units.
@@ -105,7 +160,12 @@ class GPSNode(Node):
     #   Release the serial connection
     # -----------------------
     def destroy_node(self):
-        self.stream.close()
+        self._stop.set()
+        if self._reader_thread is not None and self._reader_thread.is_alive():
+            self._reader_thread.join()
+        if self.stream is not None:
+            self.stream.close()
+            self.stream = None
         return super().destroy_node()
 
 

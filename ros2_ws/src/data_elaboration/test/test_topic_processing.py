@@ -16,6 +16,8 @@ from unittest.mock import Mock
 
 PACKAGE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PACKAGE))
+sys.path.insert(0, str(PACKAGE.parent / 'sail_common'))
+from sail_common.freshness import is_fresh
 from data_elaboration.processing.imu_filter import ImuFilter
 from data_elaboration.processing.imu_frames import (
     quaternion_from_degrees, rotation_matrix,
@@ -47,7 +49,7 @@ class Message:
 def load_node(filename):
     tree = ast.parse((PACKAGE / 'data_elaboration' / filename).read_text())
     cls = next(item for item in tree.body if isinstance(item, ast.ClassDef))
-    scope = dict(Node=object, math=math, copy=copy, BoatHeight=Message,
+    scope = dict(Node=object, math=math, copy=copy, BoatHeight=Message, is_fresh=is_fresh,
                  RollPitchYaw=Message,
                  deque=deque, vertical_row=vertical_row, beam_direction=beam_direction,
                  project_height=project_height, fuse_estimates=fuse_estimates,

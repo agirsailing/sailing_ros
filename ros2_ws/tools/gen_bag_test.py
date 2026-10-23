@@ -183,7 +183,8 @@ def main():
 
         for can_id, payload_bytes in messages:
             msg = SerialMsg()
-            msg.stamp = msg_time
+            msg.header.stamp = msg_time
+            msg.header.frame_id = ''
             msg.id = can_id
             payload_msg = UInt8MultiArray()
             payload_msg.data = list(payload_bytes)

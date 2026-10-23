@@ -63,7 +63,7 @@ class DriverTests(unittest.TestCase):
 
     def test_ultrasonic_partial_corrupt_and_stale_frames(self):
         stream = Mock()
-        stream.in_waiting = 0
+        stream.in_waiting = 2
         path = Path(__file__).resolve().parents[1] / 'sensors/drivers/ultrasonic_driver.py'
         spec = importlib.util.spec_from_file_location('tested_ultrasonic_driver', path)
         module = importlib.util.module_from_spec(spec)
@@ -81,6 +81,39 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(driver.getDistance(), 1000)
         driver.close()
         stream.close.assert_called_once()
+
+    def test_ultrasonic_waits_for_arrival_and_drains_to_latest_frame(self):
+        stream = Mock(in_waiting=0)
+        path = Path(__file__).resolve().parents[1] / 'sensors/drivers/ultrasonic_driver.py'
+        spec = importlib.util.spec_from_file_location('tested_ultrasonic_driver', path)
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {'serial': SimpleNamespace(Serial=Mock(return_value=stream))}):
+            spec.loader.exec_module(module)
+        driver = module.DFRobot_A02_Distance('test', 9600, 0.1)
+        driver.set_dis_range(30, 4500)
+
+        self.assertIsNone(driver.getDistance())
+        stream.read.assert_not_called()
+        stream.read.return_value = b'\xff'
+        self.assertIsNone(driver.getDistance(wait_for_data=True))
+        stream.read.assert_called_once_with(1)
+
+        def frame(distance):
+            packet = bytes([255, distance >> 8, distance & 255])
+            return packet + bytes([sum(packet) & 255])
+
+        # Finish the partial frame, then receive a second complete frame.
+        data = frame(1000)[1:] + frame(1200)
+        stream.in_waiting = len(data)
+        stream.read.return_value = data
+        self.assertEqual(driver.getDistance(wait_for_data=True), 1200)
+        self.assertEqual(driver.last_operate_status, driver.STA_OK)
+        stream.read.assert_called_with(len(data))
+
+        stream.in_waiting = 0
+        stream.read.return_value = b''  # Idle serial timeout, no duplicate sample.
+        self.assertIsNone(driver.getDistance(wait_for_data=True))
+        self.assertEqual(driver.last_operate_status, driver.STA_ERR_DATA)
 
 
 if __name__ == '__main__':

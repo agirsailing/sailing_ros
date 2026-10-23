@@ -9,6 +9,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import Imu, Range
 from sail_msgs.msg import BoatHeight
+from sail_common.freshness import is_fresh
 
 from sensors.generated.ros_endpoints import Topics as SensorTopics
 from data_elaboration.generated.ros_endpoints import Topics
@@ -111,7 +112,7 @@ class UltrasonicFilterNode(Node):
     def receive_attitude(self, msg):
         now = self._now()
         stamp = self._stamp(msg)
-        if not 0 <= now - stamp <= self.max_range_age_s + self.max_attitude_age_s:
+        if not is_fresh(msg.header.stamp, now, self.max_range_age_s + self.max_attitude_age_s):
             return
         if self.attitudes and stamp <= self.attitudes[-1][0]:
             return
@@ -138,7 +139,7 @@ class UltrasonicFilterNode(Node):
         stamp = self._stamp(msg)
         if stamp <= self.last_range_stamps.get(side, -math.inf):
             return
-        if not 0 <= now - stamp <= self.max_range_age_s:
+        if not is_fresh(msg.header.stamp, now, self.max_range_age_s):
             return
         self.last_range_stamps[side] = stamp
         # A new invalid reading invalidates that side's previous candidate.
@@ -146,7 +147,7 @@ class UltrasonicFilterNode(Node):
         if msg.header.frame_id != self.frames[side]:
             return
         attitude = next((up for t, up in reversed(self.attitudes)
-                         if 0 <= stamp - t <= self.max_attitude_age_s), None)
+                         if is_fresh(t, stamp, self.max_attitude_age_s)), None)
         if attitude is None:
             return
         estimate = project_height(
@@ -160,7 +161,7 @@ class UltrasonicFilterNode(Node):
         # Fuse corrected heights only when their measurement times are close.
         candidates = [
             item for item in self.estimates.values()
-            if 0 <= now - item.stamp_s <= self.max_range_age_s
+            if is_fresh(item.stamp_s, now, self.max_range_age_s)
             and abs(stamp - item.stamp_s) <= self.max_pair_dt_s
         ]
         height = fuse_estimates(

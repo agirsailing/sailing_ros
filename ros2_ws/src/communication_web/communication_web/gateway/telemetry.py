@@ -1,6 +1,7 @@
 """Build web snapshots without ROS or network dependencies."""
 
 import math
+from sail_common.freshness import is_fresh
 
 
 def seconds(stamp):
@@ -44,9 +45,15 @@ class TelemetrySnapshot:
             return None
         message, received = sample
         age_limit = self.timeouts[name]
+        # Migrated paths: ultrasound/height and original GPS measurements.
+        stamp = message.gps_stamp if name == 'gps' else message.header.stamp
+        if name in ('ultrasonic_left', 'ultrasonic_right', 'height', 'gps'):
+            if (is_fresh(received, now, age_limit)
+                    and is_fresh(stamp, now, age_limit)):
+                return message
+            return None
         if not 0 <= now - received <= age_limit:
             return None
-        stamp = message.gps_stamp if name == 'gps' else message.header.stamp
         if not 0 <= now - seconds(stamp) <= age_limit:
             return None
         return message

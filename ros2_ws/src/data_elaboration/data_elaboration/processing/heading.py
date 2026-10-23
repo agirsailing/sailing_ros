@@ -1,13 +1,14 @@
 """Select receiver course or magnetic heading using fresh measurements."""
 
 import math
+from sail_common.freshness import is_fresh
 
 
 def choose_navigation_direction(gps, compass, now, max_age, speed_threshold,
                    x_sign, y_sign, x_bias, y_bias, offset_deg):
     if gps is not None:
         stamp, valid, speed, course = gps
-        if (0 <= now - stamp <= max_age and valid
+        if (is_fresh(stamp, now, max_age) and valid
                 and math.isfinite(speed) and math.isfinite(course)
                 and speed > speed_threshold):
             return course % 360.0, 'gps', stamp

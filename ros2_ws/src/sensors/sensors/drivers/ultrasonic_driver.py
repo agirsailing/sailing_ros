@@ -31,13 +31,14 @@ class DFRobot_A02_Distance:
     def set_dis_range(self, minimum, maximum):
         self.minimum, self.maximum = minimum, maximum
 
-    def getDistance(self):
+    def getDistance(self, wait_for_data=False):
         if self.minimum is None:
             raise ValueError('Configure the measurement range before reading')
-        # Non-blocking: take only what has already arrived.
+        # With no buffered bytes, wait for one byte rather than a whole frame:
+        # read(1) returns on arrival; the serial timeout only bounds idle waits.
         waiting = self._ser.in_waiting
-        if waiting:
-            self._buffer.extend(self._ser.read(waiting))
+        if waiting or wait_for_data:
+            self._buffer.extend(self._ser.read(waiting or 1))
 
         latest = None
         status = self.STA_ERR_DATA

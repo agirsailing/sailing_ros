@@ -22,6 +22,8 @@ class ImuDriver:
     def __init__(self, mux, channel, address, odr_hz, accel_range_g,
                  gyro_range_dps):
         self.mux, self.channel, self.address = mux, channel, address
+        # ODR configures internal sample generation, not host reads or ROS output.
+        # Register encodings here are specific to LSM6DS3TR-C, not generic 9DOF IMUs.
         odr = ODR_BITS[odr_hz] << 4
         accel_bits, accel_mg = ACCEL_RANGES[accel_range_g]
         gyro_bits, gyro_mdps = GYRO_RANGES[gyro_range_dps]

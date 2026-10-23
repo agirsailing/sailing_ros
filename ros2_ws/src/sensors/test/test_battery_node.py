@@ -3,9 +3,14 @@
 import ast
 import math
 from pathlib import Path
+import sys
 from types import SimpleNamespace as NS
 import unittest
 from unittest.mock import Mock
+
+PACKAGE = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PACKAGE.parent / 'sail_common'))
+from sail_common.freshness import is_fresh
 
 
 class BatteryMessage:
@@ -17,39 +22,63 @@ class BatteryMessage:
 
 class BatteryNodeTests(unittest.TestCase):
     def setUp(self):
-        path = Path(__file__).resolve().parents[1] / 'sensors/battery_node.py'
+        path = PACKAGE / 'sensors/battery_node.py'
         tree = ast.parse(path.read_text(encoding='utf-8'))
         definition = next(item for item in tree.body if isinstance(item, ast.ClassDef))
         self.gpio = Mock()
         self.gpio.gpio_read.return_value = 0
         self.process = Mock()
         self.process.run.return_value.returncode = 0
-        scope = dict(Node=object, lgpio=self.gpio, math=math,
-                     time=NS(monotonic=lambda: 100), BatteryData=BatteryMessage,
-                     subprocess=self.process)
-        # Load the actual timeout constant and class, without importing hardware/ROS.
-        timeout = next(item for item in tree.body if isinstance(item, ast.Assign)
-                       and any(isinstance(target, ast.Name) and target.id == 'VOLTAGE_TIMEOUT_S'
-                               for target in item.targets))
-        exec(compile(ast.Module(body=[timeout, definition], type_ignores=[]), str(path), 'exec'), scope)
-        self.node = object.__new__(scope['BatteryNode'])
-        self.node.chip, self.node.gpio_line, self.node.active_level = 0, 13, 1
-        self.node.link = NS(latest=(12.4, 99))
-        self.node.battery_pub = Mock()
-        self.node.get_logger = Mock()
-        self.node.get_clock = lambda: NS(now=lambda: NS(to_msg=lambda: NS(sec=200, nanosec=123)))
-        self.node.low_samples = 0
-        self.node.low_samples_required = 1
-        self.node.shutdown_requested = False
-        self.node.shutdown_enabled = False
-        self.node.shutdown_command = ['simulated-shutdown']
+        self.params = dict(gpio_chip=0, gpio_line=13, link_gpio_line=6,
+                           active_level=1, pull='down', read_rate_hz=10.0,
+                           publish_rate_hz=10.0, max_sample_age_s=0.5,
+                           voltage_max_age_s=5.0, qos_depth=10,
+                           shutdown_enabled=False, low_samples_required=1,
+                           shutdown_command=['simulated-shutdown'])
+        self.stamp = NS(sec=200, nanosec=123)
+        self.monotonic = Mock(return_value=100.0)
+        self.link = NS(latest=(12.4, 99), close=Mock())
+        self.driver_factory = Mock(return_value=self.link)
+        owner = self
+
+        class FakeNode:
+            def __init__(self, name):
+                self.get_logger = Mock()
+                self.get_clock = lambda: NS(now=lambda: NS(
+                    to_msg=lambda: owner.stamp,
+                    nanoseconds=owner.stamp.sec * 1_000_000_000 + owner.stamp.nanosec))
+                self.create_publisher = Mock(return_value=Mock())
+                self.create_timer = Mock()
+                self.get_parameters = Mock()
+                self.list_parameters = lambda *args, **kwargs: NS(names=[])
+
+            def declare_parameter(self, name, kind):
+                return NS(value=owner.params[name])
+
+            def destroy_node(self):
+                pass
+
+        scope = dict(Node=FakeNode, lgpio=self.gpio, math=math,
+                     time=NS(monotonic=self.monotonic), BatteryData=BatteryMessage,
+                     subprocess=self.process, is_fresh=is_fresh,
+                     BatteryDriver=self.driver_factory,
+                     Parameter=NS(Type=NS(INTEGER=1, DOUBLE=2, STRING=3, BOOL=4,
+                                          STRING_ARRAY=5)),
+                     Topics=NS(BATTERY_NODE=NS(PUB=NS(BATTERY_DATA='/battery/data'))))
+        exec(compile(ast.Module(body=[definition], type_ignores=[]), str(path), 'exec'), scope)
+        self.node_type = scope['BatteryNode']
+        self.node = self.node_type()
+
+    def read_and_publish(self):
+        self.node.read_battery()
+        self.node.publish_battery()
 
     def test_snapshot_has_ros_timestamp_voltage_and_alarm_polarity(self):
         for active, level in ((1, 1), (1, 0), (0, 0), (0, 1)):
             with self.subTest(active=active, level=level):
                 self.node.active_level = active
                 self.gpio.gpio_read.return_value = level
-                self.node.publish_battery()
+                self.read_and_publish()
                 msg = self.node.battery_pub.publish.call_args.args[0]
                 self.assertEqual((msg.header.stamp.sec, msg.header.stamp.nanosec), (200, 123))
                 self.assertEqual(msg.header.frame_id, '')
@@ -61,7 +90,7 @@ class BatteryNodeTests(unittest.TestCase):
         for latest in (None, (12.4, 94.9), (12.4, 101)):
             with self.subTest(latest=latest):
                 self.node.link.latest = latest
-                self.node.publish_battery()
+                self.read_and_publish()
                 msg = self.node.battery_pub.publish.call_args.args[0]
                 self.assertTrue(math.isnan(msg.voltage_v))
                 self.assertTrue(msg.low)
@@ -69,13 +98,15 @@ class BatteryNodeTests(unittest.TestCase):
     def test_gpio_failure_never_publishes_a_false_healthy_sample_and_recovers(self):
         for result in (-1, 2, OSError('disconnected')):
             with self.subTest(result=result):
+                self.node.read_battery()  # An older good sample must be cleared.
                 self.gpio.gpio_read.side_effect = [result]
-                self.node.publish_battery()
+                self.read_and_publish()
                 self.node.battery_pub.publish.assert_not_called()
                 self.process.run.assert_not_called()
+                self.gpio.gpio_read.side_effect = None
         self.gpio.gpio_read.side_effect = None
         self.gpio.gpio_read.return_value = 1
-        self.node.publish_battery()
+        self.read_and_publish()
         self.assertTrue(self.node.battery_pub.publish.call_args.args[0].low)
 
     def test_shutdown_requires_consecutive_samples_and_preserves_raw_alarm(self):
@@ -83,28 +114,28 @@ class BatteryNodeTests(unittest.TestCase):
         self.node.low_samples_required = 2
         for level in (1, 0, 1):
             self.gpio.gpio_read.return_value = level
-            self.node.publish_battery()
+            self.read_and_publish()
             self.assertEqual(self.node.battery_pub.publish.call_args.args[0].low, bool(level))
             self.process.run.assert_not_called()
         self.gpio.gpio_read.return_value = 1
-        self.node.publish_battery()
+        self.read_and_publish()
         self.process.run.assert_called_once_with(['simulated-shutdown'], check=False)
 
-    def test_shutdown_is_requested_once_after_publishing_even_without_voltage(self):
+    def test_shutdown_does_not_wait_for_publication_or_voltage(self):
         self.node.shutdown_enabled = True
         self.node.link.latest = None
         self.gpio.gpio_read.return_value = 1
-        self.process.run.side_effect = lambda *args, **kwargs: (
-            self.assertEqual(self.node.battery_pub.publish.call_count, 1) or NS(returncode=0))
         for _ in range(3):
-            self.node.publish_battery()
+            self.node.read_battery()
         self.process.run.assert_called_once_with(['simulated-shutdown'], check=False)
-        self.assertEqual(self.node.battery_pub.publish.call_count, 3)
+        self.node.battery_pub.publish.assert_not_called()
+        self.node.publish_battery()
+        self.assertTrue(self.node.battery_pub.publish.call_args.args[0].low)
 
     def test_disabled_shutdown_keeps_publishing_and_never_executes_command(self):
         self.gpio.gpio_read.return_value = 1
         for _ in range(3):
-            self.node.publish_battery()
+            self.read_and_publish()
         self.process.run.assert_not_called()
         self.assertEqual(self.node.battery_pub.publish.call_count, 3)
         self.node.get_logger().warning.assert_called_once()
@@ -118,15 +149,14 @@ class BatteryNodeTests(unittest.TestCase):
                 self.process.run.reset_mock()
                 self.node.get_logger().error.reset_mock()
                 self.process.run.side_effect = [failure]
-                self.node.publish_battery()
-                self.node.publish_battery()
+                self.read_and_publish()
+                self.read_and_publish()
                 self.process.run.assert_called_once()
                 self.node.get_logger().error.assert_called_once()
 
     def test_shutdown_configuration_validation(self):
         self.node.get_parameters = Mock()
         self.node.list_parameters = lambda *args, **kwargs: NS(names=[])
-        self.node.pull, self.node.rate_hz, self.node.qos_depth = 'down', 10.0, 10
         self.node._validate_parameters()
         self.node.low_samples_required = 0
         with self.assertRaisesRegex(ValueError, 'low_samples_required'):
@@ -135,6 +165,92 @@ class BatteryNodeTests(unittest.TestCase):
         self.node.shutdown_command = []
         with self.assertRaisesRegex(ValueError, 'shutdown_command'):
             self.node._validate_parameters()
+
+    def test_rates_and_age_limits_reject_zero_negative_and_non_finite(self):
+        for name in ('read_rate_hz', 'publish_rate_hz',
+                     'max_sample_age_s', 'voltage_max_age_s'):
+            original = self.params[name]
+            for value in (0.0, -1.0, math.nan, math.inf):
+                with self.subTest(name=name, value=value):
+                    self.params[name] = value
+                    self.gpio.gpiochip_open.reset_mock()
+                    with self.assertRaisesRegex(ValueError, name):
+                        self.node_type()
+                    self.gpio.gpiochip_open.assert_not_called()
+            self.params[name] = original
+
+    def test_independent_timers_and_no_publication_before_first_read(self):
+        self.params['publish_rate_hz'] = 2.0
+        node = self.node_type()
+        calls = node.create_timer.call_args_list
+        self.assertEqual([(c.args[0], c.args[1].__name__) for c in calls],
+                         [(0.1, 'read_battery'), (0.5, 'publish_battery')])
+        node.publish_battery()
+        node.battery_pub.publish.assert_not_called()
+        self.gpio.gpio_read.assert_not_called()
+        node.read_battery()
+        node.battery_pub.publish.assert_not_called()
+        for _ in range(3):
+            node.publish_battery()
+        self.gpio.gpio_read.assert_called_once()
+        self.assertEqual(node.battery_pub.publish.call_count, 3)
+
+    def test_republication_preserves_stamp_and_does_not_confirm_shutdown(self):
+        self.node.shutdown_enabled = True
+        self.node.low_samples_required = 2
+        self.gpio.gpio_read.return_value = 1
+        self.node.read_battery()
+        for nanos in (100_000_000, 200_000_000, 300_000_000):
+            self.stamp = NS(sec=200, nanosec=nanos)
+            self.node.publish_battery()
+            msg = self.node.battery_pub.publish.call_args.args[0]
+            self.assertEqual((msg.header.stamp.sec, msg.header.stamp.nanosec), (200, 123))
+        self.assertEqual(self.node.low_samples, 1)
+        self.process.run.assert_not_called()
+        self.node.read_battery()
+        self.process.run.assert_called_once()
+
+    def test_alarm_expiry_checks_ros_and_monotonic_clocks_separately(self):
+        for ros_stamp, monotonic in ((NS(sec=201, nanosec=0), 100.0),
+                                     (NS(sec=200, nanosec=123), 100.6),
+                                     (NS(sec=199, nanosec=0), 100.0)):
+            with self.subTest(ros_stamp=ros_stamp, monotonic=monotonic):
+                self.stamp = NS(sec=200, nanosec=123)
+                self.monotonic.return_value = 100.0
+                self.node.read_battery()
+                self.stamp = ros_stamp
+                self.monotonic.return_value = monotonic
+                self.node.publish_battery()
+                self.node.battery_pub.publish.assert_not_called()
+
+    def test_voltage_expires_between_read_and_publish_without_expiring_alarm(self):
+        self.node.voltage_max_age_s = 1.0
+        self.node.read_battery()
+        self.node.publish_battery()
+        self.assertEqual(self.node.battery_pub.publish.call_args.args[0].voltage_v, 12.4)
+        self.monotonic.return_value = 100.2
+        self.node.publish_battery()
+        self.assertTrue(math.isnan(self.node.battery_pub.publish.call_args.args[0].voltage_v))
+        # A new alarm timestamp must not refresh the old voltage's age.
+        self.node.read_battery()
+        self.node.publish_battery()
+        self.assertTrue(math.isnan(self.node.battery_pub.publish.call_args.args[0].voltage_v))
+        self.link.latest = (12.6, 100.2)
+        self.node.read_battery()
+        self.node.publish_battery()
+        self.assertEqual(self.node.battery_pub.publish.call_args.args[0].voltage_v, 12.6)
+
+    def test_alarm_age_boundary_and_recovery(self):
+        self.node.read_battery()
+        self.monotonic.return_value = 100.5
+        self.node.publish_battery()
+        self.node.battery_pub.publish.assert_called_once()
+        self.monotonic.return_value = 100.50001
+        self.node.publish_battery()
+        self.node.battery_pub.publish.assert_called_once()
+        self.node.read_battery()
+        self.node.publish_battery()
+        self.assertEqual(self.node.battery_pub.publish.call_count, 2)
 
     def test_replay_disables_shutdown_after_loading_the_shared_parameters(self):
         launch_dir = Path(__file__).resolve().parents[1] / 'launch'

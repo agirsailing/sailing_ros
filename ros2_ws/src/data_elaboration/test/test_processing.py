@@ -6,6 +6,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'sail_common'))
 from data_elaboration.processing.imu_filter import ImuFilter
 from data_elaboration.processing.heading import choose_heading
 

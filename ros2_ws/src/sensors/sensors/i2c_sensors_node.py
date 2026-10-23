@@ -1,10 +1,15 @@
 # /ros2_ws/src/sensors/sensors/i2c_sensors_node.py
+import math
+import threading
+import time
+
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import Vector3Stamped
 from smbus2 import SMBus
+from sail_common.freshness import is_fresh
 
 from sensors.drivers.i2c_mux import I2CMultiplexer
 from sensors.drivers.imu_driver import ImuDriver
@@ -29,7 +34,9 @@ class I2CSensorsNode(Node):
         self.imu_channel = self.declare_parameter('imu.channel', Parameter.Type.INTEGER).value
         self.imu_address = self.declare_parameter('imu.address', Parameter.Type.INTEGER).value
         self.imu_frame_id = self.declare_parameter('imu.frame_id', Parameter.Type.STRING).value
-        self.imu_rate_hz = self.declare_parameter('imu.rate_hz', Parameter.Type.DOUBLE).value
+        self.imu_read_rate_hz = self.declare_parameter('imu.read_rate_hz', Parameter.Type.DOUBLE).value
+        self.imu_publish_rate_hz = self.declare_parameter('imu.publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.imu_max_sample_age_s = self.declare_parameter('imu.max_sample_age_s', Parameter.Type.DOUBLE).value
         self.imu_odr_hz = self.declare_parameter('imu.odr_hz', Parameter.Type.DOUBLE).value
         self.imu_accel_range_g = self.declare_parameter('imu.accel_range_g', Parameter.Type.INTEGER).value
         self.imu_gyro_range_dps = self.declare_parameter('imu.gyro_range_dps', Parameter.Type.INTEGER).value
@@ -39,7 +46,9 @@ class I2CSensorsNode(Node):
         self.compass_channel = self.declare_parameter('compass.channel', Parameter.Type.INTEGER).value
         self.compass_address = self.declare_parameter('compass.address', Parameter.Type.INTEGER).value
         self.compass_frame_id = self.declare_parameter('compass.frame_id', Parameter.Type.STRING).value
-        self.compass_rate_hz = self.declare_parameter('compass.rate_hz', Parameter.Type.DOUBLE).value
+        self.compass_read_rate_hz = self.declare_parameter('compass.read_rate_hz', Parameter.Type.DOUBLE).value
+        self.compass_publish_rate_hz = self.declare_parameter('compass.publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.compass_max_sample_age_s = self.declare_parameter('compass.max_sample_age_s', Parameter.Type.DOUBLE).value
         self.compass_reset_value = self.declare_parameter('compass.reset_value', Parameter.Type.INTEGER).value
         self.compass_measurement_value = self.declare_parameter('compass.measurement_value', Parameter.Type.INTEGER).value
         self.compass_reset_delay_s = self.declare_parameter('compass.reset_delay_s', Parameter.Type.DOUBLE).value
@@ -51,19 +60,27 @@ class I2CSensorsNode(Node):
         # 3. Internal state: each sensor has its own driver and retry deadline.
         self.imu_driver = None
         self.compass_driver = None
-        self.imu_retry_at_ns = 0
-        self.compass_retry_at_ns = 0
+        self.imu_retry_at = 0.0
+        self.compass_retry_at = 0.0
+        self._stop = threading.Event()
+        self._sample_lock = threading.Lock()
+        self._samples = {'imu': None, 'compass': None}
+        self._workers = []
+        self.mux = None
+        self._bus = None
+
+        if not self.imu_enabled and not self.compass_enabled:
+            self.get_logger().info('I2C acquisition disabled for both sensors')
+            return
 
         # 4. Open the shared bus and multiplexer.
         # Drivers hold the mux lock across channel selection, reading and
         # deselection. No other process may manually operate this multiplexer.
-        self.mux = I2CMultiplexer(
-            SMBus(self.bus_number),
-            self.mux_address,
-            self.mux_channel_count
-        )
-
         try:
+            self._bus = SMBus(self.bus_number)
+            self.mux = I2CMultiplexer(
+                self._bus, self.mux_address, self.mux_channel_count
+            )
             # 5. Sensor publishers.
             if self.imu_enabled:
                 self.imu_pub = self.create_publisher(
@@ -79,26 +96,37 @@ class I2CSensorsNode(Node):
                     self.qos_depth
                 )
 
-            # 6. Independent reading and publishing timers.
-            # Driver initialization happens on the first callback so a missing
-            # sensor can be retried without preventing the other from running.
+            # 6. ROS timers publish snapshots only. Dedicated workers perform
+            # polling; the existing mux lock serializes complete bus transactions.
+            # Driver initialization/retries happen in each sensor's own worker.
             if self.imu_enabled:
                 self.imu_timer = self.create_timer(
-                    1.0 / self.imu_rate_hz,
+                    1.0 / self.imu_publish_rate_hz,
                     self.publish_imu
                 )
+                self._workers.append(threading.Thread(
+                    target=self._read_loop, args=(self.read_imu, self.imu_read_rate_hz),
+                    name='i2c_imu_reader', daemon=True
+                ))
             else:
                 self.get_logger().info('IMU acquisition disabled')
 
             if self.compass_enabled:
                 self.compass_timer = self.create_timer(
-                    1.0 / self.compass_rate_hz,
+                    1.0 / self.compass_publish_rate_hz,
                     self.publish_compass
                 )
+                self._workers.append(threading.Thread(
+                    target=self._read_loop,
+                    args=(self.read_compass, self.compass_read_rate_hz),
+                    name='i2c_compass_reader', daemon=True
+                ))
             else:
                 self.get_logger().info('Compass acquisition disabled')
+            for worker in self._workers:
+                worker.start()
         except Exception:
-            self.mux.close()
+            self.destroy_node()
             raise
 
         self.get_logger().info(
@@ -116,27 +144,42 @@ class I2CSensorsNode(Node):
 
         if self.qos_depth <= 0:
             raise ValueError('qos_depth must be positive')
-        if self.retry_interval_s <= 0:
-            raise ValueError('retry_interval_s must be positive')
-        if self.imu_rate_hz <= 0:
-            raise ValueError('imu.rate_hz must be positive')
-        if self.compass_rate_hz <= 0:
-            raise ValueError('compass.rate_hz must be positive')
-        if self.compass_reset_delay_s <= 0:
-            raise ValueError('compass.reset_delay_s must be positive')
-        if self.compass_conversion_delay_s <= 0:
-            raise ValueError('compass.conversion_delay_s must be positive')
+        for name, value in (
+            ('retry_interval_s', self.retry_interval_s),
+            ('imu.read_rate_hz', self.imu_read_rate_hz),
+            ('imu.publish_rate_hz', self.imu_publish_rate_hz),
+            ('imu.max_sample_age_s', self.imu_max_sample_age_s),
+            ('compass.read_rate_hz', self.compass_read_rate_hz),
+            ('compass.publish_rate_hz', self.compass_publish_rate_hz),
+            ('compass.max_sample_age_s', self.compass_max_sample_age_s),
+            ('compass.reset_delay_s', self.compass_reset_delay_s),
+            ('compass.conversion_delay_s', self.compass_conversion_delay_s),
+        ):
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f'{name} must be finite and positive')
         if not 0 <= self.imu_channel < self.mux_channel_count:
             raise ValueError('Invalid imu.channel')
         if not 0 <= self.compass_channel < self.mux_channel_count:
             raise ValueError('Invalid compass.channel')
 
     # -----------------------
-    #   Read and publish IMU measurements
+    #   Poll independently of publication; never queue catch-up reads
     # -----------------------
-    def publish_imu(self):
-        now_ns = self.get_clock().now().nanoseconds
-        if now_ns < self.imu_retry_at_ns:
+    def _read_loop(self, read, rate_hz):
+        period = 1.0 / rate_hz
+        while not self._stop.is_set():
+            started = time.monotonic()
+            read()
+            self._stop.wait(max(0.0, period - (time.monotonic() - started)))
+
+    def _store_sample(self, name, message):
+        # Each completed read is timestamped on the host, not by the device.
+        sample = (message, time.monotonic()) if message is not None else None
+        with self._sample_lock:
+            self._samples[name] = sample
+
+    def read_imu(self):
+        if time.monotonic() < self.imu_retry_at:
             return
 
         try:
@@ -154,7 +197,8 @@ class I2CSensorsNode(Node):
         except Exception as error:
             self.get_logger().error(f'IMU acquisition failed: {error}')
             self.imu_driver = None
-            self.imu_retry_at_ns = now_ns + int(self.retry_interval_s * 1e9)
+            self._store_sample('imu', None)
+            self.imu_retry_at = time.monotonic() + self.retry_interval_s
             return
 
         msg = Imu()
@@ -173,14 +217,13 @@ class I2CSensorsNode(Node):
         # acceleration and gyro vectors means their uncertainty is unknown.
         msg.orientation_covariance[0] = -1.0
 
-        self.imu_pub.publish(msg)
+        self._store_sample('imu', msg)
 
     # -----------------------
-    #   Read and publish compass measurements
+    #   Read compass measurements using the unchanged driver/conversion delay
     # -----------------------
-    def publish_compass(self):
-        now_ns = self.get_clock().now().nanoseconds
-        if now_ns < self.compass_retry_at_ns:
+    def read_compass(self):
+        if time.monotonic() < self.compass_retry_at:
             return
 
         try:
@@ -199,7 +242,8 @@ class I2CSensorsNode(Node):
         except Exception as error:
             self.get_logger().error(f'Compass acquisition failed: {error}')
             self.compass_driver = None
-            self.compass_retry_at_ns = now_ns + int(self.retry_interval_s * 1e9)
+            self._store_sample('compass', None)
+            self.compass_retry_at = time.monotonic() + self.retry_interval_s
             return
 
         msg = Vector3Stamped()
@@ -211,13 +255,44 @@ class I2CSensorsNode(Node):
         msg.vector.y = float(y)
         msg.vector.z = float(z)
 
-        self.compass_pub.publish(msg)
+        self._store_sample('compass', msg)
+
+    def _publish_latest(self, name, publisher, max_age_s):
+        with self._sample_lock:
+            sample = self._samples[name]
+        if sample is None:
+            return
+        msg, received_at = sample
+        # Separate clock domains: source ROS time and elapsed monotonic time.
+        # Pausing ROS time must not keep a disconnected sensor fresh forever.
+        if (not is_fresh(msg.header.stamp, self.get_clock().now(), max_age_s)
+                or not is_fresh(received_at, time.monotonic(), max_age_s)):
+            return
+        # Never mutate a cached message or refresh its stamp on republication.
+        publisher.publish(msg)
+
+    def publish_imu(self):
+        self._publish_latest('imu', self.imu_pub, self.imu_max_sample_age_s)
+
+    def publish_compass(self):
+        self._publish_latest('compass', self.compass_pub, self.compass_max_sample_age_s)
 
     # -----------------------
     #   Release the multiplexer and I2C bus
     # -----------------------
     def destroy_node(self):
-        self.mux.close()
+        self._stop.set()
+        # Let in-flight driver transactions finish before releasing the bus.
+        for worker in self._workers:
+            if worker.is_alive():
+                worker.join()
+        if self.mux is not None:
+            self.mux.close()
+            self.mux = None
+            self._bus = None
+        elif self._bus is not None:
+            self._bus.close()
+            self._bus = None
         return super().destroy_node()
 
 

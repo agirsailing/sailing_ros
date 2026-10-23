@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'sail_common'))
 from communication_web.gateway.recording_rpc import RecordingRpc
 from communication_web.gateway.telemetry import TelemetrySnapshot, json_safe
 
