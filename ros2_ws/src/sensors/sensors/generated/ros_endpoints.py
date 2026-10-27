@@ -22,10 +22,13 @@ class Topics:
         class PUB:
             GPS_DATA = '/gps/data'
 
-    class I2C_SENSORS_NODE:
+    class IMU_SENSOR_NODE:
         class PUB:
             IMU_DATA = '/imu/data'
             IMU_MAG = '/imu/mag'
+
+    class I2C_SENSORS_NODE:
+        class PUB:
             COMPASS_DATA = '/compass/data'
 
     class BATTERY_NODE:

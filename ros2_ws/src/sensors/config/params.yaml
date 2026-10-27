@@ -39,7 +39,7 @@ gps_node:
 
 imu_sensor_node:
   ros__parameters:
-    port: /dev/imu
+    port: /dev/ttyAMA0
     baudrate: 3000000
     frame_id: imu
     rate_hz: 100.0
