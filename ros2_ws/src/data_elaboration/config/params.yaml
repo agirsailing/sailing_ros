@@ -44,7 +44,7 @@ imu_node:
     # Colocated aerospace axes: forward, right, down. This defines the convention.
     tf_offset_aero: [0.0, 0.0, 0.0, 180.0, 0.0, 0.0]
     # Complete the local up-to-down world conversion after the aero transformer.
-    world_rotation_rpy_deg: [180.0, 0.0, 0.0]
+    world_rotation_rpy_deg: [180.0, 0.0, 90.0]
     # Isotropic variances in robotic axes; zero means not yet characterized.
     cov_orient: 0.0
     cov_vel: 0.0

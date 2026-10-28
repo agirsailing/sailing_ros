@@ -33,6 +33,7 @@ setup(
             'ultrasonic_node = sensors.ultrasonic_node:main',
             'i2c_sensors_node = sensors.i2c_sensors_node:main',
             'battery_node = sensors.battery_node:main',
+            'imu_sensor_node = sensors.imu_sensor_node:main',
         ],
     },
 )
