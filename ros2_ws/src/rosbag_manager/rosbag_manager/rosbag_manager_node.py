@@ -1,4 +1,5 @@
 # ros2_ws/src/rosbag_manager/rosbag_manager/rosbag_manager_node.py
+import math
 import os
 import signal
 import subprocess
@@ -13,6 +14,7 @@ from sail_msgs.srv import StartRecording, StopRecording
 # Endpoints are generated from config/endpoints.yaml.
 from rosbag_manager.generated.ros_endpoints import Topics, Services
 
+
 class RosbagManagerNode(Node):
     def __init__(self):
         super().__init__('rosbag_manager_node')
@@ -23,11 +25,19 @@ class RosbagManagerNode(Node):
         self.declare_parameter('record_dir', default_record_dir)
         self.declare_parameter('bag_prefix', 'rosbag2_')
         self.declare_parameter('sigint_timeout', 5.0)
+        self.declare_parameter('process_check_rate_hz', 2.0)
+        self.declare_parameter('publish_rate_hz', 2.0)
 
         # Read parameters.
         self.record_dir = self.get_parameter('record_dir').value
         self.bag_prefix = self.get_parameter('bag_prefix').value
         self.sigint_timeout = self.get_parameter('sigint_timeout').value
+        self.process_check_rate_hz = self.get_parameter('process_check_rate_hz').value
+        self.publish_rate_hz = self.get_parameter('publish_rate_hz').value
+        for name in ('process_check_rate_hz', 'publish_rate_hz'):
+            value = getattr(self, name)
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f'{name} must be finite and positive')
 
         # Create the recording directory if needed.
         try:
@@ -62,16 +72,20 @@ class RosbagManagerNode(Node):
             self.handle_stop_recording
         )
 
-        # Timer publishing
-        self.state_timer = self.create_timer(0.5, self.publish_state)
+        # Independent timers: lowering state traffic must not slow exit detection.
+        # Callbacks use the default mutually exclusive callback group.
+        self.process_timer = self.create_timer(
+            1.0 / self.process_check_rate_hz, self.check_recorder)
+        self.state_timer = self.create_timer(
+            1.0 / self.publish_rate_hz, self.publish_state)
 
         self.get_logger().info(f'RosbagManager Initialized. Ready to record to {self.record_dir}')
 
     # -----------------------
-    #   Recording state publisher
+    #   Recorder monitoring and periodic state publication
     # -----------------------
-    def publish_state(self):
-        # Report recorder exits even when no further service request arrives.
+    def _refresh_recorder_state(self):
+        """Return whether an unexpected recorder exit changed the state."""
         if self.recording and self.rosbag_proc is not None:
             return_code = self.rosbag_proc.poll()
             if return_code is not None:
@@ -79,7 +93,15 @@ class RosbagManagerNode(Node):
                 self.last_error = f'Recorder exited unexpectedly with code {return_code}'
                 self.get_logger().error(self.last_error)
                 self.rosbag_proc = None
+                return True
+        return False
 
+    def check_recorder(self):
+        # Publish a detected exit immediately, without waiting for the heartbeat.
+        if self._refresh_recorder_state():
+            self.publish_state()
+
+    def publish_state(self):
         msg = RecordingState()
         msg.recording = self.recording
         msg.bag_name = self.current_bag_name
@@ -127,6 +149,9 @@ class RosbagManagerNode(Node):
             response.success = False
             response.error_message = self.last_error
 
+        # Preserve immediate-start failure reporting without coupling periodic
+        # state publication to process polling or publishing the event twice.
+        self._refresh_recorder_state()
         self.publish_state()
         if response.success and not self.recording:
             response.success = False
@@ -173,6 +198,7 @@ class RosbagManagerNode(Node):
             response.success = False
             response.error_message = self.last_error
 
+        self._refresh_recorder_state()
         self.publish_state()
         return response
 

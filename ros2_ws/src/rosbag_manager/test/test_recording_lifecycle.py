@@ -50,13 +50,13 @@ def test_start_reports_immediate_process_failure():
     assert not node.recording
 
 
-def test_state_detects_unexpected_exit():
+def test_monitor_detects_unexpected_exit():
     """Update the published state when a previously running recorder exits."""
     node = make_node()
     node.recording = True
     node.rosbag_proc = Mock()
     node.rosbag_proc.poll.return_value = 2
-    node.publish_state()
+    node.check_recorder()
     assert not node.recording
     assert node.rosbag_proc is None
     state = node.state_pub.publish.call_args.args[0]

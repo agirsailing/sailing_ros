@@ -100,7 +100,7 @@ values when merging branches; do not infer deployed settings from another branch
 | `heading_node` | GPS up to 10 Hz + compass target 10 Hz; callbacks store latest inputs | Timer selects direction and builds summary at 10 Hz | 10 Hz **per topic**: `/processed/heading_deg`, `/processed/gps/summary`; snapshots may reuse inputs | processing params, `rate_hz` |
 | `telemetry_gateway_node` | Independently receives aero RPY ~50, height up to ~40, battery ~10, GPS summary ~10, left/right up to 20 each, state 2 Hz plus events | Cache on input callbacks; build dashboard AND map at 4 Hz. State forwarded in its callback | Each ROS dashboard/map topic at 4 Hz; each corresponding MQTT topic at 4 Hz; MQTT state follows manager | [communication params](ros2_ws/src/communication_web/config/params.yaml), `publish_rate_hz` |
 | `command_gateway_node` | MQTT commands on demand; asynchronous service responses | Queue/timeouts checked every 0.05 s (20 Hz) | MQTT responses on demand, **not** 20 messages/s | communication params, `poll_period_s` |
-| `rosbag_manager_node` | Start/stop service requests on demand | Handle requests; check recorder process and build state every 0.5 s | State at 2 Hz, plus after start/stop handling | Interval hard-coded in [rosbag_manager_node.py](ros2_ws/src/rosbag_manager/rosbag_manager/rosbag_manager_node.py) |
+| `rosbag_manager_node` | Start/stop service requests on demand | Handle requests; independently check recorder process at 2 Hz | Periodic state at 2 Hz, plus after start/stop handling and detected unexpected exits | [rosbag manager params](ros2_ws/src/rosbag_manager/config/params.yaml), `process_check_rate_hz`, `publish_rate_hz` |
 
 The same node can have multiple input/output rates: summing the two IMU callbacks
 into a single "node Hz" would hide what is actually happening. These are nominal
@@ -164,10 +164,6 @@ telemetry_gateway_node:
     map.publication.mode: periodic
     map.publication.rate_hz: 2.0
 
-rosbag_manager_node:
-  ros__parameters:
-    publication.mode: periodic
-    publication.rate_hz: 0.5
 ```
 
 - `on_data`: publish when a new valid sample/result is available, even if its
