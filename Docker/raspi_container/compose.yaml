@@ -12,8 +12,8 @@ services:
       - ../../ros2_ws:/home/ros/ros2_ws
       # Linux hardware access: USB serial, I2C and GPIO.
       - /dev:/dev
-    # Agir uses USB serial, I2C and GPIO through /dev above. Do not require
-    # a Polimi STM32 UART (/dev/ttyAMA0) to exist on this Raspberry Pi.
+    # /dev above also exposes the BNO085 GPIO UART (/dev/ttyAMA0).
+    # Configure it with the hardware setup step and reboot before live acquisition.
     group_add:
       - "dialout"
       - "tty"

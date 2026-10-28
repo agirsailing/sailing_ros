@@ -70,8 +70,10 @@ imu_sensor_node:
     publish_rate_hz: 100.0
     max_sample_age_s: 0.5
     timeout_s: 0.1
-    # Requested device report rates, independent of host reading/publication.
+    # Ask the BNO085 firmware to produce orientation/acceleration/gyro reports
+    # at this rate (Hz). This is separate from reading UART and publishing ROS.
     report_rate_hz: 100.0
+    # The internal magnetometer has its own requested device report rate.
     magnetometer_rate_hz: 50.0
     orientation_report: rotation_vector
     roll_pitch_variance_rad2: 0.0

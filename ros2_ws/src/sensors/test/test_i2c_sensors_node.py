@@ -28,10 +28,6 @@ class I2CNodeTests(unittest.TestCase):
         self.params = dict(bus=1, mux_address=0x70, mux_channel_count=4,
                            qos_depth=10, retry_interval_s=2.0)
         self.params.update({
-            'imu.enabled': True, 'imu.channel': 2, 'imu.address': 0x6A,
-            'imu.frame_id': 'imu', 'imu.read_rate_hz': 50.0,
-            'imu.publish_rate_hz': 25.0, 'imu.max_sample_age_s': 0.5,
-            'imu.odr_hz': 104.0, 'imu.accel_range_g': 4, 'imu.gyro_range_dps': 500,
             'compass.enabled': True, 'compass.channel': 0, 'compass.address': 0x0E,
             'compass.frame_id': 'compass', 'compass.read_rate_hz': 10.0,
             'compass.publish_rate_hz': 5.0, 'compass.max_sample_age_s': 0.5,
@@ -40,11 +36,8 @@ class I2CNodeTests(unittest.TestCase):
         })
         self.stamp = NS(sec=200, nanosec=0)
         self.monotonic = Mock(return_value=100.0)
-        self.imu = Mock()
-        self.imu.read.return_value = ((1.0, 2.0, 9.8), (0.1, 0.2, 0.3))
         self.compass = Mock()
         self.compass.read.return_value = (100, -200, 300)
-        self.imu_factory = Mock(return_value=self.imu)
         self.compass_factory = Mock(return_value=self.compass)
         self.bus = Mock()
         self.bus_factory = Mock(return_value=self.bus)
@@ -77,8 +70,7 @@ class I2CNodeTests(unittest.TestCase):
         scope = dict(
             Node=FakeNode, Parameter=NS(Type=NS(BOOL=1, STRING=2, INTEGER=3, DOUBLE=4)),
             Imu=Message, Vector3Stamped=Message, SMBus=self.bus_factory,
-            I2CMultiplexer=self.mux_factory, ImuDriver=self.imu_factory,
-            CompassDriver=self.compass_factory,
+            I2CMultiplexer=self.mux_factory, CompassDriver=self.compass_factory,
             Topics=NS(I2C_SENSORS_NODE=NS(PUB=NS(IMU_DATA='/imu/data',
                                                COMPASS_DATA='/compass/data'))),
             threading=self.threads, time=NS(monotonic=self.monotonic),
@@ -90,99 +82,34 @@ class I2CNodeTests(unittest.TestCase):
 
     def test_read_rates_and_publish_rates_are_independent(self):
         calls = self.node.create_timer.call_args_list
-        self.assertEqual([call.args[0] for call in calls], [0.04, 0.2])
+        self.assertEqual([call.args[0] for call in calls], [0.2])
         workers = self.threads.Thread.call_args_list
-        self.assertEqual([call.kwargs['args'][1] for call in workers], [50.0, 10.0])
-        self.node.publish_imu()
+        self.assertEqual([call.kwargs['args'][1] for call in workers], [10.0])
         self.node.publish_compass()
-        self.imu_factory.assert_not_called()
         self.compass_factory.assert_not_called()
-        self.node.imu_pub.publish.assert_not_called()
         self.node.compass_pub.publish.assert_not_called()
 
     def test_read_does_not_publish_and_preserves_driver_contracts(self):
-        self.node.read_imu()
         self.node.read_compass()
-        self.node.imu_pub.publish.assert_not_called()
         self.node.compass_pub.publish.assert_not_called()
-        self.imu_factory.assert_called_once_with(self.mux, 2, 0x6A, 104.0, 4, 500)
         self.compass_factory.assert_called_once_with(self.mux, 0, 0x0E, 1, 1, 0.1, 0.02)
-        self.node.publish_imu()
         self.node.publish_compass()
-        imu = self.node.imu_pub.publish.call_args.args[0]
         compass = self.node.compass_pub.publish.call_args.args[0]
-        self.assertEqual(imu.linear_acceleration.z, 9.8)
-        self.assertEqual(imu.angular_velocity.x, 0.1)
-        self.assertEqual(imu.orientation_covariance[0], -1.0)
-        self.assertEqual(imu.header.frame_id, 'imu')
         self.assertEqual(compass.vector.y, -200.0)
         self.assertEqual(compass.header.frame_id, 'compass')
 
-    def test_repeat_preserves_timestamp_and_newest_read_wins(self):
-        self.node.read_imu()
-        stamp = self.stamp
-        self.stamp = NS(sec=200, nanosec=100_000_000)
-        for _ in range(2):
-            self.node.publish_imu()
-            self.assertIs(self.node.imu_pub.publish.call_args.args[0].header.stamp, stamp)
-        self.imu.read.assert_called_once()
-        for value in (2.0, 3.0):
-            self.imu.read.return_value = ((value, 0, 9.8), (0, 0, 0))
-            self.node.read_imu()
-        self.node.publish_imu()
-        msg = self.node.imu_pub.publish.call_args.args[0]
-        self.assertEqual(msg.linear_acceleration.x, 3.0)
-        self.assertIs(msg.header.stamp, self.stamp)
-
-    def test_samples_expire_independently_without_new_readings(self):
-        self.node.read_imu()
-        self.monotonic.return_value = 100.4
-        self.stamp = NS(sec=200, nanosec=400_000_000)
-        self.node.read_compass()
-        self.monotonic.return_value = 100.6
-        self.stamp = NS(sec=200, nanosec=600_000_000)
-        self.node.publish_imu()
-        self.node.publish_compass()
-        self.node.imu_pub.publish.assert_not_called()
-        self.node.compass_pub.publish.assert_called_once()
-
     def test_paused_ros_clock_still_expires_both_sensors(self):
-        self.node.read_imu()
         self.node.read_compass()
         self.monotonic.return_value = 100.501
-        self.node.publish_imu()
         self.node.publish_compass()
-        self.node.imu_pub.publish.assert_not_called()
         self.node.compass_pub.publish.assert_not_called()
 
     def test_ros_clock_jumps_reject_cached_samples(self):
-        self.node.read_imu()
         self.node.read_compass()
         for seconds in (199, 201):
             self.stamp = NS(sec=seconds, nanosec=0)
-            self.node.publish_imu()
             self.node.publish_compass()
-        self.node.imu_pub.publish.assert_not_called()
         self.node.compass_pub.publish.assert_not_called()
-
-    def test_failure_clears_only_failed_sensor_and_retry_uses_monotonic_time(self):
-        self.node.read_imu()
-        self.node.read_compass()
-        self.imu.read.side_effect = OSError('disconnected')
-        self.node.read_imu()
-        self.node.publish_imu()
-        self.node.publish_compass()
-        self.node.imu_pub.publish.assert_not_called()
-        self.node.compass_pub.publish.assert_called_once()
-        self.node.read_imu()
-        self.imu_factory.assert_called_once()
-        # Recovery must work even if the ROS clock remains paused.
-        self.monotonic.return_value = 102.0
-        self.imu.read.side_effect = None
-        self.node.read_imu()
-        self.node.publish_imu()
-        self.assertEqual(self.imu_factory.call_count, 2)
-        self.node.imu_pub.publish.assert_called_once()
 
     def test_compass_failure_clears_cached_sample(self):
         self.node.read_compass()
@@ -192,7 +119,6 @@ class I2CNodeTests(unittest.TestCase):
         self.node.compass_pub.publish.assert_not_called()
 
     def test_disabled_sensors_do_not_start_readers_or_open_bus(self):
-        self.params['imu.enabled'] = False
         self.params['compass.enabled'] = False
         self.bus_factory.reset_mock()
         self.threads.Thread.reset_mock()
@@ -233,7 +159,6 @@ class I2CNodeTests(unittest.TestCase):
             finished.set()
             return (100, 200, 300)
 
-        self.params['imu.enabled'] = False
         self.threads.Thread = threading.Thread
         self.compass.read.side_effect = blocking_read
         node = self.node_type()
@@ -253,8 +178,7 @@ class I2CNodeTests(unittest.TestCase):
         self.assertTrue(node.destroyed)
 
     def test_nonpositive_and_nonfinite_timing_values_fail_before_open(self):
-        for name in ('imu.read_rate_hz', 'imu.publish_rate_hz', 'imu.max_sample_age_s',
-                     'compass.read_rate_hz', 'compass.publish_rate_hz',
+        for name in ('compass.read_rate_hz', 'compass.publish_rate_hz',
                      'compass.max_sample_age_s', 'retry_interval_s'):
             old = self.params[name]
             for value in (0.0, -1.0, math.nan, math.inf):

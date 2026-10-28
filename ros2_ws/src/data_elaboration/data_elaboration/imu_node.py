@@ -6,6 +6,7 @@ Raw 6-DOF input (orientation_covariance[0] == -1) still uses the complementary f
 
 import copy
 import math
+import time
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
@@ -13,6 +14,7 @@ from sensor_msgs.msg import Imu
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import StaticTransformBroadcaster
 from sail_msgs.msg import RollPitchYaw
+from sail_common.freshness import is_fresh
 
 from data_elaboration.generated.ros_endpoints import Topics
 from data_elaboration.processing.imu_filter import ImuFilter
@@ -31,6 +33,8 @@ class ImuNode(Node):
         self.complementary_alpha = self.declare_parameter('complementary_alpha', Parameter.Type.DOUBLE).value
         self.max_sample_dt_s = self.declare_parameter('max_sample_dt_s', Parameter.Type.DOUBLE).value
         self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
+        self.max_sample_age_s = self.declare_parameter('max_sample_age_s', Parameter.Type.DOUBLE).value
+        self.publish_rate_hz = self.declare_parameter('publish_rate_hz', Parameter.Type.DOUBLE).value
 
         self.frame_base = self.declare_parameter('frame_base', Parameter.Type.STRING).value
         self.frame_imu = self.declare_parameter('frame_imu', Parameter.Type.STRING).value
@@ -58,6 +62,9 @@ class ImuNode(Node):
         self.aero_last_stamp = None
         self.aero_last_yaw = None
         self.aero_continuous_yaw = 0.0
+        self._robotic_last_stamp = None
+        self._last_clock_ns = None
+        self._robotic_sample = None
 
         # 3. Processed IMU and explicit angle publishers.
         self.imu_pub = self.create_publisher(
@@ -89,10 +96,16 @@ class ImuNode(Node):
         )
         self.aero_imu_sub = self.create_subscription(
             Imu, Topics.IMU_NODE.SUB.IMU_AERO, self.publish_aero, self.qos_depth)
+        # Filtering/angle extraction always runs on new input. Periodic mode
+        # throttles only the robotic output; the aero branch follows that output
+        # immediately, avoiding a second timer delay in the conversion chain.
+        self.publish_timer = None
+        if self.publish_rate_hz > 0:
+            self.publish_timer = self.create_timer(1.0 / self.publish_rate_hz, self.publish_latest)
         if self.calibration_samples:
             self.get_logger().info(
-                f'Calibrating over {self.calibration_samples} samples: '
-                'keep the boat stationary and level'
+                f'Raw 6-DOF fallback calibration uses {self.calibration_samples} samples; '
+                'sensor-fused orientation bypasses this calibration'
             )
 
     # -----------------------
@@ -100,6 +113,10 @@ class ImuNode(Node):
     # -----------------------
     def _validate_parameters(self):
         self.get_parameters(self.list_parameters([], depth=0).names)
+        if not math.isfinite(self.max_sample_age_s) or self.max_sample_age_s <= 0:
+            raise ValueError('max_sample_age_s must be finite and positive')
+        if not math.isfinite(self.publish_rate_hz) or self.publish_rate_hz < 0:
+            raise ValueError('publish_rate_hz must be finite and nonnegative')
         if self.calibration_samples < 0:
             raise ValueError('calibration_samples must not be negative')
         if not math.isfinite(self.gravity_mps2) or self.gravity_mps2 <= 0:
@@ -166,15 +183,53 @@ class ImuNode(Node):
     # -----------------------
     #   Estimate and publish orientation
     # -----------------------
+    def _now(self):
+        now = self.get_clock().now()
+        if self._last_clock_ns is not None and now.nanoseconds < self._last_clock_ns:
+            self.filter.reset()
+            self._robotic_last_stamp = None
+            self._robotic_sample = None
+            self.aero_last_stamp = self.aero_last_yaw = None
+            self.aero_continuous_yaw = 0.0
+        self._last_clock_ns = now.nanoseconds
+        return now
+
+    def _store_robotic(self, output, angles):
+        self._robotic_sample = (output, angles, time.monotonic())
+        if self.publish_rate_hz == 0:
+            self.publish_latest()
+
+    def publish_latest(self):
+        now = self._now()
+        if self._robotic_sample is None:
+            return
+        output, angles, received_at = self._robotic_sample
+        if (is_fresh(output.header.stamp, now, self.max_sample_age_s)
+                and is_fresh(received_at, time.monotonic(), self.max_sample_age_s)):
+            self.imu_pub.publish(output)
+            self.rpy_pub.publish(angles)
+
     def publish_attitude(self, msg):
+        now = self._now()
+        if not is_fresh(msg.header.stamp, now, self.max_sample_age_s):
+            return
         if (msg.header.frame_id != self.frame_robotic
                 or msg.linear_acceleration_covariance[0] == -1
                 or msg.angular_velocity_covariance[0] == -1):
             return
+        stamp_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+        if self._robotic_last_stamp is not None and stamp_ns <= self._robotic_last_stamp:
+            return
+        if not all(math.isfinite(v) for v in (
+                msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z,
+                msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z)):
+            return
         if msg.orientation_covariance[0] != -1:
             # A fusing IMU (BNO085) already estimated orientation: do not refilter.
-            self._publish_fused(msg)
+            if self._publish_fused(msg):
+                self._robotic_last_stamp = stamp_ns
             return
+        self._robotic_last_stamp = stamp_ns
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         acceleration = (
             msg.linear_acceleration.x,
@@ -214,8 +269,7 @@ class ImuNode(Node):
         angles.pitch_deg = math.degrees(self.filter.pitch)
         angles.yaw_deg = math.degrees(self.filter.yaw)
 
-        self.imu_pub.publish(output)
-        self.rpy_pub.publish(angles)
+        self._store_robotic(output, angles)
 
     # Pass through sensor-fused orientation (ENU world for the BNO085 rotation vector).
     def _publish_fused(self, msg):
@@ -223,7 +277,7 @@ class ImuNode(Node):
         quaternion = (q.x, q.y, q.z, q.w)
         norm = math.hypot(*quaternion)
         if not math.isfinite(norm) or norm == 0:
-            return
+            return False
         quaternion = tuple(v / norm for v in quaternion)
         output = copy.deepcopy(msg)
         output.header.frame_id = self.frame_robotic
@@ -241,11 +295,13 @@ class ImuNode(Node):
         angles.roll_deg = math.degrees(math.atan2(rotation[2][1], rotation[2][2]))
         angles.pitch_deg = math.degrees(math.asin(max(-1.0, min(1.0, -rotation[2][0]))))
         angles.yaw_deg = math.degrees(math.atan2(rotation[1][0], rotation[0][0]))
-        self.imu_pub.publish(output)
-        self.rpy_pub.publish(angles)
+        self._store_robotic(output, angles)
+        return True
 
     # Complete only the world-reference conversion after the aero transformer.
     def publish_aero(self, msg):
+        if not is_fresh(msg.header.stamp, self._now(), self.max_sample_age_s):
+            return
         if msg.header.frame_id != self.frame_aero or msg.orientation_covariance[0] == -1:
             return
         q = msg.orientation
@@ -253,11 +309,9 @@ class ImuNode(Node):
         norm = math.hypot(*quaternion)
         if not math.isfinite(norm) or norm == 0:
             return
-        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        if self.aero_last_stamp is not None and stamp == self.aero_last_stamp:
+        stamp = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+        if self.aero_last_stamp is not None and stamp <= self.aero_last_stamp:
             return
-        if self.aero_last_stamp is not None and stamp < self.aero_last_stamp:
-            self.aero_last_yaw = None
         # Body vectors and their covariance were already transformed by the ROS node.
         # Only orientation and its world-referenced covariance need this left product.
         transformed = multiply(self.world_quaternion, tuple(v / norm for v in quaternion))

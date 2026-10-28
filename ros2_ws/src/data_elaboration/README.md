@@ -122,98 +122,83 @@ clear cached samples.
 
 ## IMU attitude, mounting and standards
 
-/imu/data contains measured acceleration (m/s^2) and angular velocity (rad/s),
-with orientation_covariance[0] = -1. sensors retains the chip's axes.
-All mounting, estimation and convention conversion belong to data_elaboration.
-The launch files now start the actual imu_transformer executable, as in Polimi.
+The UART BNO085 now publishes acceleration (m/s^2, including gravity), angular
+velocity (rad/s) and onboard fused orientation on `/imu/data`. The sensor's
+`rotation_vector` uses its internal accelerometer, gyro and magnetometer; the
+separate compass is not fed into this firmware fusion.
 
-The layout follows the Polimi can_bus configuration: named frames, a six-value
-tf_offset [x, y, z, roll, pitch, yaw] in metres/degrees, tf_offset_aero, and
-cov_orient/cov_vel/cov_acc. Actual mounting values remain placeholders.
-The pipeline is:
+The existing mounting pipeline is preserved:
 
-    /imu/data
-      -> imu_mount_transformer_node (ROS imu_transformer + mounting TF)
-      -> /internal/imu/mounted
-      -> imu_node (stationary/level calibration and attitude filter)
-      -> /processed/imu/data
-      -> imu_aero_transformer_node (ROS imu_transformer + FRD TF)
-      -> /internal/imu/aero_body
-      -> imu_node.publish_aero callback (world-reference conversion only)
-      -> /processed/imu/data/aero
+    /imu/data -> imu_mount_transformer_node -> /internal/imu/mounted
+      -> imu_node -> /processed/imu/data (+ /processed/imu/rpy)
+      -> imu_aero_transformer_node -> /internal/imu/aero_body
+      -> imu_node aero callback -> /processed/imu/data/aero (+ /processed/imu/rpy/aero)
 
-Both transformer instances are from the external imu_transformer package; there
-is no local replacement for their mounting/body-axis rotation. They load
-target_frame from params.yaml. Keep the mounting target equal to
-imu_node.frame_robotic, and the aerodynamic target equal to imu_node.frame_aero. Their unused magnetometer ports are remapped to
-private names, so the two instances do not share those ports.
+Both transformers are instances of the external ROS `imu_transformer` package.
+They retain the sample timestamp and apply body-axis transformations. The two
+callbacks in `imu_node` have distinct inputs/outputs; this is not a feedback loop.
+`imu_node` publishes mounting/static TF at initialization, independently of input.
+`tf_offset` describes the actual sensor mounting in `base_link`; confirm it on the
+boat. Translating the frame does not compensate accelerations for a lever arm.
+The near-centre-of-mass assumption is retained.
 
-The TF rotation is applied before the level-boat calibration. imu_node rejects
-input in a different frame and does not apply the mounting rotation a second
-time. TF publication remains in imu_node and is independent of receiving data,
-so the mounting transformer can start before attitude estimation.
-The two callbacks in imu_node have distinct input/output topics. The aerodynamic
-callback never republishes on the robotic topic or updates its attitude filter,
-so the return path through imu_aero_transformer_node is not a feedback loop.
-All final IMU publishers and their configuration now belong to imu_node.
+If orientation is present (`orientation_covariance[0] != -1`), `imu_node` validates
+and normalizes the supplied quaternion, preserves it and extracts roll/pitch/yaw.
+It does not run the complementary filter or stationary calibration on BNO085
+orientation. Existing covariance is retained unless a positive characterized YAML
+variance overrides it. Zero configured variance means unknown, not perfect accuracy.
+Raw 6-DOF messages with orientation marked absent still use the legacy filter;
+`calibration_samples`, `complementary_alpha` and `max_sample_dt_s` apply only there.
+The latter limits integration gaps, not the age of a message relative to now.
 
-imu_node publishes three static transforms:
-- frame_base -> frame_imu: actual sensor mounting position and orientation.
-- frame_base -> frame_robotic: same position, axes parallel to boat FLU.
-- frame_robotic -> frame_aero: same position, 180-degree roll (FRD axes).
-
-Both processed frames remain at the physical IMU. Position is represented in
-TF; acceleration is not relocated to the centre of mass. A lever-arm correction
-would also require angular acceleration and centripetal terms.
-For the current development stage, assume the IMU is close enough to the centre
-of mass to neglect this effect. The zero mounting translation represents that
-approximation; it is not a measured installation position.
-
-| Output | Body axes | Orientation reference |
+| Output | Body axes | BNO085 rotation-vector world reference |
 | --- | --- | --- |
-| /processed/imu/data | FLU: forward, left, up | Local up-world; yaw zero at startup |
-| /processed/imu/data/aero | FRD: forward, right, down | Local down-world; yaw zero at startup |
+| `/processed/imu/data` | FLU: forward, left, up | East, magnetic north, up (ENU) |
+| `/processed/imu/data/aero` | FRD: forward, right, down | Magnetic north, east, down (NED) |
 
-The robotic stream feeds height estimation and is the intended future EKF input.
-The aerodynamic stream is separate and must not be fed to an ENU-assuming EKF.
-For explicit angles, /processed/imu/rpy and /processed/imu/rpy/aero use
-sail_msgs/RollPitchYaw with roll_deg, pitch_deg and yaw_deg in degrees.
-The filter still computes in radians; sensor_msgs/Imu outputs retain quaternions
-and angular velocity in rad/s. All outputs retain the input sample timestamp.
-Both start at zero roll/pitch when level; yaw starts at zero after calibration.
-Aerodynamic signs are positive right-side-down roll, bow-up pitch and right turn.
-The RPY relation is (roll, -pitch, -yaw) within the usual Euler-angle range.
-The aerodynamic callback unwraps successive yaw values across turns (requiring less
-than 180 degrees between samples), skips duplicates and resets on backwards time.
+The configured world rotation is `[180.0, 0.0, 90.0]` degrees. Combined with the
+FLU-to-FRD body transform, it maps magnetic ENU to magnetic NED. Robotic yaw is
+zero towards east; aero yaw is zero towards magnetic north, increasing towards
+east. Declination is not applied, so this is not true north. Aero yaw is unwrapped
+across successive samples and can exceed 360 degrees. The conversion changes the
+orientation reference, not acceleration/gyro a second time. For the former local
+up/down convention use `[180.0, 0.0, 0.0]`; it does not establish a north reference
+for raw gyro integration or the BNO085 game rotation vector.
 
-Like the Polimi launch, the external imu_transformer changes the sensor/body
-frame while retaining the world reference. To also preserve the explicitly
-requested intuitive aerospace angles, the publish_aero callback in imu_node
-changes only the remaining world reference. It copies transformed acceleration,
-gyro and their
-covariances unchanged. It transforms orientation and its world-frame covariance.
+### IMU timing and freshness
 
-The combined operation is:
+```yaml
+publish_rate_hz: 0.0
+max_sample_age_s: 0.5
+```
 
-    A = Rx(pi)
-    R_aero = A.T R_robotic A
-    vector_aero = A.T vector_robotic
-    covariance_aero = A.T covariance_robotic A
+There is no `read_rate_hz`: subscriptions process new input immediately. Zero
+`publish_rate_hz` publishes each new valid result; a positive value periodically
+publishes the newest robotic IMU/RPY pair, preserving the acquisition timestamp.
+All new inputs are still processed, including when publication is slower. The
+aero transformer and callback follow these publications immediately, without a
+second timer delay. Repeated input timestamps are not reprocessed, so aero
+publication can be lower than the robotic repeat rate when no new sample exists.
 
-This local down-world reference is **not geographic NED**: it is not aligned to
-north. The body-axis TF alone does not describe the orientation-reference change.
-Do not pass the aero message through a body-only TF transform expecting to undo
-the full convention conversion; use the already published robotic stream instead.
+`sail_common.freshness.is_fresh` checks each input's original ROS stamp before
+processing. Cached periodic results also check elapsed monotonic time, including
+with a paused ROS clock. Duplicate and out-of-order samples are ignored. A ROS
+clock jump backwards clears the cache, duplicate tracking and estimator/yaw state.
+The helper is checked independently on the aero input. No missing or expired
+measurement is replaced with a freshly stamped copy. Parameters are read at
+startup; rebuild/install and restart after YAML changes.
 
-tf_offset_aero must represent colocated FLU/FRD axes; arbitrary physical mounting
-belongs in tf_offset. Isotropic covariance values are configured in YAML; zeros
-mean unknown uncertainty, not perfect accuracy. Set measured variances before
-EKF tuning. Covariance matrices are transformed along with the vectors.
+### Raspberry checks
 
-The existing complementary filter is still approximate during large rotations
-or translational acceleration. Yaw integrates the gyro relative to startup and
-can drift. No output is published during initial stationary/level calibration.
-Backwards timestamps reset the estimator and its relative yaw.
+After deploying the merged setup and rebuilding, verify `/dev/ttyAMA0` and run
+one live acquisition/processing stack. Inspect `/imu/data`, `/imu/mag`,
+`/processed/imu/rpy` and `/processed/imu/rpy/aero` with `ros2 topic echo` and
+measure frequency with `ros2 topic hz`. Check level orientation, known roll/pitch
+motions and magnetic heading with the sensor mounted as configured. Stop the
+UART stream: acquisition and periodic processed output must expire rather than
+repeat indefinitely. Restore it and check reconnection. Offline tests cover
+protocol decoding, cache expiry and conversions; physical wiring, calibration,
+serial reliability and real ROS scheduling still require this hardware check.
 
 ## Navigation direction and GPS summary
 
@@ -281,8 +266,8 @@ implemented. Rebuild sail_msgs and the workspace before using new interfaces.
   the IMU mounting rotation. Keep the near-COM assumption for now; revisit lever-
   arm compensation only if the actual IMU offset and motion make it significant.
 - IMU estimation / EKF: characterize covariance values and filter behaviour
-  during manoeuvres. Decide later how to reference yaw to north; current yaw
-  remains relative to startup. Use the robotic Imu stream for the future EKF.
+  during manoeuvres. Validate BNO085 magnetic heading and declination before
+  interpreting it as true north. Use the robotic Imu stream for the future EKF.
 - Replay / export: implement bag-driven replay without hardware acquisition and
   adapt CSV export to the current Agir topics and message definitions.
 

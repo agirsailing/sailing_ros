@@ -26,8 +26,8 @@ shutdown policy; calibration, filtering and heading selection belong to data_ela
 | ultrasonic_left_node | /dev/ultrasonic_left | sensor_msgs/Range /ultrasonic/left (m) |
 | ultrasonic_right_node | /dev/ultrasonic_right | sensor_msgs/Range /ultrasonic/right (m) |
 | gps_node | /dev/gps, NAV-PVT | sail_msgs/GpsData /gps/data |
-| i2c_sensors_node | bus 1, mux 0x70, channel 2 | sensor_msgs/Imu /imu/data |
-| i2c_sensors_node | same mux, channel 0 | geometry_msgs/Vector3Stamped /compass/data |
+| imu_sensor_node | /dev/ttyAMA0, full UART SHTP at 3 Mbaud | sensor_msgs/Imu /imu/data; sensor_msgs/MagneticField /imu/mag |
+| i2c_sensors_node | bus 1, mux 0x70, channel 0 | geometry_msgs/Vector3Stamped /compass/data |
 | battery_node | gpiochip0 line 13 (alarm), line 6 (ESP32 voltage link) | sail_msgs/BatteryData /battery/data |
 
 ### Ultrasound reading and publication
@@ -169,94 +169,86 @@ Replace the old battery `rate_hz` entry in custom YAML with the four parameters
 above, rebuild/install and restart the node. Settings are read at startup, not
 changed live. This refactor does not change downstream nodes or the message fields.
 
-Compass values are signed raw counts, not tesla: the exact model and sensitivity
-still need hardware confirmation. IMU acceleration is m/s^2 and gyro is rad/s.
-Raw IMU orientation is absent (orientation_covariance[0] = -1); the measured
-vectors have zero covariances to indicate unknown uncertainty.
+### BNO085 UART acquisition
 
-The mux owner holds a lock across channel selection, sensor access and
-deselection, including failures. The lock protects only this process; do not
-launch another program that manually operates this mux. A failed sensor is
-retried independently. Compass conversion currently holds the bus for 20 ms:
-the configured 50 Hz IMU rate is nominal and can jitter. Processing uses message
-timestamps, not an assumed fixed interval. A kernel mux driver or asynchronous
-conversion scheduling may be considered after hardware timing measurements.
-
-### I2C polling and replacement hardware
-
-Each sensor has independent acquisition and publication settings:
+The BNO085 is owned by `imu_sensor_node`, separate from the I2C compass. It uses
+`/dev/ttyAMA0` at 3,000,000 baud in full SH-2/SHTP UART mode (P1 high, P0 low),
+not UART-RVC. The hardware setup step enables the Pi's PL011 UART on GPIO14/15,
+disables Bluetooth and removes the serial console from this port; reboot after
+applying those boot settings. Docker exposes host devices through `/dev`.
 
 ```yaml
-imu:
-  read_rate_hz: 50.0
-  publish_rate_hz: 50.0
-  max_sample_age_s: 0.5
+read_rate_hz: 0.0
+publish_rate_hz: 100.0
+max_sample_age_s: 0.5
+timeout_s: 0.1
+report_rate_hz: 100.0
+magnetometer_rate_hz: 50.0
+orientation_report: rotation_vector
+```
+
+`read_rate_hz: 0.0` waits for UART bytes in a dedicated reader, with a finite idle
+read timeout; positive values poll and drain buffered bytes at that nominal rate.
+The device report rates request the sensor's output frequency, independently of
+host reading/publication. `publish_rate_hz` must be positive and drives a separate
+ROS timer. Initialization, serial waits and reconnects do not block that timer.
+The latest complete IMU and magnetometer snapshots are kept, not a FIFO backlog.
+
+The driver decodes accelerometer, gyro, orientation and magnetometer reports.
+A new orientation only forms an IMU snapshot if the required acceleration/gyro
+reports are also fresh. Each report stream has its own monotonic decoding time.
+The cached IMU expires when its oldest required component expires.
+`is_fresh` checks original ROS stamps and monotonic ages before publication;
+repeats keep their stamps. Missing data expires after 0.5 s by default, even with
+paused ROS time. Serial failure clears both caches and retries after
+`retry_interval_s`; complete UART silence beyond `stale_timeout_s` also reconnects.
+Magnetic data expires independently and is not refreshed by orientation reports.
+
+ROS stamps mark host snapshot assembly, not the sensor's internal measurement
+instant. SH-2 sensor timestamps are not yet mapped to ROS time. The separate
+report streams are not asserted to be exactly synchronized, and time already
+spent in device/serial buffers cannot be reconstructed. Partial UART frames are
+retained across read timeouts; malformed/oversized frames are rejected.
+
+`rotation_vector` uses the onboard accelerometer, gyro and magnetometer fusion.
+The driver provides its quaternion in the chip's axes; processing corrects
+mounting and extracts angles without running the old filter again. The world
+reference is magnetic ENU. `game_rotation_vector` does not reference magnetic
+north; changing that option changes heading semantics and is not a calibration.
+Accuracy status 0..3 is logged, not silently converted into perfect accuracy.
+Acceleration includes gravity (m/s^2); gyro is rad/s; magnetic field is tesla.
+`/imu/mag` is the BNO085's magnetometer, not the separate `/compass/data` sensor.
+
+### I2C compass polling
+
+The separate compass remains on its existing multiplexer channel and driver:
+
+```yaml
 compass:
   read_rate_hz: 10.0
   publish_rate_hz: 10.0
   max_sample_age_s: 0.5
+  conversion_delay_s: 0.02
 ```
 
-All rates and age limits must be finite and positive. These are startup settings;
-zero does not select arrival-driven reading for I2C. Migrate custom YAML from
-`imu.rate_hz` / `compass.rate_hz` to the three parameters per sensor, rebuild and
-restart. No downstream node is changed by this acquisition refactor.
+The worker reads independently of the ROS publication timer. Positive, finite
+rates are required; zero does not select arrival-driven I2C reading. The mux lock
+covers selection, conversion and reading. The 20 ms conversion delay is preserved;
+it no longer delays IMU acquisition because the IMU has its own UART.
+Compass values remain signed raw counts, not tesla. `is_fresh` checks ROS source
+time and elapsed monotonic time before each publication; errors clear the cache,
+retries use monotonic time, and shutdown joins the worker before closing the bus.
 
-One polling worker per enabled sensor calls the existing driver. The mux's
-existing lock serializes select/read/deselect operations. Separate ROS timers
-publish the latest complete snapshot without accessing the bus. Raising
-`publish_rate_hz` does not cause additional reads; lowering it keeps only the
-newest acquired sample, without queueing historical snapshots. Polling rates are
-nominal: the unchanged compass conversion delay can still postpone IMU reads,
-but waiting for that conversion does not block the ROS publication callbacks.
-
-Before every publication, `sail_common.freshness.is_fresh` checks the original
-host-read ROS timestamp and, separately, elapsed monotonic time. Repeated
-publications retain the acquisition stamp. Nothing is published before the first
-successful read or after `max_sample_age_s`; a read failure immediately clears
-only that sensor's cached sample. Retry deadlines use monotonic time, so ROS clock
-pauses do not prevent recovery. Each new successful register read is stamped on
-the host; without hardware data-ready handling this does not prove that the
-sensor internally produced a different sample. Disabled sensors have no reader
-or publisher, and shutdown joins workers before closing the shared bus.
-
-`imu.odr_hz` controls internal measurement generation, not register polling or ROS
-publication. The driver currently targets LSM6DS3TR-C (six axes) plus a separate
-magnetometer. The replacement board has been identified as Adafruit BNO085;
-the driver migration is not yet implemented. The existing 104 Hz setting and
-register protocol must not be used as BNO085 configuration.
-
-`compass.conversion_delay_s` remains the wait between the measurement command and
-reading the result. Its 20 ms value needs hardware confirmation; removing it
-without checking the sensor protocol could read an unfinished or previous result.
-Polling frequency and sample freshness do not replace conversion readiness.
-
-The BNO085 has onboard sensor fusion and provides accelerometer, gyroscope,
-magnetometer and orientation reports. Adafruit's BNO08x driver requests report
-intervals in microseconds (`enable_feature(..., report_interval=...)`): a 20,000 us
-request corresponds to 50 reports/s. Requested report frequency, host reads and
-ROS publication are distinct; a report interval is not the old LSM6DS3TR-C ODR
-register setting. Its magnetometer reports do not use this legacy driver's
-per-measurement command/sleep/read sequence. Any separate external compass still
-needs its own verified conversion timing.
-
-BNO085 is used as the IMU through the multiplexer, with a separate compass;
-the replacement driver and exact hardware routing are being handled separately.
-Adafruit explicitly
-reports BNO08x I2C compatibility issues with multiplexers; reducing polling rate
-alone does not establish reliability. The downstream IMU node currently computes
-orientation from acceleration/gyro: adopting BNO085 fused orientation is a
-separate processing change, not automatically enabled by changing acquisition.
-
-References for the replacement board:
-
-- [Adafruit BNO085 overview and I2C compatibility note](https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085)
-- [Adafruit report configuration implementation](https://github.com/adafruit/Adafruit_CircuitPython_BNO08x/blob/main/adafruit_bno08x/__init__.py)
+Timing settings are read at startup. Rebuild/install and restart after changing
+YAML. Custom configs must replace `imu_sensor_node.rate_hz` with the new UART
+reading/publication/age/timeout settings and `compass.rate_hz` with the separate
+compass reading/publication/age settings. Remove the old I2C `imu.*` block; the
+LSM6DS3TR-C driver and its ODR register settings are no longer used.
 
 ## Launch
 
 live_sensors.launch.py and replay_sensors.launch.py both start all acquisition
-nodes, including IMU via i2c_sensors_node. Replay explicitly overrides
+nodes, including IMU via imu_sensor_node. Replay explicitly overrides
 `shutdown_enabled=false` for battery_node after loading the shared YAML.
 sensors_launch.py is a compatibility entry point with the same acquisition set.
 Replay is not yet a hardware-free bag pipeline. Do not start both modes together.
@@ -274,7 +266,8 @@ No Docker commands or ROS/hardware execution were used during the refactor.
 
 - pyubx2 NAV-PVT field scaling:
   https://github.com/semuconsulting/pyubx2/blob/master/src/pyubx2/ubxtypes_get.py
-- LSM6DS3TR-C register settings and sensitivities:
-  https://www.st.com/resource/en/datasheet/lsm6ds3tr-c.pdf
+- BNO085 report types and UART mode selection:
+  https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/report-types
+  https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/pinouts
 - ROS Imu covariance conventions:
   https://github.com/ros2/common_interfaces/blob/jazzy/sensor_msgs/msg/Imu.msg

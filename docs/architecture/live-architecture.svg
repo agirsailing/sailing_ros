@@ -30,19 +30,26 @@
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="272.64,-636.6 279.14,-634.32 272.64,-632.05 272.64,-636.6"/>
 <text xml:space="preserve" text-anchor="middle" x="184.98" y="-637.02" font-family="Arial" font-size="9.00" fill="#475569">device</text>
 </g>
+<!-- BNO&#45;&gt;IMUN -->
+<g id="edge9" class="edge">
+<title>BNO&#45;&gt;IMUN</title>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M121,-557.28C155.71,-557.28 202.01,-557.28 242.62,-557.28"/>
+<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="242.42,-559.56 248.92,-557.28 242.42,-555.01 242.42,-559.56"/>
+<text xml:space="preserve" text-anchor="middle" x="172.51" y="-559.98" font-family="Arial" font-size="9.00" fill="#475569">device</text>
+</g>
 <!-- BUS&#45;&gt;IN -->
 <g id="edge4" class="edge">
 <title>BUS&#45;&gt;IN</title>
-<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M136.65,-557.28C168.6,-557.28 207.1,-557.28 241.6,-557.28"/>
-<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="241.19,-559.56 247.69,-557.28 241.19,-555.01 241.19,-559.56"/>
-<text xml:space="preserve" text-anchor="middle" x="179.79" y="-559.98" font-family="Arial" font-size="9.00" fill="#475569">device</text>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M136.65,-480.24C168.6,-480.24 207.1,-480.24 241.6,-480.24"/>
+<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="241.19,-482.52 247.69,-480.24 241.19,-477.97 241.19,-482.52"/>
+<text xml:space="preserve" text-anchor="middle" x="179.79" y="-482.94" font-family="Arial" font-size="9.00" fill="#475569">device</text>
 </g>
 <!-- BAT&#45;&gt;BN -->
 <g id="edge5" class="edge">
 <title>BAT&#45;&gt;BN</title>
-<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M134.24,-480.24C172.68,-480.24 221.19,-480.24 260.84,-480.24"/>
-<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="260.42,-482.52 266.92,-480.24 260.42,-477.97 260.42,-482.52"/>
-<text xml:space="preserve" text-anchor="middle" x="188.19" y="-482.94" font-family="Arial" font-size="9.00" fill="#475569">device</text>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M134.24,-403.2C172.68,-403.2 221.19,-403.2 260.84,-403.2"/>
+<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="260.42,-405.48 266.92,-403.2 260.42,-400.93 260.42,-405.48"/>
+<text xml:space="preserve" text-anchor="middle" x="188.19" y="-405.9" font-family="Arial" font-size="9.00" fill="#475569">device</text>
 </g>
 <!-- LN&#45;&gt;TL -->
 <g id="edge6" class="edge">
@@ -65,386 +72,393 @@
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="556.41,-636.6 562.91,-634.32 556.41,-632.05 556.41,-636.6"/>
 <text xml:space="preserve" text-anchor="middle" x="468.72" y="-637.02" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
-<!-- IN&#45;&gt;TI -->
-<g id="edge9" class="edge">
-<title>IN&#45;&gt;TI</title>
-<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M420.2,-557.28C465.64,-557.28 519.56,-557.28 556.59,-557.28"/>
-<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="556.51,-559.56 563.01,-557.28 556.51,-555.01 556.51,-559.56"/>
-<text xml:space="preserve" text-anchor="middle" x="484.6" y="-559.98" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
+<!-- IMUN&#45;&gt;TI -->
+<g id="edge10" class="edge">
+<title>IMUN&#45;&gt;TI</title>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M418.74,-557.28C464.61,-557.28 519.47,-557.28 556.91,-557.28"/>
+<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="556.44,-559.56 562.94,-557.28 556.44,-555.01 556.44,-559.56"/>
+<text xml:space="preserve" text-anchor="middle" x="484.04" y="-559.98" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
+</g>
+<!-- IMUN&#45;&gt;MAG -->
+<g id="edge11" class="edge">
+<title>IMUN&#45;&gt;MAG</title>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M359.6,-537.32C378.81,-521.95 405.83,-500.05 429.01,-480.24 481.84,-435.08 541.97,-380.37 575.25,-349.8"/>
+<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="576.62,-351.63 579.86,-345.56 573.54,-348.28 576.62,-351.63"/>
+<text xml:space="preserve" text-anchor="middle" x="464.19" y="-445.84" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- IN&#45;&gt;TC -->
-<g id="edge10" class="edge">
+<g id="edge12" class="edge">
 <title>IN&#45;&gt;TC</title>
-<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M389.64,-541.32C434.34,-528.39 497.14,-510.23 542.63,-497.07"/>
-<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="543,-499.34 548.62,-495.34 541.74,-494.96 543,-499.34"/>
-<text xml:space="preserve" text-anchor="middle" x="462.13" y="-520.88" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M420.2,-480.24C460.11,-480.24 506.54,-480.24 542.34,-480.24"/>
+<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="542.1,-482.52 548.6,-480.24 542.1,-477.97 542.1,-482.52"/>
+<text xml:space="preserve" text-anchor="middle" x="477.77" y="-482.94" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- BN&#45;&gt;TB -->
-<g id="edge11" class="edge">
+<g id="edge13" class="edge">
 <title>BN&#45;&gt;TB</title>
-<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M383.31,-466.11C430.03,-452.6 500.26,-432.29 548.2,-418.42"/>
-<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="548.63,-420.67 554.24,-416.68 547.36,-416.3 548.63,-420.67"/>
-<text xml:space="preserve" text-anchor="middle" x="461.92" y="-443.9" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M400.64,-403.2C446.05,-403.2 505.5,-403.2 547.79,-403.2"/>
+<polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="547.77,-405.48 554.27,-403.2 547.77,-400.93 547.77,-405.48"/>
+<text xml:space="preserve" text-anchor="middle" x="470.9" y="-405.9" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- MT&#45;&gt;TI -->
-<g id="edge12" class="edge">
+<g id="edge14" class="edge">
 <title>MT&#45;&gt;TI</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M889.81,-768.09C830.98,-725.18 694.35,-625.5 632.4,-580.3"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="633.86,-578.55 627.26,-576.55 631.17,-582.22 633.86,-578.55"/>
 <text xml:space="preserve" text-anchor="middle" x="750.98" y="-674.8" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- MT&#45;&gt;MOUNT -->
-<g id="edge13" class="edge">
+<g id="edge15" class="edge">
 <title>MT&#45;&gt;MOUNT</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M917.65,-767.75C917.65,-758.47 917.65,-747.41 917.65,-737.55"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="919.92,-737.66 917.65,-731.16 915.37,-737.66 919.92,-737.66"/>
 <text xml:space="preserve" text-anchor="middle" x="910.14" y="-751.2" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- MT&#45;&gt;TF -->
-<g id="edge14" class="edge">
+<g id="edge16" class="edge">
 <title>MT&#45;&gt;TF</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M882.84,-768.23C869.37,-758.99 854.79,-747 844.63,-733.16 795.5,-666.24 774.02,-639.94 781.74,-557.28 787.21,-498.79 841.88,-451.79 880.2,-425.7"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="881.04,-427.87 885.19,-422.37 878.52,-424.09 881.04,-427.87"/>
 <text xml:space="preserve" text-anchor="middle" x="761.73" y="-549.17" font-family="Arial" font-size="9.00" fill="#475569">TF lookup</text>
 </g>
 <!-- IMU&#45;&gt;MOUNT -->
-<g id="edge15" class="edge">
+<g id="edge17" class="edge">
 <title>IMU&#45;&gt;MOUNT</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M917.65,-654.97C917.65,-664.25 917.65,-675.31 917.65,-685.17"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="915.37,-685.06 917.65,-691.56 919.92,-685.06 915.37,-685.06"/>
 <text xml:space="preserve" text-anchor="middle" x="910.39" y="-676.92" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- IMU&#45;&gt;AEROB -->
-<g id="edge22" class="edge">
+<g id="edge24" class="edge">
 <title>IMU&#45;&gt;AEROB</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M867.43,-626.65C828.71,-617.55 781.74,-598.1 781.74,-557.28 781.74,-527.27 807.12,-508.82 835.95,-497.53"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="836.49,-499.75 841.8,-495.37 834.91,-495.48 836.49,-499.75"/>
 <text xml:space="preserve" text-anchor="middle" x="824.95" y="-618.22" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- IMU&#45;&gt;TF -->
-<g id="edge18" class="edge">
+<g id="edge20" class="edge">
 <title>IMU&#45;&gt;TF</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M869.27,-624.95C834.49,-615.07 791.99,-595.39 781.74,-557.28 765.98,-498.68 831.19,-449.91 876.71,-423.8"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="877.67,-425.87 882.22,-420.7 875.44,-421.9 877.67,-425.87"/>
 <text xml:space="preserve" text-anchor="middle" x="814.46" y="-465.24" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- IMU&#45;&gt;ROB -->
-<g id="edge16" class="edge">
+<g id="edge18" class="edge">
 <title>IMU&#45;&gt;ROB</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M951.25,-650.66C1008.56,-678.54 1125.22,-735.28 1189.48,-766.53"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1188.36,-768.52 1195.21,-769.31 1190.35,-764.43 1188.36,-768.52"/>
 <text xml:space="preserve" text-anchor="middle" x="1065.97" y="-712.81" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- IMU&#45;&gt;RPY -->
-<g id="edge17" class="edge">
+<g id="edge19" class="edge">
 <title>IMU&#45;&gt;RPY</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M963.37,-645.44C1016.06,-658.25 1103.24,-679.45 1164.47,-694.34"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1163.78,-696.52 1170.63,-695.84 1164.85,-692.1 1163.78,-696.52"/>
 <text xml:space="preserve" text-anchor="middle" x="1060.4" y="-673.56" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- IMU&#45;&gt;AERO -->
-<g id="edge23" class="edge">
+<g id="edge25" class="edge">
 <title>IMU&#45;&gt;AERO</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M971.75,-634.32C1019.86,-634.32 1091.09,-634.32 1147.25,-634.32"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1147.01,-636.6 1153.51,-634.32 1147.01,-632.05 1147.01,-636.6"/>
 <text xml:space="preserve" text-anchor="middle" x="1055.49" y="-637.02" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- IMU&#45;&gt;ARPY -->
-<g id="edge24" class="edge">
+<g id="edge26" class="edge">
 <title>IMU&#45;&gt;ARPY</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M963.37,-623.2C1012.28,-611.31 1090.89,-592.19 1150.89,-577.6"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1151.16,-579.88 1156.94,-576.13 1150.08,-575.45 1151.16,-579.88"/>
 <text xml:space="preserve" text-anchor="middle" x="1053.28" y="-602.21" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- AT&#45;&gt;AEROB -->
-<g id="edge20" class="edge">
+<g id="edge22" class="edge">
 <title>AT&#45;&gt;AEROB</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M917.65,-536.63C917.65,-527.35 917.65,-516.29 917.65,-506.43"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="919.92,-506.54 917.65,-500.04 915.37,-506.54 919.92,-506.54"/>
 <text xml:space="preserve" text-anchor="middle" x="910.14" y="-520.08" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- AT&#45;&gt;TF -->
-<g id="edge21" class="edge">
+<g id="edge23" class="edge">
 <title>AT&#45;&gt;TF</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M959.94,-537.68C973.93,-528.9 987.89,-517.08 995.67,-502.04 1004.57,-484.83 1004.57,-475.65 995.67,-458.44 987.6,-442.84 972.88,-430.7 958.37,-421.83"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="959.56,-419.89 952.8,-418.59 957.28,-423.82 959.56,-419.89"/>
 <text xml:space="preserve" text-anchor="middle" x="974.07" y="-458.26" font-family="Arial" font-size="9.00" fill="#475569">TF lookup</text>
 </g>
 <!-- AT&#45;&gt;ROB -->
-<g id="edge19" class="edge">
+<g id="edge21" class="edge">
 <title>AT&#45;&gt;ROB</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M945.48,-577.59C1004.31,-620.5 1140.94,-720.18 1202.89,-765.38"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1201.44,-767.13 1208.03,-769.13 1204.12,-763.46 1201.44,-767.13"/>
 <text xml:space="preserve" text-anchor="middle" x="1069.8" y="-676.28" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- HF&#45;&gt;TL -->
-<g id="edge25" class="edge">
+<g id="edge27" class="edge">
 <title>HF&#45;&gt;TL</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M903.35,-346.77C896.25,-357.11 887.57,-369.86 879.98,-381.4 778.24,-536.07 773.09,-589.06 656.85,-733.16 647.88,-744.28 636.89,-755.54 627.02,-764.96"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="625.73,-763.06 622.56,-769.17 628.85,-766.37 625.73,-763.06"/>
 <text xml:space="preserve" text-anchor="middle" x="764.92" y="-566.91" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- HF&#45;&gt;TR -->
-<g id="edge26" class="edge">
+<g id="edge28" class="edge">
 <title>HF&#45;&gt;TR</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M900.84,-346.6C846.96,-412.1 678.74,-616.65 620.74,-687.17"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="619.25,-685.4 616.88,-691.86 622.77,-688.29 619.25,-685.4"/>
 <text xml:space="preserve" text-anchor="middle" x="751.47" y="-522.1" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- HF&#45;&gt;ROB -->
-<g id="edge27" class="edge">
+<g id="edge29" class="edge">
 <title>HF&#45;&gt;ROB</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M932.04,-346.71C939.17,-357.03 947.84,-369.78 955.31,-381.4 1004.75,-458.27 1108.91,-663.81 1168.44,-733.16 1178.47,-744.84 1191.12,-756.07 1202.65,-765.32"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1201.09,-766.99 1207.61,-769.21 1203.91,-763.41 1201.09,-766.99"/>
 <text xml:space="preserve" text-anchor="middle" x="1053.16" y="-566.88" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- HF&#45;&gt;HEIGHT -->
-<g id="edge28" class="edge">
+<g id="edge30" class="edge">
 <title>HF&#45;&gt;HEIGHT</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M956.81,-345.21C1015.91,-373.95 1127.57,-428.26 1189.76,-458.51"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1188.43,-460.39 1195.27,-461.19 1190.42,-456.3 1188.43,-460.39"/>
 <text xml:space="preserve" text-anchor="middle" x="1069.16" y="-406.2" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- HN&#45;&gt;GPSRAW -->
-<g id="edge29" class="edge">
+<g id="edge31" class="edge">
 <title>HN&#45;&gt;GPSRAW</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M885.75,-267.73C863.09,-281.92 832.82,-302.93 810.32,-326.16 716.2,-423.37 718.2,-468.06 640.85,-579.08 633.79,-589.2 625.86,-600.23 618.92,-609.76"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="617.24,-608.21 615.24,-614.8 620.91,-610.89 617.24,-608.21"/>
 <text xml:space="preserve" text-anchor="middle" x="722.35" y="-432.34" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- HN&#45;&gt;TC -->
-<g id="edge30" class="edge">
+<g id="edge32" class="edge">
 <title>HN&#45;&gt;TC</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M890.68,-268.35C868.94,-283.88 837.6,-306.34 810.32,-326.16 746.75,-372.35 672.78,-426.96 631.95,-457.19"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="630.77,-455.23 626.9,-460.93 633.48,-458.89 630.77,-455.23"/>
 <text xml:space="preserve" text-anchor="middle" x="750.64" y="-367.12" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- HN&#45;&gt;HEADING -->
-<g id="edge31" class="edge">
+<g id="edge33" class="edge">
 <title>HN&#45;&gt;HEADING</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M954.3,-266.95C1012.75,-295.38 1126.93,-350.91 1189.97,-381.57"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1188.72,-383.49 1195.56,-384.29 1190.71,-379.4 1188.72,-383.49"/>
 <text xml:space="preserve" text-anchor="middle" x="1068.03" y="-328.61" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- HN&#45;&gt;GPSOUT -->
-<g id="edge32" class="edge">
+<g id="edge34" class="edge">
 <title>HN&#45;&gt;GPSOUT</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M972.11,-262.36C1021.3,-274.33 1094.46,-292.12 1151.03,-305.87"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1150.16,-308 1157.01,-307.33 1151.23,-303.58 1150.16,-308"/>
 <text xml:space="preserve" text-anchor="middle" x="1057.95" y="-287.77" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- GW&#45;&gt;TL -->
-<g id="edge33" class="edge">
+<g id="edge35" class="edge">
 <title>GW&#45;&gt;TL</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1480.74,-797.97C1428.19,-802.6 1362.55,-807.69 1303.79,-810.2 1132.33,-817.54 1089.18,-818.3 917.65,-812.82 872.6,-811.39 861.43,-809.06 816.49,-805.67 762.44,-801.59 700.79,-796.62 657.29,-793.06"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="657.52,-790.8 650.86,-792.54 657.15,-795.34 657.52,-790.8"/>
 <text xml:space="preserve" text-anchor="middle" x="1057.83" y="-819" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- GW&#45;&gt;TR -->
-<g id="edge34" class="edge">
+<g id="edge36" class="edge">
 <title>GW&#45;&gt;TR</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1477.4,-780.15C1425.39,-776.01 1361.24,-770.96 1303.79,-766.6 1099.77,-751.12 1048.57,-749.7 844.63,-733.16 781.98,-728.08 710.35,-721.59 661.03,-717.02"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="661.5,-714.78 654.82,-716.44 661.08,-719.31 661.5,-714.78"/>
 <text xml:space="preserve" text-anchor="middle" x="1058.32" y="-752.39" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- GW&#45;&gt;TB -->
-<g id="edge38" class="edge">
+<g id="edge40" class="edge">
 <title>GW&#45;&gt;TB</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1553.01,-768.32C1496.59,-726.76 1367.45,-633.44 1317.47,-612.52 1249.37,-584.01 1226.53,-596.38 1154.76,-579.08 1091.54,-563.84 1076.88,-555.63 1013.75,-540.01 936.86,-520.99 915.21,-525.72 839.62,-502.04 770.45,-480.37 693.49,-446.69 646.12,-424.78"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="647.3,-422.83 640.45,-422.15 645.39,-426.95 647.3,-422.83"/>
 <text xml:space="preserve" text-anchor="middle" x="1097.53" y="-568.54" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- GW&#45;&gt;ARPY -->
-<g id="edge35" class="edge">
+<g id="edge37" class="edge">
 <title>GW&#45;&gt;ARPY</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1550.14,-768.32C1501.42,-735.63 1401.89,-668.88 1317.47,-612.52 1301.34,-601.75 1283.44,-589.83 1268.39,-579.83"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1269.82,-578.05 1263.14,-576.34 1267.3,-581.84 1269.82,-578.05"/>
 <text xml:space="preserve" text-anchor="middle" x="1398.93" y="-674.54" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- GW&#45;&gt;HEIGHT -->
-<g id="edge36" class="edge">
+<g id="edge38" class="edge">
 <title>GW&#45;&gt;HEIGHT</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1554.01,-768.28C1541.12,-758.07 1525.47,-745.28 1512.03,-733.16 1419.68,-649.94 1409.57,-615.14 1314.13,-535.48 1300.34,-523.98 1284.21,-512.47 1270.08,-502.96"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1271.43,-501.12 1264.76,-499.41 1268.9,-504.9 1271.43,-501.12"/>
 <text xml:space="preserve" text-anchor="middle" x="1404.85" y="-633.3" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- GW&#45;&gt;GPSOUT -->
-<g id="edge37" class="edge">
+<g id="edge39" class="edge">
 <title>GW&#45;&gt;GPSOUT</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1550.44,-768.26C1537.64,-758.62 1523.09,-746.32 1512.03,-733.16 1396.78,-596.09 1436.37,-513.53 1315.48,-381.4 1303.92,-368.76 1288.93,-357.53 1275,-348.54"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1276.42,-346.75 1269.71,-345.22 1274,-350.61 1276.42,-346.75"/>
 <text xml:space="preserve" text-anchor="middle" x="1408.15" y="-556.85" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- GW&#45;&gt;DASH -->
-<g id="edge40" class="edge">
+<g id="edge42" class="edge">
 <title>GW&#45;&gt;DASH</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1580.05,-767.75C1580.05,-758.47 1580.05,-747.41 1580.05,-737.55"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1582.32,-737.66 1580.05,-731.16 1577.77,-737.66 1582.32,-737.66"/>
 <text xml:space="preserve" text-anchor="middle" x="1572.54" y="-751.2" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- GW&#45;&gt;MAP -->
-<g id="edge41" class="edge">
+<g id="edge43" class="edge">
 <title>GW&#45;&gt;MAP</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1615.6,-768.73C1628.28,-759.69 1641.13,-747.72 1648.06,-733.16 1656.39,-715.66 1656.39,-707.06 1648.06,-689.56 1641.94,-676.7 1631.19,-665.85 1620.03,-657.27"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1621.38,-655.44 1614.78,-653.45 1618.7,-659.12 1621.38,-655.44"/>
 <text xml:space="preserve" text-anchor="middle" x="1640.54" y="-692.22" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- GW&#45;&gt;STATE -->
-<g id="edge39" class="edge">
+<g id="edge41" class="edge">
 <title>GW&#45;&gt;STATE</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1548.15,-768.45C1535.39,-759.1 1521.5,-746.96 1512.03,-733.16 1446.01,-636.98 1451.18,-596.52 1441.84,-480.24 1436.3,-411.21 1424.06,-381.98 1465.05,-326.16 1482.28,-302.7 1508.94,-284.2 1532.26,-271.21"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1533.05,-273.37 1537.67,-268.27 1530.87,-269.37 1533.05,-273.37"/>
 <text xml:space="preserve" text-anchor="middle" x="1434.59" y="-482.94" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- GW&#45;&gt;MD -->
-<g id="edge42" class="edge">
+<g id="edge44" class="edge">
 <title>GW&#45;&gt;MD</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1691.49,-788.4C1744.52,-788.4 1806.89,-788.4 1855.88,-788.4"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1855.61,-790.68 1862.11,-788.4 1855.61,-786.13 1855.61,-790.68"/>
 <text xml:space="preserve" text-anchor="middle" x="1755.69" y="-791.1" font-family="Arial" font-size="9.00" fill="#475569">pub MQTT</text>
 </g>
 <!-- GW&#45;&gt;MM -->
-<g id="edge43" class="edge">
+<g id="edge45" class="edge">
 <title>GW&#45;&gt;MM</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1653.33,-772.72C1717.54,-758.98 1810.09,-739.17 1872.52,-725.81"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1872.92,-728.05 1878.8,-724.47 1871.97,-723.6 1872.92,-728.05"/>
 <text xml:space="preserve" text-anchor="middle" x="1745.28" y="-751.14" font-family="Arial" font-size="9.00" fill="#475569">pub MQTT</text>
 </g>
 <!-- GW&#45;&gt;MS -->
-<g id="edge44" class="edge">
+<g id="edge46" class="edge">
 <title>GW&#45;&gt;MS</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1624.55,-769.35C1691.84,-740.55 1819.11,-686.08 1889.7,-655.87"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1890.57,-657.97 1895.65,-653.32 1888.78,-653.79 1890.57,-657.97"/>
 <text xml:space="preserve" text-anchor="middle" x="1739.27" y="-713.75" font-family="Arial" font-size="9.00" fill="#475569">pub MQTT</text>
 </g>
 <!-- CG&#45;&gt;START -->
-<g id="edge56" class="edge">
+<g id="edge58" class="edge">
 <title>CG&#45;&gt;START</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1580.05,-536.63C1580.05,-532.58 1580.05,-528.19 1580.05,-523.7"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1582.32,-523.82 1580.05,-517.32 1577.77,-523.82 1582.32,-523.82"/>
 <text xml:space="preserve" text-anchor="middle" x="1571.04" y="-528.91" font-family="Arial" font-size="9.00" fill="#475569">calls</text>
 </g>
 <!-- CG&#45;&gt;STOP -->
-<g id="edge57" class="edge">
+<g id="edge59" class="edge">
 <title>CG&#45;&gt;STOP</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1501.66,-542.09C1470.46,-531.07 1441.84,-512.24 1441.84,-480.24 1441.84,-456.09 1458.14,-439.44 1479.54,-427.99"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1480.45,-430.08 1485.25,-425.14 1478.42,-426.01 1480.45,-430.08"/>
 <text xml:space="preserve" text-anchor="middle" x="1432.84" y="-472.07" font-family="Arial" font-size="9.00" fill="#475569">calls</text>
 </g>
 <!-- CG&#45;&gt;CS -->
-<g id="edge50" class="edge">
+<g id="edge52" class="edge">
 <title>CG&#45;&gt;CS</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1693.95,-557.28C1742.34,-557.28 1798.14,-557.28 1844.35,-557.28"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1844.27,-559.56 1850.77,-557.28 1844.27,-555.01 1844.27,-559.56"/>
 <text xml:space="preserve" text-anchor="middle" x="1765.73" y="-559.98" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- CG&#45;&gt;CE -->
-<g id="edge51" class="edge">
+<g id="edge53" class="edge">
 <title>CG&#45;&gt;CE</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1654.2,-541.41C1709.78,-529.52 1786.24,-513.15 1846.1,-500.34"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1846.25,-502.64 1852.13,-499.05 1845.3,-498.19 1846.25,-502.64"/>
 <text xml:space="preserve" text-anchor="middle" x="1746.8" y="-522.74" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- CG&#45;&gt;RS -->
-<g id="edge52" class="edge">
+<g id="edge54" class="edge">
 <title>CG&#45;&gt;RS</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1624.91,-538.08C1692.34,-509.22 1819.37,-454.85 1889.81,-424.7"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1890.67,-426.81 1895.75,-422.16 1888.88,-422.62 1890.67,-426.81"/>
 <text xml:space="preserve" text-anchor="middle" x="1753.6" y="-482.48" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- CG&#45;&gt;RE -->
-<g id="edge53" class="edge">
+<g id="edge55" class="edge">
 <title>CG&#45;&gt;RE</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1618.36,-537.64C1646.54,-522.78 1685.47,-501.39 1718.25,-480.24 1780.26,-440.22 1790.7,-422.96 1851.69,-381.4 1868.19,-370.16 1886.88,-358.34 1902.81,-348.54"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1903.61,-350.72 1907.96,-345.38 1901.23,-346.84 1903.61,-350.72"/>
 <text xml:space="preserve" text-anchor="middle" x="1759.65" y="-448.53" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- RM&#45;&gt;START -->
-<g id="edge58" class="edge">
+<g id="edge60" class="edge">
 <title>RM&#45;&gt;START</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1504.37,-340.6C1472.38,-351.51 1442.38,-370.47 1442.38,-403.2 1442.38,-427.15 1458.45,-443.73 1479.6,-455.18"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1478.41,-457.12 1485.24,-458.02 1480.46,-453.06 1478.41,-457.12"/>
 <text xml:space="preserve" text-anchor="middle" x="1429.13" y="-405.94" font-family="Arial" font-size="9.00" fill="#475569">serves</text>
 </g>
 <!-- RM&#45;&gt;STOP -->
-<g id="edge59" class="edge">
+<g id="edge61" class="edge">
 <title>RM&#45;&gt;STOP</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1580.05,-346.81C1580.05,-350.86 1580.05,-355.25 1580.05,-359.74"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1577.77,-359.62 1580.05,-366.12 1582.32,-359.62 1577.77,-359.62"/>
 <text xml:space="preserve" text-anchor="middle" x="1566.79" y="-359.93" font-family="Arial" font-size="9.00" fill="#475569">serves</text>
 </g>
 <!-- RM&#45;&gt;STATE -->
-<g id="edge60" class="edge">
+<g id="edge62" class="edge">
 <title>RM&#45;&gt;STATE</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1580.05,-305.51C1580.05,-296.23 1580.05,-285.17 1580.05,-275.31"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1582.32,-275.42 1580.05,-268.92 1577.77,-275.42 1582.32,-275.42"/>
 <text xml:space="preserve" text-anchor="middle" x="1572.54" y="-288.96" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- RM&#45;&gt;REC -->
-<g id="edge61" class="edge">
+<g id="edge63" class="edge">
 <title>RM&#45;&gt;REC</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1627.97,-307.8C1643.85,-299.15 1659.76,-287.1 1668.74,-270.92 1678.15,-253.98 1678.15,-244.26 1668.74,-227.32 1661.17,-213.69 1648.69,-202.99 1635.45,-194.78"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1636.71,-192.88 1629.95,-191.56 1634.41,-196.81 1636.71,-192.88"/>
 <text xml:space="preserve" text-anchor="middle" x="1647.84" y="-273.42" font-family="Arial" font-size="9.00" fill="#475569">start / stop</text>
 </g>
 <!-- REC&#45;&gt;TOPICS -->
-<g id="edge62" class="edge">
+<g id="edge64" class="edge">
 <title>REC&#45;&gt;TOPICS</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M1580.05,-151.43C1580.05,-143.23 1580.05,-133.64 1580.05,-124.71"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1582.32,-124.8 1580.05,-118.3 1577.77,-124.8 1582.32,-124.8"/>
 <text xml:space="preserve" text-anchor="middle" x="1541.27" y="-136.77" font-family="Arial" font-size="9.00" fill="#475569">sub while recording</text>
 </g>
 <!-- REC&#45;&gt;FILES -->
-<g id="edge63" class="edge">
+<g id="edge65" class="edge">
 <title>REC&#45;&gt;FILES</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M1641.1,-154.26C1657.07,-146.52 1672.4,-135.63 1681.72,-120.44 1693.53,-101.2 1693.53,-88.88 1681.72,-69.64 1670,-50.55 1648.78,-38.24 1628.74,-30.46"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1629.74,-28.4 1622.86,-28.3 1628.18,-32.67 1629.74,-28.4"/>
 <text xml:space="preserve" text-anchor="middle" x="1652.52" y="-52.94" font-family="Arial" font-size="9.00" fill="#475569">writes</text>
 </g>
 <!-- WEB&#45;&gt;MD -->
-<g id="edge45" class="edge">
+<g id="edge47" class="edge">
 <title>WEB&#45;&gt;MD</title>
-<path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M2192.14,-788.4C2144.96,-788.4 2077.5,-788.4 2024.23,-788.4"/>
+<path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M2192.14,-788.4C2144.96,-788.4 2077.49,-788.4 2024.23,-788.4"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="2024.52,-786.13 2018.02,-788.4 2024.52,-790.68 2024.52,-786.13"/>
 <text xml:space="preserve" text-anchor="middle" x="2096.99" y="-791.1" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- WEB&#45;&gt;MM -->
-<g id="edge46" class="edge">
+<g id="edge48" class="edge">
 <title>WEB&#45;&gt;MM</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M2192.14,-774.09C2139.84,-761.08 2062.62,-741.86 2007.44,-728.13"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="2008.18,-725.97 2001.33,-726.61 2007.08,-730.39 2008.18,-725.97"/>
 <text xml:space="preserve" text-anchor="middle" x="2089.01" y="-752.93" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- WEB&#45;&gt;MS -->
-<g id="edge47" class="edge">
+<g id="edge49" class="edge">
 <title>WEB&#45;&gt;MS</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M2205.29,-766.32C2146.2,-736.92 2042.32,-685.22 1983.63,-656.01"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1984.97,-654.14 1978.14,-653.28 1982.94,-658.21 1984.97,-654.14"/>
 <text xml:space="preserve" text-anchor="middle" x="2083.72" y="-712.13" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- WEB&#45;&gt;CS -->
-<g id="edge48" class="edge">
+<g id="edge50" class="edge">
 <title>WEB&#45;&gt;CS</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M2224.92,-766.3C2185.64,-731.68 2105.99,-663.36 2033.08,-612.52 2016.35,-600.85 1997.08,-589.14 1980.42,-579.53"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1981.76,-577.68 1974.99,-576.42 1979.5,-581.62 1981.76,-577.68"/>
 <text xml:space="preserve" text-anchor="middle" x="2096.58" y="-668.11" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- WEB&#45;&gt;CE -->
-<g id="edge49" class="edge">
+<g id="edge51" class="edge">
 <title>WEB&#45;&gt;CE</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" d="M2234.37,-766.39C2201.29,-719.79 2118.91,-609.39 2031.4,-535.48 2016.78,-523.13 1999.09,-511.76 1983.19,-502.58"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1984.33,-500.61 1977.55,-499.38 1982.09,-504.57 1984.33,-500.61"/>
 <text xml:space="preserve" text-anchor="middle" x="2110.99" y="-623.77" font-family="Arial" font-size="9.00" fill="#475569">pub</text>
 </g>
 <!-- WEB&#45;&gt;RS -->
-<g id="edge54" class="edge">
+<g id="edge56" class="edge">
 <title>WEB&#45;&gt;RS</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M2239.37,-766.37C2212.08,-709.67 2132.88,-556.29 2031.07,-458.44 2017.66,-445.55 2000.73,-434.26 1985.12,-425.3"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1986.36,-423.39 1979.58,-422.2 1984.14,-427.36 1986.36,-423.39"/>
 <text xml:space="preserve" text-anchor="middle" x="2123.7" y="-581.43" font-family="Arial" font-size="9.00" fill="#475569">sub</text>
 </g>
 <!-- WEB&#45;&gt;RE -->
-<g id="edge55" class="edge">
+<g id="edge57" class="edge">
 <title>WEB&#45;&gt;RE</title>
 <path fill="none" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="5,2" d="M2242.32,-766.55C2219.58,-701.34 2144.69,-504.99 2028.4,-381.4 2016.14,-368.37 2000.17,-357.17 1985.19,-348.32"/>
 <polygon fill="#94a3b8" stroke="#94a3b8" stroke-width="0.8" points="1986.66,-346.54 1979.89,-345.28 1984.39,-350.49 1986.66,-346.54"/>
@@ -471,338 +485,357 @@
 <text xml:space="preserve" text-anchor="middle" x="68.05" y="-637.92" font-family="Arial" font-size="12.00">GPS receiver</text>
 <text xml:space="preserve" text-anchor="middle" x="68.05" y="-623.52" font-family="Arial" font-size="12.00">/dev/gps</text>
 </g>
-<!-- BUS -->
+<!-- BNO -->
 <g id="node4" class="node">
+<title>BNO</title>
+<polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="120.58,-578.88 15.51,-578.88 15.51,-535.68 120.58,-535.68 120.58,-578.88"/>
+<text xml:space="preserve" text-anchor="middle" x="68.05" y="-560.88" font-family="Arial" font-size="12.00">BNO085 UART</text>
+<text xml:space="preserve" text-anchor="middle" x="68.05" y="-546.48" font-family="Arial" font-size="12.00">/dev/ttyAMA0</text>
+</g>
+<!-- BUS -->
+<g id="node5" class="node">
 <title>BUS</title>
-<polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="136.09,-578.88 0,-578.88 0,-535.68 136.09,-535.68 136.09,-578.88"/>
-<text xml:space="preserve" text-anchor="middle" x="68.05" y="-560.88" font-family="Arial" font-size="12.00">I2C bus + multiplexer</text>
-<text xml:space="preserve" text-anchor="middle" x="68.05" y="-546.48" font-family="Arial" font-size="12.00">IMU and compass</text>
+<polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="136.09,-501.84 0,-501.84 0,-458.64 136.09,-458.64 136.09,-501.84"/>
+<text xml:space="preserve" text-anchor="middle" x="68.05" y="-483.84" font-family="Arial" font-size="12.00">I2C bus + multiplexer</text>
+<text xml:space="preserve" text-anchor="middle" x="68.05" y="-469.44" font-family="Arial" font-size="12.00">Separate compass</text>
 </g>
 <!-- BAT -->
-<g id="node5" class="node">
+<g id="node6" class="node">
 <title>BAT</title>
-<polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="133.92,-501.84 2.17,-501.84 2.17,-458.64 133.92,-458.64 133.92,-501.84"/>
-<text xml:space="preserve" text-anchor="middle" x="68.05" y="-483.84" font-family="Arial" font-size="12.00">Battery voltage link</text>
-<text xml:space="preserve" text-anchor="middle" x="68.05" y="-469.44" font-family="Arial" font-size="12.00">and low&#45;alarm GPIO</text>
+<polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="133.92,-424.8 2.17,-424.8 2.17,-381.6 133.92,-381.6 133.92,-424.8"/>
+<text xml:space="preserve" text-anchor="middle" x="68.05" y="-406.8" font-family="Arial" font-size="12.00">Battery voltage link</text>
+<text xml:space="preserve" text-anchor="middle" x="68.05" y="-392.4" font-family="Arial" font-size="12.00">and low&#45;alarm GPIO</text>
 </g>
 <!-- LN -->
-<g id="node6" class="node">
+<g id="node7" class="node">
 <title>LN</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-788.4" rx="92.24" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="334.45" y="-784.8" font-family="Arial" font-size="12.00">ultrasonic_left_node</text>
 </g>
 <!-- RN -->
-<g id="node7" class="node">
+<g id="node8" class="node">
 <title>RN</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-711.36" rx="97.43" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="334.45" y="-707.76" font-family="Arial" font-size="12.00">ultrasonic_right_node</text>
 </g>
 <!-- GN -->
-<g id="node8" class="node">
+<g id="node9" class="node">
 <title>GN</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-634.32" rx="53.57" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="334.45" y="-630.72" font-family="Arial" font-size="12.00">gps_node</text>
 </g>
+<!-- IMUN -->
+<g id="node10" class="node">
+<title>IMUN</title>
+<ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-557.28" rx="83.75" ry="20.36"/>
+<text xml:space="preserve" text-anchor="middle" x="334.45" y="-553.68" font-family="Arial" font-size="12.00">imu_sensor_node</text>
+</g>
 <!-- IN -->
-<g id="node9" class="node">
+<g id="node11" class="node">
 <title>IN</title>
-<ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-557.28" rx="85.16" ry="20.36"/>
-<text xml:space="preserve" text-anchor="middle" x="334.45" y="-553.68" font-family="Arial" font-size="12.00">i2c_sensors_node</text>
+<ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-480.24" rx="85.16" ry="20.36"/>
+<text xml:space="preserve" text-anchor="middle" x="334.45" y="-476.64" font-family="Arial" font-size="12.00">i2c_sensors_node</text>
 </g>
 <!-- BN -->
-<g id="node10" class="node">
+<g id="node12" class="node">
 <title>BN</title>
-<ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-480.24" rx="65.83" ry="20.36"/>
-<text xml:space="preserve" text-anchor="middle" x="334.45" y="-476.64" font-family="Arial" font-size="12.00">battery_node</text>
+<ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="334.45" cy="-403.2" rx="65.83" ry="20.36"/>
+<text xml:space="preserve" text-anchor="middle" x="334.45" y="-399.6" font-family="Arial" font-size="12.00">battery_node</text>
 </g>
 <!-- TL -->
-<g id="node11" class="node">
+<g id="node13" class="node">
 <title>TL</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="649.38,-806.4 552.31,-806.4 552.31,-770.4 649.38,-770.4 649.38,-806.4"/>
 <text xml:space="preserve" text-anchor="middle" x="600.85" y="-784.8" font-family="Arial" font-size="12.00">/ultrasonic/left</text>
 </g>
 <!-- TR -->
-<g id="node12" class="node">
+<g id="node14" class="node">
 <title>TR</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="653.05,-729.36 548.64,-729.36 548.64,-693.36 653.05,-693.36 653.05,-729.36"/>
 <text xml:space="preserve" text-anchor="middle" x="600.85" y="-707.76" font-family="Arial" font-size="12.00">/ultrasonic/right</text>
 </g>
 <!-- GPSRAW -->
-<g id="node13" class="node">
+<g id="node15" class="node">
 <title>GPSRAW</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="637.05,-652.32 564.64,-652.32 564.64,-616.32 637.05,-616.32 637.05,-652.32"/>
 <text xml:space="preserve" text-anchor="middle" x="600.85" y="-630.72" font-family="Arial" font-size="12.00">/gps/data</text>
 </g>
 <!-- TI -->
-<g id="node14" class="node">
+<g id="node16" class="node">
 <title>TI</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="637.05,-575.28 564.65,-575.28 564.65,-539.28 637.05,-539.28 637.05,-575.28"/>
 <text xml:space="preserve" text-anchor="middle" x="600.85" y="-553.68" font-family="Arial" font-size="12.00">/imu/data</text>
 </g>
 <!-- TC -->
-<g id="node15" class="node">
+<g id="node17" class="node">
 <title>TC</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="651.39,-498.24 550.3,-498.24 550.3,-462.24 651.39,-462.24 651.39,-498.24"/>
 <text xml:space="preserve" text-anchor="middle" x="600.85" y="-476.64" font-family="Arial" font-size="12.00">/compass/data</text>
 </g>
 <!-- TB -->
-<g id="node16" class="node">
+<g id="node18" class="node">
 <title>TB</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="645.72,-421.2 555.97,-421.2 555.97,-385.2 645.72,-385.2 645.72,-421.2"/>
 <text xml:space="preserve" text-anchor="middle" x="600.85" y="-399.6" font-family="Arial" font-size="12.00">/battery/data</text>
 </g>
+<!-- MAG -->
+<g id="node19" class="node">
+<title>MAG</title>
+<polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="637.04,-344.16 564.65,-344.16 564.65,-308.16 637.04,-308.16 637.04,-344.16"/>
+<text xml:space="preserve" text-anchor="middle" x="600.85" y="-322.56" font-family="Arial" font-size="12.00">/imu/mag</text>
+</g>
 <!-- MT -->
-<g id="node17" class="node">
+<g id="node20" class="node">
 <title>MT</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="917.65" cy="-788.4" rx="129.96" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-784.8" font-family="Arial" font-size="12.00">imu_mount_transformer_node</text>
 </g>
 <!-- MOUNT -->
-<g id="node18" class="node">
+<g id="node21" class="node">
 <title>MOUNT</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="986.86,-729.36 848.43,-729.36 848.43,-693.36 986.86,-693.36 986.86,-729.36"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-707.76" font-family="Arial" font-size="12.00">/internal/imu/mounted</text>
 </g>
 <!-- IMU -->
-<g id="node19" class="node">
+<g id="node22" class="node">
 <title>IMU</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="917.65" cy="-634.32" rx="53.56" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-630.72" font-family="Arial" font-size="12.00">imu_node</text>
 </g>
 <!-- AT -->
-<g id="node20" class="node">
+<g id="node23" class="node">
 <title>AT</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="917.65" cy="-557.28" rx="123.36" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-553.68" font-family="Arial" font-size="12.00">imu_aero_transformer_node</text>
 </g>
 <!-- AEROB -->
-<g id="node21" class="node">
+<g id="node24" class="node">
 <title>AEROB</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="991.87,-498.24 843.42,-498.24 843.42,-462.24 991.87,-462.24 991.87,-498.24"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-476.64" font-family="Arial" font-size="12.00">/internal/imu/aero_body</text>
 </g>
 <!-- TF -->
-<g id="node22" class="node">
+<g id="node25" class="node">
 <title>TF</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="951.51,-421.2 883.78,-421.2 883.78,-385.2 951.51,-385.2 951.51,-421.2"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-399.6" font-family="Arial" font-size="12.00">/tf_static</text>
 </g>
 <!-- HF -->
-<g id="node23" class="node">
+<g id="node26" class="node">
 <title>HF</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="917.65" cy="-326.16" rx="96.95" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-322.56" font-family="Arial" font-size="12.00">ultrasonic_filter_node</text>
 </g>
 <!-- HN -->
-<g id="node24" class="node">
+<g id="node27" class="node">
 <title>HN</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="917.65" cy="-249.12" rx="70.09" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-245.52" font-family="Arial" font-size="12.00">heading_node</text>
 </g>
 <!-- ROB -->
-<g id="node25" class="node">
+<g id="node28" class="node">
 <title>ROB</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1299.99,-806.4 1168.9,-806.4 1168.9,-770.4 1299.99,-770.4 1299.99,-806.4"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-784.8" font-family="Arial" font-size="12.00">/processed/imu/data</text>
 </g>
 <!-- RPY -->
-<g id="node26" class="node">
+<g id="node29" class="node">
 <title>RPY</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1296.65,-729.36 1172.24,-729.36 1172.24,-693.36 1296.65,-693.36 1296.65,-729.36"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-707.76" font-family="Arial" font-size="12.00">/processed/imu/rpy</text>
 </g>
 <!-- AERO -->
-<g id="node27" class="node">
+<g id="node30" class="node">
 <title>AERO</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1313.67,-652.32 1155.22,-652.32 1155.22,-616.32 1313.67,-616.32 1313.67,-652.32"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-630.72" font-family="Arial" font-size="12.00">/processed/imu/data/aero</text>
 </g>
 <!-- ARPY -->
-<g id="node28" class="node">
+<g id="node31" class="node">
 <title>ARPY</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1310.33,-575.28 1158.56,-575.28 1158.56,-539.28 1310.33,-539.28 1310.33,-575.28"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-553.68" font-family="Arial" font-size="12.00">/processed/imu/rpy/aero</text>
 </g>
 <!-- HEIGHT -->
-<g id="node29" class="node">
+<g id="node32" class="node">
 <title>HEIGHT</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1308.34,-498.24 1160.55,-498.24 1160.55,-462.24 1308.34,-462.24 1308.34,-498.24"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-476.64" font-family="Arial" font-size="12.00">/processed/boat_height</text>
 </g>
 <!-- HEADING -->
-<g id="node30" class="node">
+<g id="node33" class="node">
 <title>HEADING</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1311.68,-421.2 1157.21,-421.2 1157.21,-385.2 1311.68,-385.2 1311.68,-421.2"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-399.6" font-family="Arial" font-size="12.00">/processed/heading_deg</text>
 </g>
 <!-- GPSOUT -->
-<g id="node31" class="node">
+<g id="node34" class="node">
 <title>GPSOUT</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1312.99,-344.16 1155.9,-344.16 1155.9,-308.16 1312.99,-308.16 1312.99,-344.16"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-322.56" font-family="Arial" font-size="12.00">/processed/gps/summary</text>
 </g>
 <!-- GW -->
-<g id="node32" class="node">
+<g id="node35" class="node">
 <title>GW</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="1580.05" cy="-788.4" rx="111.1" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-784.8" font-family="Arial" font-size="12.00">telemetry_gateway_node</text>
 </g>
 <!-- DASH -->
-<g id="node33" class="node">
+<g id="node36" class="node">
 <title>DASH</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1644.26,-729.36 1515.83,-729.36 1515.83,-693.36 1644.26,-693.36 1644.26,-729.36"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-707.76" font-family="Arial" font-size="12.00">/web/ros/dashboard</text>
 </g>
 <!-- MAP -->
-<g id="node34" class="node">
+<g id="node37" class="node">
 <title>MAP</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1627.58,-652.32 1532.51,-652.32 1532.51,-616.32 1627.58,-616.32 1627.58,-652.32"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-630.72" font-family="Arial" font-size="12.00">/web/ros/map</text>
 </g>
 <!-- CG -->
-<g id="node35" class="node">
+<g id="node38" class="node">
 <title>CG</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="1580.05" cy="-557.28" rx="113.47" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-553.68" font-family="Arial" font-size="12.00">command_gateway_node</text>
 </g>
 <!-- START -->
-<g id="node36" class="node">
+<g id="node39" class="node">
 <title>START</title>
 <polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="1713.76,-480.24 1646.9,-515.51 1513.19,-515.51 1446.33,-480.24 1513.19,-444.97 1646.9,-444.97 1713.76,-480.24"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-483.84" font-family="Arial" font-size="12.00">Service:</text>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-469.44" font-family="Arial" font-size="12.00">/local_cmd/start_recording</text>
 </g>
 <!-- STOP -->
-<g id="node37" class="node">
+<g id="node40" class="node">
 <title>STOP</title>
 <polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="1713.23,-403.2 1646.64,-438.47 1513.45,-438.47 1446.86,-403.2 1513.45,-367.93 1646.64,-367.93 1713.23,-403.2"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-406.8" font-family="Arial" font-size="12.00">Service:</text>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-392.4" font-family="Arial" font-size="12.00">/local_cmd/stop_recording</text>
 </g>
 <!-- RM -->
-<g id="node38" class="node">
+<g id="node41" class="node">
 <title>RM</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="1580.05" cy="-326.16" rx="104.04" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-322.56" font-family="Arial" font-size="12.00">rosbag_manager_node</text>
 </g>
 <!-- STATE -->
-<g id="node39" class="node">
+<g id="node42" class="node">
 <title>STATE</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1664.94,-267.12 1495.15,-267.12 1495.15,-231.12 1664.94,-231.12 1664.94,-267.12"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-245.52" font-family="Arial" font-size="12.00">/local_state/recording_state</text>
 </g>
 <!-- REC -->
-<g id="node40" class="node">
+<g id="node43" class="node">
 <title>REC</title>
 <ellipse fill="#dbeafe" stroke="#2563eb" stroke-width="1.2" cx="1580.05" cy="-172.08" rx="117.22" ry="20.36"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-168.48" font-family="Arial" font-size="12.00">ROS bag recorder process</text>
 </g>
 <!-- TOPICS -->
-<g id="node41" class="node">
+<g id="node44" class="node">
 <title>TOPICS</title>
 <polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="1677.92,-116.64 1482.17,-116.64 1482.17,-73.44 1677.92,-73.44 1677.92,-116.64"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-98.64" font-family="Arial" font-size="12.00">All discovered ROS topics</text>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-84.24" font-family="Arial" font-size="12.00">(recorder subscription summary)</text>
 </g>
 <!-- FILES -->
-<g id="node42" class="node">
+<g id="node45" class="node">
 <title>FILES</title>
 <polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="1621.24,-36 1538.85,-36 1538.85,0 1621.24,0 1621.24,-36"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-14.4" font-family="Arial" font-size="12.00">MCAP files</text>
 </g>
 <!-- MD -->
-<g id="node43" class="node">
+<g id="node46" class="node">
 <title>MD</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="2016.28,-806.4 1863.81,-806.4 1863.81,-770.4 2016.28,-770.4 2016.28,-806.4"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-784.8" font-family="Arial" font-size="12.00">agir_gui/data/dashboard</text>
 </g>
 <!-- MM -->
-<g id="node44" class="node">
+<g id="node47" class="node">
 <title>MM</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="1999.6,-729.36 1880.49,-729.36 1880.49,-693.36 1999.6,-693.36 1999.6,-729.36"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-707.76" font-family="Arial" font-size="12.00">agir_gui/data/map</text>
 </g>
 <!-- MS -->
-<g id="node45" class="node">
+<g id="node48" class="node">
 <title>MS</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="2029.28,-652.32 1850.81,-652.32 1850.81,-616.32 2029.28,-616.32 2029.28,-652.32"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-630.72" font-family="Arial" font-size="12.00">agir_gui/data/recording_state</text>
 </g>
 <!-- CS -->
-<g id="node46" class="node">
+<g id="node49" class="node">
 <title>CS</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="2027.6,-575.28 1852.49,-575.28 1852.49,-539.28 2027.6,-539.28 2027.6,-575.28"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-553.68" font-family="Arial" font-size="12.00">agir_gui/cmd/start_recording</text>
 </g>
 <!-- CE -->
-<g id="node47" class="node">
+<g id="node50" class="node">
 <title>CE</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="2027.27,-498.24 1852.82,-498.24 1852.82,-462.24 2027.27,-462.24 2027.27,-498.24"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-476.64" font-family="Arial" font-size="12.00">agir_gui/cmd/stop_recording</text>
 </g>
 <!-- RS -->
-<g id="node48" class="node">
+<g id="node51" class="node">
 <title>RS</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="2024.6,-421.2 1855.49,-421.2 1855.49,-385.2 2024.6,-385.2 2024.6,-421.2"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-399.6" font-family="Arial" font-size="12.00">agir_gui/rsp/start_recording</text>
 </g>
 <!-- RE -->
-<g id="node49" class="node">
+<g id="node52" class="node">
 <title>RE</title>
 <polygon fill="#ffedd5" stroke="#c2410c" stroke-width="1.2" points="2024.27,-344.16 1855.82,-344.16 1855.82,-308.16 2024.27,-308.16 2024.27,-344.16"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-322.56" font-family="Arial" font-size="12.00">agir_gui/rsp/stop_recording</text>
 </g>
 <!-- WEB -->
-<g id="node50" class="node">
+<g id="node53" class="node">
 <title>WEB</title>
 <polygon fill="#f1f5f9" stroke="#64748b" stroke-width="1.2" points="2306.83,-810 2192.46,-810 2192.46,-766.8 2306.83,-766.8 2306.83,-810"/>
 <text xml:space="preserve" text-anchor="middle" x="2249.65" y="-792" font-family="Arial" font-size="12.00">Webapp</text>
 <text xml:space="preserve" text-anchor="middle" x="2249.65" y="-777.6" font-family="Arial" font-size="12.00">MQTT over WSS</text>
 </g>
 <!-- H_HW -->
-<g id="node51" class="node">
+<g id="node54" class="node">
 <title>H_HW</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M100.08,-883.44C100.08,-883.44 36.01,-883.44 36.01,-883.44 30.01,-883.44 24.01,-877.44 24.01,-871.44 24.01,-871.44 24.01,-859.44 24.01,-859.44 24.01,-853.44 30.01,-847.44 36.01,-847.44 36.01,-847.44 100.08,-847.44 100.08,-847.44 106.08,-847.44 112.08,-853.44 112.08,-859.44 112.08,-859.44 112.08,-871.44 112.08,-871.44 112.08,-877.44 106.08,-883.44 100.08,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="68.05" y="-860.94" font-family="Arial" font-size="15.00" fill="white">Hardware</text>
 </g>
 <!-- H_ACQ -->
-<g id="node52" class="node">
+<g id="node55" class="node">
 <title>H_ACQ</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M392.75,-883.44C392.75,-883.44 276.14,-883.44 276.14,-883.44 270.14,-883.44 264.14,-877.44 264.14,-871.44 264.14,-871.44 264.14,-859.44 264.14,-859.44 264.14,-853.44 270.14,-847.44 276.14,-847.44 276.14,-847.44 392.75,-847.44 392.75,-847.44 398.75,-847.44 404.75,-853.44 404.75,-859.44 404.75,-859.44 404.75,-871.44 404.75,-871.44 404.75,-877.44 398.75,-883.44 392.75,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="334.45" y="-860.94" font-family="Arial" font-size="15.00" fill="white">Acquisition nodes</text>
 </g>
 <!-- H_RAW -->
-<g id="node53" class="node">
+<g id="node56" class="node">
 <title>H_RAW</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M645.8,-883.44C645.8,-883.44 555.89,-883.44 555.89,-883.44 549.89,-883.44 543.89,-877.44 543.89,-871.44 543.89,-871.44 543.89,-859.44 543.89,-859.44 543.89,-853.44 549.89,-847.44 555.89,-847.44 555.89,-847.44 645.8,-847.44 645.8,-847.44 651.8,-847.44 657.8,-853.44 657.8,-859.44 657.8,-859.44 657.8,-871.44 657.8,-871.44 657.8,-877.44 651.8,-883.44 645.8,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="600.85" y="-860.94" font-family="Arial" font-size="15.00" fill="white">Sensor topics</text>
 </g>
 <!-- H_PROC -->
-<g id="node54" class="node">
+<g id="node57" class="node">
 <title>H_PROC</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M985.12,-883.44C985.12,-883.44 850.17,-883.44 850.17,-883.44 844.17,-883.44 838.17,-877.44 838.17,-871.44 838.17,-871.44 838.17,-859.44 838.17,-859.44 838.17,-853.44 844.17,-847.44 850.17,-847.44 850.17,-847.44 985.12,-847.44 985.12,-847.44 991.12,-847.44 997.12,-853.44 997.12,-859.44 997.12,-859.44 997.12,-871.44 997.12,-871.44 997.12,-877.44 991.12,-883.44 985.12,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="917.65" y="-860.94" font-family="Arial" font-size="15.00" fill="white">Processing / internal</text>
 </g>
 <!-- H_OUT -->
-<g id="node55" class="node">
+<g id="node58" class="node">
 <title>H_OUT</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M1291.08,-883.44C1291.08,-883.44 1177.81,-883.44 1177.81,-883.44 1171.81,-883.44 1165.81,-877.44 1165.81,-871.44 1165.81,-871.44 1165.81,-859.44 1165.81,-859.44 1165.81,-853.44 1171.81,-847.44 1177.81,-847.44 1177.81,-847.44 1291.08,-847.44 1291.08,-847.44 1297.08,-847.44 1303.08,-853.44 1303.08,-859.44 1303.08,-859.44 1303.08,-871.44 1303.08,-871.44 1303.08,-877.44 1297.08,-883.44 1291.08,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="1234.45" y="-860.94" font-family="Arial" font-size="15.00" fill="white">Processed topics</text>
 </g>
 <!-- H_GATE -->
-<g id="node56" class="node">
+<g id="node59" class="node">
 <title>H_GATE</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M1650.43,-883.44C1650.43,-883.44 1509.66,-883.44 1509.66,-883.44 1503.66,-883.44 1497.66,-877.44 1497.66,-871.44 1497.66,-871.44 1497.66,-859.44 1497.66,-859.44 1497.66,-853.44 1503.66,-847.44 1509.66,-847.44 1509.66,-847.44 1650.43,-847.44 1650.43,-847.44 1656.43,-847.44 1662.43,-853.44 1662.43,-859.44 1662.43,-859.44 1662.43,-871.44 1662.43,-871.44 1662.43,-877.44 1656.43,-883.44 1650.43,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="1580.05" y="-860.94" font-family="Arial" font-size="15.00" fill="white">Gateways / recording</text>
 </g>
 <!-- H_MQTT -->
-<g id="node57" class="node">
+<g id="node60" class="node">
 <title>H_MQTT</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M2005.83,-883.44C2005.83,-883.44 1874.26,-883.44 1874.26,-883.44 1868.26,-883.44 1862.26,-877.44 1862.26,-871.44 1862.26,-871.44 1862.26,-859.44 1862.26,-859.44 1862.26,-853.44 1868.26,-847.44 1874.26,-847.44 1874.26,-847.44 2005.83,-847.44 2005.83,-847.44 2011.83,-847.44 2017.83,-853.44 2017.83,-859.44 2017.83,-859.44 2017.83,-871.44 2017.83,-871.44 2017.83,-877.44 2011.83,-883.44 2005.83,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="1940.05" y="-860.94" font-family="Arial" font-size="15.00" fill="white">MQTT broker topics</text>
 </g>
 <!-- H_CLIENT -->
-<g id="node58" class="node">
+<g id="node61" class="node">
 <title>H_CLIENT</title>
 <path fill="#0f172a" stroke="#0f172a" stroke-width="1.2" d="M2276.67,-883.44C2276.67,-883.44 2222.62,-883.44 2222.62,-883.44 2216.62,-883.44 2210.62,-877.44 2210.62,-871.44 2210.62,-871.44 2210.62,-859.44 2210.62,-859.44 2210.62,-853.44 2216.62,-847.44 2222.62,-847.44 2222.62,-847.44 2276.67,-847.44 2276.67,-847.44 2282.67,-847.44 2288.67,-853.44 2288.67,-859.44 2288.67,-859.44 2288.67,-871.44 2288.67,-871.44 2288.67,-877.44 2282.67,-883.44 2276.67,-883.44"/>
 <text xml:space="preserve" text-anchor="middle" x="2249.65" y="-860.94" font-family="Arial" font-size="15.00" fill="white">Browser</text>

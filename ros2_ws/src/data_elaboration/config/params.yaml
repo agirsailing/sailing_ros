@@ -33,6 +33,11 @@ ultrasonic_filter_node:
 
 imu_node:
   ros__parameters:
+    # 0.0: publish each new result; positive: periodically publish the latest.
+    # The aero conversion follows robotic publications without a second timer.
+    publish_rate_hz: 0.0
+    # Check the original acquisition timestamp, not just callback arrival time.
+    max_sample_age_s: 0.5
     frame_base: base_link
     frame_imu: imu
     frame_robotic: imu_link_flu
@@ -43,7 +48,7 @@ imu_node:
     tf_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     # Colocated aerospace axes: forward, right, down. This defines the convention.
     tf_offset_aero: [0.0, 0.0, 0.0, 180.0, 0.0, 0.0]
-    # Complete the local up-to-down world conversion after the aero transformer.
+    # Convert the BNO085 magnetic ENU world to magnetic NED after the body transform.
     world_rotation_rpy_deg: [180.0, 0.0, 90.0]
     # Isotropic variances in robotic axes; zero means not yet characterized.
     cov_orient: 0.0

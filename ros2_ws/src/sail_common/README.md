@@ -48,9 +48,12 @@ Migration is incremental. Current users:
   driver timestamp and age limit; expired voltage becomes NaN without suppressing
   a fresh alarm. Shutdown checks run on new GPIO reads, not republications.
 - `sensors/i2c_sensors_node.py`: checks source ROS time and elapsed monotonic time
-  independently for IMU and compass snapshots before each publication. Existing
-  drivers and conversion delays are unchanged; no downstream migration is part
-  of this I2C acquisition step.
+  for compass snapshots before each publication. Its conversion delay is unchanged.
+- `sensors/imu_sensor_node.py` and `drivers/imu_driver.py`: check each BNO085
+  component independently and expire cached UART measurements without renewing
+  timestamps on republication.
+- `data_elaboration/imu_node.py`: accepts fresh mounted/aero input, rejects repeated
+  timestamps and expires periodic robotic output using source and receipt times.
 - `data_elaboration/heading_node.py` and `processing/heading.py`: check the GPS
   input before summarizing position or using course over ground. Compass and
   other telemetry fields retain existing checks until their migration step.

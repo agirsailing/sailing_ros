@@ -1,4 +1,4 @@
-"""Launch hardware acquisition: USB sensors (ultrasonic, GPS, IMU) and the I2C compass."""
+"""Launch hardware acquisition: USB sensors, UART IMU and the I2C compass."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument

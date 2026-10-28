@@ -50,7 +50,7 @@ def load_node(filename):
     tree = ast.parse((PACKAGE / 'data_elaboration' / filename).read_text())
     cls = next(item for item in tree.body if isinstance(item, ast.ClassDef))
     scope = dict(Node=object, math=math, copy=copy, BoatHeight=Message, is_fresh=is_fresh,
-                 RollPitchYaw=Message,
+                 RollPitchYaw=Message, time=SimpleNamespace(monotonic=lambda: 100.0),
                  deque=deque, vertical_row=vertical_row, beam_direction=beam_direction,
                  project_height=project_height, fuse_estimates=fuse_estimates,
                  quaternion_from_degrees=quaternion_from_degrees, rotation_matrix=rotation_matrix,
@@ -62,6 +62,11 @@ def load_node(filename):
     node = object.__new__(scope[cls.name])
     node.get_logger = Mock()
     if filename == 'imu_node.py':
+        node.max_sample_age_s, node.publish_rate_hz = 0.5, 0.0
+        node._last_clock_ns = node._robotic_last_stamp = node._robotic_sample = None
+        node.filter = ImuFilter(0, 9.80665, 0.98, 0.2)
+        node.get_clock = Mock()
+        node.get_clock().now.return_value = SimpleNamespace(nanoseconds=1_100_000_000)
         node.frame_robotic = 'sensor'
         node.cov_orient = node.cov_vel = node.cov_acc = 0.0
         node.frame_aero = 'imu_link_frd'
@@ -223,6 +228,79 @@ class TopicProcessingTests(unittest.TestCase):
         self.assertEqual(sample.orientation_covariance[0], -1.0)
         self.assertEqual(imu.orientation_covariance[0], 0.0)
 
+    def fused_sample(self, roll=10, pitch=20, yaw=30, nanos=0):
+        msg = Message()
+        msg.header.stamp.nanosec = nanos
+        q = quaternion_from_degrees(roll, pitch, yaw)
+        msg.orientation = SimpleNamespace(**dict(zip(('x', 'y', 'z', 'w'), q)))
+        msg.orientation_covariance = [0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.2]
+        return msg
+
+    def test_bno_fusion_is_preserved_without_software_filter_or_duplicate_processing(self):
+        node, _ = load_node('imu_node.py')
+        node.imu_pub, node.rpy_pub, node.filter = Mock(), Mock(), Mock()
+        sample = self.fused_sample()
+        node.publish_attitude(sample)
+        node.publish_attitude(sample)
+        node.filter.update.assert_not_called()
+        node.imu_pub.publish.assert_called_once()
+        output = node.imu_pub.publish.call_args.args[0]
+        self.assertEqual(output.header, sample.header)
+        self.assertEqual(output.orientation_covariance, sample.orientation_covariance)
+        angles = node.rpy_pub.publish.call_args.args[0]
+        for actual, expected in ((angles.roll_deg, 10), (angles.pitch_deg, 20), (angles.yaw_deg, 30)):
+            self.assertAlmostEqual(actual, expected)
+
+    def test_periodic_output_keeps_only_latest_result_and_original_stamp(self):
+        node, _ = load_node('imu_node.py')
+        node.imu_pub, node.rpy_pub = Mock(), Mock()
+        node.publish_rate_hz = 20.0
+        node.publish_attitude(self.fused_sample(yaw=10))
+        latest = self.fused_sample(yaw=20, nanos=50_000_000)
+        node.publish_attitude(latest)
+        node.imu_pub.publish.assert_not_called()
+        for _ in range(2):
+            node.publish_latest()
+        self.assertEqual(node.imu_pub.publish.call_count, 2)
+        self.assertAlmostEqual(node.rpy_pub.publish.call_args.args[0].yaw_deg, 20)
+        self.assertEqual(node.imu_pub.publish.call_args.args[0].header.stamp, latest.header.stamp)
+
+    def test_expiry_future_input_and_paused_clock_are_checked(self):
+        node, scope = load_node('imu_node.py')
+        node.imu_pub, node.rpy_pub = Mock(), Mock()
+        node.get_clock().now().nanoseconds = 2_000_000_000
+        node.publish_attitude(self.fused_sample())  # One second old.
+        future = self.fused_sample()
+        future.header.stamp.sec = 3
+        node.publish_attitude(future)
+        node.imu_pub.publish.assert_not_called()
+        fresh = self.fused_sample()
+        fresh.header.stamp.sec = 2
+        node.publish_attitude(fresh)
+        node.imu_pub.publish.assert_called_once()
+        scope['time'].monotonic = lambda: 100.6
+        node.publish_latest()
+        node.imu_pub.publish.assert_called_once()
+
+    def test_enu_north_converts_to_ned_north_without_zeroing_absolute_heading(self):
+        node, _ = load_node('imu_node.py')
+        node.world_quaternion = quaternion_from_degrees(180, 0, 90)
+        node.world_rotation = rotation_matrix(node.world_quaternion)
+        node.publish_aero(self.transformed_aero_sample(yaw_deg=90))
+        self.assertAlmostEqual(node.aero_rpy_pub.publish.call_args.args[0].yaw_deg, 0)
+        node.publish_aero(self.transformed_aero_sample(yaw_deg=0, tick=1))
+        self.assertAlmostEqual(node.aero_rpy_pub.publish.call_args.args[0].yaw_deg, 90)
+
+    def test_out_of_order_fused_samples_do_not_replace_newer_result(self):
+        node, _ = load_node('imu_node.py')
+        node.imu_pub, node.rpy_pub = Mock(), Mock()
+        node.publish_attitude(self.fused_sample(nanos=50_000_000))
+        node.publish_attitude(self.fused_sample())
+        node.imu_pub.publish.assert_called_once()
+        node.get_clock().now().nanoseconds = 1_000_000_000
+        node.publish_attitude(self.fused_sample())  # New ROS clock epoch.
+        self.assertEqual(node.imu_pub.publish.call_count, 2)
+
     def test_imu_does_not_publish_during_calibration_or_missing_vectors(self):
         node, _ = load_node('imu_node.py')
         node.filter = ImuFilter(2, 9.80665, 0.98, 0.2)
@@ -282,6 +360,7 @@ class TopicProcessingTests(unittest.TestCase):
             self.assertAlmostEqual(angles.pitch_deg, 0)
         node.publish_aero(sample)  # Duplicate timestamp does not publish twice.
         self.assertEqual(node.aero_imu_pub.publish.call_count, 6)
+        node.get_clock().now().nanoseconds = 1_000_000_000  # Actual ROS clock reset.
         node.publish_aero(self.transformed_aero_sample())
         self.assertAlmostEqual(node.aero_rpy_pub.publish.call_args.args[0].yaw_deg, 0)
 

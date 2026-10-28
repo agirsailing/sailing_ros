@@ -185,6 +185,7 @@ class ImuSample:
     magnetic_field: tuple         # tesla; None unless a new report arrived
     magnetic_accuracy: int        # SH-2 status; -1 before the first report
     received_at: float            # host monotonic time of orientation decoding
+    oldest_received_at: float     # oldest required IMU component, for cache expiry
     magnetic_received_at: float   # independent magnetic-report decoding time
 
 
@@ -275,6 +276,7 @@ class ImuDriver:
             magnetic_field=magnetic_field,
             magnetic_accuracy=magnetic_accuracy,
             received_at=self._received_at[self.orientation_id],
+            oldest_received_at=min(self._received_at[r] for r in required),
             magnetic_received_at=self._received_at.get(REPORT_MAGNETOMETER))
 
     def close(self):

@@ -11,7 +11,6 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sensors.drivers.i2c_mux import I2CMultiplexer
-from sensors.drivers.imu_driver import ImuDriver
 from sensors.drivers.gps_driver import nav_pvt_values
 
 
@@ -35,19 +34,6 @@ class DriverTests(unittest.TestCase):
             with I2CMultiplexer(bus, 0x70, 4).channel(4):
                 pass
         bus.write_byte.assert_not_called()
-
-    def test_imu_registers_match_units_and_signed_samples(self):
-        bus = Mock()
-        mux = I2CMultiplexer(bus, 0x70, 4)
-        driver = ImuDriver(mux, 2, 0x6A, 104.0, 4, 500)
-        bus.write_byte_data.assert_any_call(0x6A, 0x10, 0x48)
-        bus.write_byte_data.assert_any_call(0x6A, 0x11, 0x44)
-        bus.read_i2c_block_data.side_effect = [
-            list(struct.pack('<hhh', -1000, 0, 1000)),
-            list(struct.pack('<hhh', -1000, 0, 1000))]
-        accel, gyro = driver.read()
-        self.assertAlmostEqual(accel[0], -1.1964113)
-        self.assertAlmostEqual(gyro[2], math.radians(17.5))
 
     def test_gps_does_not_rescale_pyubx_angles_or_dop(self):
         packet = SimpleNamespace(lat=59.0, lon=18.0, hMSL=12340, gSpeed=1500,

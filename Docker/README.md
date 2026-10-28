@@ -101,10 +101,9 @@ Use `replay` instead of `live` for the replay launch. Both orchestrator launches
 are currently empty and will be connected to the package launch files later.
 
 The existing sensor system can be launched separately with
-`ros2 launch sensors sensors_launch.py`. It starts two ultrasonic nodes, their
-filter, GPS and battery monitoring and requires the connected hardware; the PC
-container is primarily for development.
-The IMU executable is installed but is not part of this launcher yet.
+`ros2 launch sensors sensors_launch.py`. It starts two ultrasonic nodes,
+GPS, the BNO085 UART IMU, the I2C compass and the battery node; connected
+hardware is required. The PC container is primarily for development.
 The ultrasonic ports, topics and device IDs are configured in
 `ros2_ws/src/sensors/config/params.yaml`, installed to `share/sensors/config/params.yaml`.
 Rebuild the workspace after changing configuration to refresh the installed files.
@@ -150,10 +149,10 @@ values in `Docker/raspi_container/.env` when running Compose from that directory
 The hardware container is `agir-ros-raspi`; it exposes `/dev` for the existing serial,
 I2C and GPIO code and retains privileged mode. Check serial device access through
 the `dialout` group. The GPS configuration uses the stable `/dev/gps` alias, and the battery
-node expects `/dev/gpiochip0`. No dedicated `/dev/ttyAMA0` mapping is required by
-the Agir USB/I2C/GPIO setup. Verify the device access against the
-actual Pi. The [Pi 4 setup](../DAY_BEFORE_REGATTA/README.md) enables I2C at boot and
-installs the hardware permission rules.
+node expects `/dev/gpiochip0`. The BNO085 uses `/dev/ttyAMA0`, exposed through
+the same `/dev` mount. The [Pi 4 setup](../DAY_BEFORE_REGATTA/README.md) configures
+GPIO UART and I2C and installs hardware permission rules. Reboot after changing
+UART boot settings, then verify `/dev/ttyAMA0` access before starting the IMU.
 
 Manual startup over SSH and system-level autostart use the same headless Compose
 file. No monitor, Wayland session, display server or interactive login is needed
