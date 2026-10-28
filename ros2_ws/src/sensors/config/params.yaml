@@ -59,6 +59,27 @@ gps_node:
     frame_id: gps
     qos_depth: 10
 
+imu_sensor_node:
+  ros__parameters:
+    port: /dev/ttyAMA0
+    baudrate: 3000000
+    frame_id: imu
+    # 0.0 waits for UART data; positive values poll buffered data.
+    read_rate_hz: 0.0
+    # Independent ROS publication rate.
+    publish_rate_hz: 100.0
+    max_sample_age_s: 0.5
+    timeout_s: 0.1
+    # Requested device report rates, independent of host reading/publication.
+    report_rate_hz: 100.0
+    magnetometer_rate_hz: 50.0
+    orientation_report: rotation_vector
+    roll_pitch_variance_rad2: 0.0
+    reset_delay_s: 0.5
+    stale_timeout_s: 1.0
+    retry_interval_s: 2.0
+    qos_depth: 10
+
 i2c_sensors_node:
   ros__parameters:
     bus: 1
@@ -66,25 +87,6 @@ i2c_sensors_node:
     mux_channel_count: 4
     qos_depth: 10
     retry_interval_s: 2.0
-    imu:
-      enabled: true
-      channel: 2
-      address: 0x6A
-      frame_id: imu
-      # Raspberry register reads per second, independent of ROS publication.
-      # Positive rates only: this driver does not implement data-ready interrupts.
-      read_rate_hz: 50.0
-      # Publish the latest sample, preserving its acquisition timestamp on repeats.
-      publish_rate_hz: 50.0
-      # Stop publishing when the last successful read exceeds this age (seconds).
-      max_sample_age_s: 0.5
-      # ODR = Output Data Rate: how often the sensor generates measurements internally.
-      # Separate from Raspberry polling and ROS publication; hardware-supported values only.
-      # 104 Hz applies to the current LSM6DS3TR-C driver, not the replacement BNO085.
-      # BNO085 requires its own driver and requested report intervals; migration pending.
-      odr_hz: 104.0
-      accel_range_g: 4
-      gyro_range_dps: 500
     compass:
       enabled: true
       channel: 0

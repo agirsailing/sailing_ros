@@ -194,3 +194,7 @@ Recommended order: expose the recording-state interval in YAML, separate dashboa
 and map timers, then introduce the common publication policy while keeping hardware
 readers and estimator input processing independent. Preserve existing defaults
 until each behavior change has been tested against recorded data or hardware.
+For MQTT latency/disconnection tests without ROS or a Raspberry, use
+[the standalone MQTT diagnostics](tools/mqtt_diagnostics/README.md). It includes
+a local Mosquitto broker, synthetic dashboard/map data, native and WebSocket
+observers, and CSV/JSON reports for comparing local and cloud brokers.

@@ -1,4 +1,8 @@
-"""Estimate robotic attitude, complete the aero world conversion and publish TF."""
+"""Estimate or pass through robotic attitude, complete the aero world conversion, publish TF.
+
+A fusing IMU (BNO085) supplies orientation; it is passed through unchanged.
+Raw 6-DOF input (orientation_covariance[0] == -1) still uses the complementary filter.
+"""
 
 import copy
 import math
@@ -122,11 +126,12 @@ class ImuNode(Node):
         if (len(self.world_rotation_rpy_deg) != 3
                 or not all(math.isfinite(v) for v in self.world_rotation_rpy_deg)):
             raise ValueError('world_rotation_rpy_deg must contain three finite angles')
+        # The world change must turn world-up into world-down (roll 180, pitch 0).
+        # Its yaw only re-labels the horizontal axes: 90 degrees turns ENU into NED.
         rotation = rotation_matrix(quaternion_from_degrees(*self.world_rotation_rpy_deg))
-        expected = ((1, 0, 0), (0, -1, 0), (0, 0, -1))
-        if any(not math.isclose(rotation[i][j], expected[i][j], abs_tol=1e-9)
-               for i in range(3) for j in range(3)):
-            raise ValueError('The local up-to-down world convention requires 180 degrees of roll')
+        if any(not math.isclose(rotation[2][j], (0, 0, -1)[j], abs_tol=1e-9) for j in range(3)):
+            raise ValueError('world_rotation_rpy_deg must map world-up to world-down: '
+                             'roll 180, pitch 0 (yaw 90 converts ENU to NED)')
         if self.qos_depth <= 0:
             raise ValueError('qos_depth must be positive')
 
@@ -165,6 +170,10 @@ class ImuNode(Node):
         if (msg.header.frame_id != self.frame_robotic
                 or msg.linear_acceleration_covariance[0] == -1
                 or msg.angular_velocity_covariance[0] == -1):
+            return
+        if msg.orientation_covariance[0] != -1:
+            # A fusing IMU (BNO085) already estimated orientation: do not refilter.
+            self._publish_fused(msg)
             return
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         acceleration = (
@@ -205,6 +214,33 @@ class ImuNode(Node):
         angles.pitch_deg = math.degrees(self.filter.pitch)
         angles.yaw_deg = math.degrees(self.filter.yaw)
 
+        self.imu_pub.publish(output)
+        self.rpy_pub.publish(angles)
+
+    # Pass through sensor-fused orientation (ENU world for the BNO085 rotation vector).
+    def _publish_fused(self, msg):
+        q = msg.orientation
+        quaternion = (q.x, q.y, q.z, q.w)
+        norm = math.hypot(*quaternion)
+        if not math.isfinite(norm) or norm == 0:
+            return
+        quaternion = tuple(v / norm for v in quaternion)
+        output = copy.deepcopy(msg)
+        output.header.frame_id = self.frame_robotic
+        output.orientation.x, output.orientation.y, output.orientation.z, output.orientation.w = quaternion
+        # Keep the sensor's covariance unless YAML supplies a characterized value.
+        for field, value in (('orientation_covariance', self.cov_orient),
+                             ('angular_velocity_covariance', self.cov_vel),
+                             ('linear_acceleration_covariance', self.cov_acc)):
+            if value > 0:
+                setattr(output, field, self._diagonal(value))
+
+        rotation = rotation_matrix(quaternion)
+        angles = RollPitchYaw()
+        angles.header = copy.deepcopy(output.header)
+        angles.roll_deg = math.degrees(math.atan2(rotation[2][1], rotation[2][2]))
+        angles.pitch_deg = math.degrees(math.asin(max(-1.0, min(1.0, -rotation[2][0]))))
+        angles.yaw_deg = math.degrees(math.atan2(rotation[1][0], rotation[0][0]))
         self.imu_pub.publish(output)
         self.rpy_pub.publish(angles)
 
