@@ -3,7 +3,6 @@
 ultrasonic_left_node:
   ros__parameters:
     enabled: true
-    # Stable udev alias: physical USB port 1.4 on the Raspberry Pi 4.
     endpoint_group: ULTRASONIC_LEFT_NODE
     port: /dev/ultrasonic_left
     baudrate: 9600
@@ -17,9 +16,7 @@ ultrasonic_left_node:
 
 ultrasonic_right_node:
   ros__parameters:
-    # Both bow sensors are enabled for attitude-dependent fusion.
     enabled: true
-    # Stable udev alias: physical USB port 1.3 on the Raspberry Pi 4.
     endpoint_group: ULTRASONIC_RIGHT_NODE
     port: /dev/ultrasonic_right
     baudrate: 9600
@@ -33,12 +30,26 @@ ultrasonic_right_node:
 
 gps_node:
   ros__parameters:
-    # Stable udev alias: physical USB port 1.2 on the Raspberry Pi 4.
     port: /dev/gps
     baudrate: 230400
     timeout_s: 0.1
     rate_hz: 10.0
     frame_id: gps
+    qos_depth: 10
+
+imu_sensor_node:
+  ros__parameters:
+    port: /dev/ttyAMA0
+    baudrate: 3000000
+    frame_id: imu
+    rate_hz: 100.0
+    report_rate_hz: 100.0
+    magnetometer_rate_hz: 50.0
+    orientation_report: rotation_vector
+    roll_pitch_variance_rad2: 0.0
+    reset_delay_s: 0.5
+    stale_timeout_s: 1.0
+    retry_interval_s: 2.0
     qos_depth: 10
 
 i2c_sensors_node:
@@ -48,15 +59,6 @@ i2c_sensors_node:
     mux_channel_count: 4
     qos_depth: 10
     retry_interval_s: 2.0
-    imu:
-      enabled: true
-      channel: 2
-      address: 0x6A
-      frame_id: imu
-      rate_hz: 50.0
-      odr_hz: 104.0
-      accel_range_g: 4
-      gyro_range_dps: 500
     compass:
       enabled: true
       channel: 0
@@ -79,5 +81,4 @@ battery_node:
     qos_depth: 10
     shutdown_enabled: true
     low_samples_required: 1
-    # Preserves the existing shutdown request; host behaviour depends on Docker.
     shutdown_command: [sudo, shutdown, "-h", now]
