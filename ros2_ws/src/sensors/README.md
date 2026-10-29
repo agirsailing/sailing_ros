@@ -25,7 +25,7 @@ shutdown policy; calibration, filtering and heading selection belong to data_ela
 | --- | --- | --- |
 | ultrasonic_left_node | /dev/ultrasonic_left | sensor_msgs/Range /ultrasonic/left (m) |
 | ultrasonic_right_node | /dev/ultrasonic_right | sensor_msgs/Range /ultrasonic/right (m) |
-| gps_node | /dev/gps, NAV-PVT | sail_msgs/GpsData /gps/data |
+| gps_node | /dev/gps, NAV-PVT | gps_msgs/GPSFix /gps/data |
 | imu_sensor_node | /dev/ttyAMA0, full UART SHTP at 3 Mbaud | sensor_msgs/Imu /imu/data; sensor_msgs/MagneticField /imu/mag |
 | i2c_sensors_node | bus 1, mux 0x70, channel 0 | geometry_msgs/Vector3Stamped /compass/data |
 | battery_node | gpiochip0 line 13 (alarm), line 6 (ESP32 voltage link) | sail_msgs/BatteryData /battery/data |
@@ -73,7 +73,7 @@ restart the nodes. Battery and I2C timing controls are documented below.
 
 ### GPS reading and publication
 
-`gps_node` publishes `sail_msgs/GpsData` on `/gps/data`. Its timing is independent
+`gps_node` publishes `gps_msgs/msg/GPSFix` on `/gps/data`. Its timing is independent
 of the ultrasound nodes and configured in the same package YAML:
 
 ```yaml
@@ -99,16 +99,55 @@ configure the receiver's physical measurement or NAV-PVT output frequency.
 The stamp is host decoding time, not receiver UTC or a reconstruction of time
 spent inside the receiver/serial buffer.
 
-`fix_valid` is preserved: it combines the receiver's `gnssFixOk` flag with the
-accepted fix types (2, 3, 4). A new packet with `fix_valid=false` replaces the
-previous valid fix and is still published. Freshness and fix quality are separate:
+`status.status` is `GPSStatus.STATUS_FIX` when the receiver's `gnssFixOk` flag is
+set and the fix type is accepted (2, 3, 4); otherwise it is `STATUS_NO_FIX`.
+Receiver fix-type numbers are not GPSStatus codes and are never copied directly.
+A new no-fix packet replaces the previous valid fix and is still published, with
+position, speed, track and altitude set to NaN. Freshness and fix quality are separate:
 `sail_common.freshness.is_fresh` checks ROS source time and elapsed monotonic time
 before publication, even if ROS time is paused. No publication occurs before the
 first NAV-PVT or after it exceeds `max_sample_age_s`.
 
-The heading/summary node and the GPS field in the web gateway also use the shared
-helper. `GpsSummary.gps_stamp` and `MapDataMsg.gps_stamp` retain the original GPS
-timestamp, so refreshed summaries cannot make an old position appear new.
+GPSFix mapping:
+
+| Field | Source and units |
+|---|---|
+| `header`, `status.header` | Same host decoding timestamp and configured GPS frame; preserved on repeats. |
+| `latitude`, `longitude` | Receiver coordinates in degrees. |
+| `altitude` | NAV-PVT `hMSL` in metres above mean sea level, NaN for a 2D/no fix. |
+| `speed` | SOG in m/s, from `gSpeed`. |
+| `track` | COG in degrees clockwise from geographic north, from `headMot`; not bow heading. |
+| `pdop` | Receiver position DOP, dimensionless; nonpositive/invalid values become -1 (unknown). |
+| `status.satellites_used` | Number of satellites used by the receiver. |
+| `status.position_source` | `SOURCE_GPS` for a valid fix, otherwise `SOURCE_NONE`. |
+
+Only a generic fix/no-fix classification is emitted; this adapter does not infer
+RTK, differential or augmentation modes. NAV-PVT does not provide satellite PRN
+lists/visibility here: the lists remain empty and `satellites_visible` remains
+unspecified (default zero). Motion and orientation sources are `SOURCE_NONE`.
+
+Unavailable scalar fields (`time`, `climb`, device orientation and `err*`) are
+NaN. Unavailable DOP fields are -1, per the GPSFix definition. Position covariance
+is marked `COVARIANCE_TYPE_UNKNOWN`; its default zero entries do not mean zero
+uncertainty. In particular, GPSFix `err_horz`/`err_vert` require **95% confidence**:
+the NAV-PVT hAcc/vAcc estimates are not copied into them, nor squared into a
+covariance, without a verified statistical conversion. These receiver estimates
+are therefore not exposed on `/gps/data` by this adapter. `GPSFix.time` is also
+unknown: a ROS reception stamp must not be passed off as receiver GPS time.
+
+See the upstream [GPSFix](https://github.com/swri-robotics/gps_umd/blob/ros2-devel/gps_msgs/msg/GPSFix.msg)
+and [GPSStatus](https://github.com/swri-robotics/gps_umd/blob/ros2-devel/gps_msgs/msg/GPSStatus.msg)
+definitions. This changes the ROS type on `/gps/data`; the MQTT/webapp payloads
+remain unchanged. The obsolete `sail_msgs/GpsData` definition has been removed.
+Old raw GPS bags require conversion or the previous interface/consumer version.
+Rebuild both Docker images as applicable (they now explicitly install
+`ros-${ROS_DISTRO}-gps-msgs`) and clean-build the workspace with
+`bash scripts/build.sh --clean` from `ros2_ws` inside the container to remove
+stale generated interfaces. Restart publishers and subscribers together.
+
+The web gateway reads GPSFix directly and uses the shared freshness helper.
+`MapDataMsg.gps_stamp` retains the original GPS header timestamp, so periodic
+snapshots cannot make an old position appear new.
 Consumer thresholds remain in their own YAML files. Replace the old GPS
 `rate_hz` in custom configs with the three new parameters above, rebuild/install
 and restart. These settings are read at startup, not changed live.
@@ -179,7 +218,7 @@ applying those boot settings. Docker exposes host devices through `/dev`.
 
 ```yaml
 read_rate_hz: 0.0
-publish_rate_hz: 100.0
+publish_rate_hz: 50.0
 max_sample_age_s: 0.5
 timeout_s: 0.1
 report_rate_hz: 100.0

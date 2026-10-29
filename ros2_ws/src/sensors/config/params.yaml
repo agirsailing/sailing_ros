@@ -52,9 +52,9 @@ gps_node:
     # 0.0: decode serial packets as they arrive; positive: drain on each poll.
     # This does not configure the receiver's NAV-PVT measurement/output rate.
     read_rate_hz: 0.0
-    # Repeat the newest NAV-PVT at 10 Hz, preserving its timestamp and fix_valid.
+    # Repeat the newest NAV-PVT at 10 Hz, preserving its timestamp and GPSStatus.
     publish_rate_hz: 10.0
-    # Missing NAV-PVT expires; a new fix_valid=false packet is still published.
+    # Missing NAV-PVT expires; a new STATUS_NO_FIX packet is still published.
     max_sample_age_s: 1.0
     frame_id: gps
     qos_depth: 10
@@ -66,8 +66,8 @@ imu_sensor_node:
     frame_id: imu
     # 0.0 waits for UART data; positive values poll buffered data.
     read_rate_hz: 0.0
-    # Independent ROS publication rate.
-    publish_rate_hz: 100.0
+    # ROS publication target, matching data_elaboration/imu_node at 50 Hz.
+    publish_rate_hz: 50.0
     max_sample_age_s: 0.5
     timeout_s: 0.1
     # Ask the BNO085 firmware to produce orientation/acceleration/gyro reports

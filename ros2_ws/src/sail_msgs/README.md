@@ -8,10 +8,6 @@ It contains 10 messages and 3 recording services:
 - Mark
 - MapDataMsg
 - RecordingState
-- GpsData
-- GpsSummary
-- BoatHeight
-- RollPitchYaw
 - DashboardDataMsg
 
 In Agir, `SerialMsg` is currently used only by `ros2_ws/tools/gen_bag_test.py`
@@ -37,13 +33,20 @@ DashboardDataMsg is the dashboard snapshot. MapDataMsg replaces the unused
 legacy map definition with the position snapshot actually consumed by Agir.
 The original COMITATO and BOLINA constants in Mark.msg are preserved.
 
-GpsData carries the Agir receiver solution with explicit units and fix validity,
-before compass selection. GpsSummary carries structured position, SOG in m/s,
-selected direction, source and validity flags, with separate source timestamps. BoatHeight carries the timestamped, signed vertical clearance of the design-
-waterline reference below the centre of mass, estimated from left/right ranges
-and attitude, in metres. RollPitchYaw carries timestamped roll_deg, pitch_deg and yaw_deg;
-the topic selects robotic FLU/up-world or aerodynamic FRD/down-world convention.
-Yaw is relative to initialization and is not an absolute compass heading.
+Raw receiver data now uses the existing `gps_msgs/msg/GPSFix` type on `/gps/data`.
+The former `GpsData.msg` has been removed; old raw GPS bags are not compatible
+with the new subscribers. Clean-build the workspace after installing `gps_msgs`.
+`GpsSummary` has also been removed: the gateway reads GPSFix and processed IMU
+attitude directly, then prepares DashboardDataMsg and MapDataMsg.
+`BoatHeight` has been replaced by `marti_common_msgs/msg/Float64Stamped` on
+`/processed/boat_height`. Its `value` is signed vertical clearance in metres,
+referenced to the design-waterline point below the centre of mass; the header
+retains the measurement timestamp and boat reference. Rebuild consumers and
+clean-build to remove the old interface.
+`RollPitchYaw` is also removed: standard `sensor_msgs/Imu` carries orientation in
+a quaternion. The gateway converts the aero Imu to dashboard angles and wraps yaw
+to [0, 360) degrees. With BNO085 rotation_vector it references magnetic north;
+game rotation vector / raw fallback has no north reference.
 
 DashboardDataMsg aggregates aerospace angles in degrees, waterline-reference height
 in metres, raw left/right ultrasonic beam distances (`ultrasonic_left_m` and

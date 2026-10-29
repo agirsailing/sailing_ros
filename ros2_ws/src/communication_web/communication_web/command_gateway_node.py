@@ -20,7 +20,7 @@ class CommandGatewayNode(Node):
 
         # 1. Declare and validate request handling configuration.
         self.service_timeout_s = self.declare_parameter('service_timeout_s', Parameter.Type.DOUBLE).value
-        self.poll_period_s = self.declare_parameter('poll_period_s', Parameter.Type.DOUBLE).value
+        self.process_rate_hz = self.declare_parameter('process_rate_hz', Parameter.Type.DOUBLE).value
         self.command_queue_size = self.declare_parameter('command_queue_size', Parameter.Type.INTEGER).value
         self.response_cache_size = self.declare_parameter('response_cache_size', Parameter.Type.INTEGER).value
         self.max_payload_bytes = self.declare_parameter('max_payload_bytes', Parameter.Type.INTEGER).value
@@ -45,13 +45,13 @@ class CommandGatewayNode(Node):
         # 3. Paho only enqueues bytes. ROS service calls run on the ROS executor.
         # A steady timer keeps command timeouts working when ROS time is paused.
         self.wall_clock = Clock(clock_type=ClockType.STEADY_TIME)
-        self.timer = self.create_timer(self.poll_period_s, self._process_commands,
+        self.timer = self.create_timer(1.0 / self.process_rate_hz, self._process_commands,
                                       clock=self.wall_clock)
         self.mqtt.start()
 
     def _validate_parameters(self):
         self.get_parameters(self.list_parameters([], depth=0).names)
-        for name in ('service_timeout_s', 'poll_period_s'):
+        for name in ('service_timeout_s', 'process_rate_hz'):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f'{name} must be finite and positive')

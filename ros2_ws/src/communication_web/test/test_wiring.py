@@ -8,7 +8,7 @@ from queue import Empty, Full, Queue
 import sys
 from types import SimpleNamespace as NS
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT.parent / 'sail_common'))
 from communication_web.gateway.recording_rpc import RecordingRpc
 from communication_web.gateway.telemetry import TelemetrySnapshot, json_safe
 from communication_web.generated.ros_endpoints import Services, Topics
+from sail_common.freshness import is_fresh
 
 
 def mapping_file(path):
@@ -89,6 +90,7 @@ class FakeNode:
         self.subscriptions = {}
         self.publishers = {}
         self.clients = {}
+        self.timers = []
 
     def declare_parameter(self, name, kind):
         value = self.config[name]
@@ -124,6 +126,7 @@ class FakeNode:
         return client
 
     def create_timer(self, *args, **kwargs):
+        self.timers.append(args)
         return Mock()
 
 
@@ -137,6 +140,7 @@ def load_class(path, name, **scope):
 
 class WiringTests(unittest.TestCase):
     def setUp(self):
+        self.monotonic = Mock(return_value=100.0)
         self.fake_mqtt = NS(Client=Mock(), CallbackAPIVersion=NS(VERSION2=2), MQTTv311=4)
         self.parameter = NS(Type=NS(STRING=str, INTEGER=int, DOUBLE=float, BOOL=bool))
         self.transport = load_class(
@@ -144,16 +148,25 @@ class WiringTests(unittest.TestCase):
             json=json, uuid=uuid, mqtt=self.fake_mqtt, Parameter=self.parameter,
             json_safe=json_safe, message_to_ordereddict=lambda msg: {'test': float('nan')})
         self.messages = {name: message_type(name) for name in (
-            'BatteryData', 'BoatHeight', 'MapDataMsg', 'GpsSummary', 'RecordingState',
-            'RollPitchYaw', 'DashboardDataMsg')}
+            'BatteryData', 'MapDataMsg', 'RecordingState',
+            'DashboardDataMsg')}
 
-    def telemetry_node(self):
+    def telemetry_node(self, **rates):
         cls = load_class(
             ROOT / 'communication_web/telemetry_gateway_node.py', 'TelemetryGatewayNode',
             Node=FakeNode, math=math, Parameter=self.parameter,
+            time=NS(monotonic=self.monotonic), is_fresh=is_fresh,
             Topics=Topics, MqttClientWrapper=self.transport,
-            TelemetrySnapshot=TelemetrySnapshot, Bool=NS, Range=NS, **self.messages)
-        return cls()
+            TelemetrySnapshot=TelemetrySnapshot, GPSFix=NS, Float64Stamped=NS, Imu=NS, Range=NS, **self.messages)
+        original = FakeNode.declare_parameter
+
+        def declare(node, name, kind):
+            if name in rates:
+                node.config[name] = rates[name]
+            return original(node, name, kind)
+
+        with patch.object(FakeNode, 'declare_parameter', declare):
+            return cls()
 
     def command_node(self):
         cls = load_class(
@@ -170,10 +183,16 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(set(node.config) - {'use_sim_time'}, node.declared)
         rt = Topics.TELEMETRY_GATEWAY_NODE
         self.assertEqual(len(node.subscriptions), 7)
-        angle = self.messages['RollPitchYaw']()
-        angle.header.stamp.sec = 100
-        angle.roll_deg, angle.pitch_deg, angle.yaw_deg = 12.0, 3.0, 75.0
+        angle = NS(header=NS(stamp=NS(sec=100, nanosec=0)),
+                   orientation=NS(x=0.0, y=0.0, z=math.sin(math.radians(75)/2),
+                                  w=math.cos(math.radians(75)/2)),
+                   orientation_covariance=[0.0] * 9)
         node.subscriptions[rt.SUB.ATTITUDE](angle)
+        node.subscriptions[rt.SUB.HEIGHT](NS(
+            header=NS(stamp=NS(sec=100, nanosec=0)), value=-0.05))
+        node.subscriptions[rt.SUB.GPS](NS(
+            header=NS(stamp=NS(sec=100, nanosec=0)), status=NS(status=0),
+            latitude=59.3, longitude=18.1, speed=1.5, track=270.0))
         battery = self.messages['BatteryData']()
         battery.header.stamp.sec = 100
         battery.voltage_v, battery.low = 12.4, True
@@ -182,11 +201,14 @@ class WiringTests(unittest.TestCase):
             header=NS(stamp=NS(sec=100, nanosec=0)), range=0.6, min_range=0.03, max_range=4.5))
         node.subscriptions[rt.SUB.ULTRASONIC_RIGHT](NS(
             header=NS(stamp=NS(sec=100, nanosec=0)), range=0.8, min_range=0.03, max_range=4.5))
-        node.publish_snapshot()
+        node.publish_dashboard()
+        node.publish_map()
         message = node.publishers[rt.PUB.TELEMETRY].publish.call_args.args[0]
         self.assertEqual(message.header.stamp.sec, 100)
-        self.assertEqual(message.roll_deg, 12.0)
+        self.assertAlmostEqual(message.roll_deg, 0.0)
         self.assertTrue(message.attitude_valid)
+        self.assertTrue(message.height_valid)
+        self.assertEqual(message.height_m, -0.05)
         self.assertTrue(message.battery_valid)
         self.assertTrue(message.battery_low)
         self.assertEqual(message.battery_voltage_v, 12.4)
@@ -195,11 +217,78 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(message.ultrasonic_left_m, 0.6)
         self.assertEqual(message.ultrasonic_right_m, 0.8)
         position = node.publishers[rt.PUB.POSITION].publish.call_args.args[0]
-        self.assertFalse(position.fix_valid)
-        self.assertTrue(math.isnan(position.latitude_deg))
+        self.assertTrue(position.fix_valid)
+        self.assertEqual(position.latitude_deg, 59.3)
+        self.assertEqual(position.sog_mps, 1.5)
+        self.assertEqual(position.gps_stamp.sec, 100)
+        self.assertAlmostEqual(message.yaw_deg, 75.0)
+        self.assertEqual(message.sog_mps, 1.5)
+
+    def test_independent_output_timers_and_recording_forwarding(self):
+        node = self.telemetry_node(dashboard_publish_rate_hz=5.0, map_publish_rate_hz=2.0)
+        self.assertEqual([(period, callback.__name__) for period, callback in node.timers],
+                         [(0.2, 'publish_dashboard'), (0.5, 'publish_map'),
+                          (2.0, '_publish_recording_state')])
+        rt = Topics.TELEMETRY_GATEWAY_NODE
+        node.mqtt.publish_ros_msg = Mock()
+        for _ in range(3):
+            node.timers[0][1]()
+        self.assertEqual(node.telemetry_pub.publish.call_count, 3)
+        node.position_pub.publish.assert_not_called()
+        self.assertEqual([c.args[0] for c in node.mqtt.publish_ros_msg.call_args_list],
+                         [rt.MQTT.PUB.TELEMETRY] * 3)
+        node.timers[1][1]()
+        self.assertEqual(node.telemetry_pub.publish.call_count, 3)
+        node.position_pub.publish.assert_called_once()
+        self.assertEqual(node.mqtt.publish_ros_msg.call_args.args[0], rt.MQTT.PUB.POSITION)
+        recording = self.messages['RecordingState']()
+        previous_calls = node.mqtt.publish_ros_msg.call_count
+        node.subscriptions[rt.SUB.RECORDING_STATE](recording)
+        self.assertEqual(node.mqtt.publish_ros_msg.call_count, previous_calls)
+        node.timers[2][1]()
+        node.mqtt.publish_ros_msg.assert_called_with(rt.MQTT.PUB.RECORDING_STATE, recording)
+        self.assertEqual(node.telemetry_pub.publish.call_count, 3)
+        node.position_pub.publish.assert_called_once()
+
+    def test_output_rates_must_be_finite_and_positive(self):
+        for name in ('dashboard_publish_rate_hz', 'map_publish_rate_hz',
+                     'recording_state_publish_rate_hz', 'recording_state_timeout_s'):
+            for value in (0.0, -1.0, math.inf, math.nan):
+                with self.subTest(name=name, value=value):
+                    with self.assertRaisesRegex(ValueError, name):
+                        self.telemetry_node(**{name: value})
+
+    def test_recording_mqtt_uses_latest_state_without_keeping_dead_manager_alive(self):
+        node = self.telemetry_node()
+        node.mqtt.publish_ros_msg = Mock()
+        rt = Topics.TELEMETRY_GATEWAY_NODE
+        node._publish_recording_state()
+        node.mqtt.publish_ros_msg.assert_not_called()
+        for tick in range(5):
+            self.monotonic.return_value = 100.0 + tick * 0.5
+            state = self.messages['RecordingState']()
+            state.bag_name = 'bag_' + str(tick)
+            node.subscriptions[rt.SUB.RECORDING_STATE](state)
+        node.mqtt.publish_ros_msg.assert_not_called()
+        node._publish_recording_state()
+        node.mqtt.publish_ros_msg.assert_called_once_with(rt.MQTT.PUB.RECORDING_STATE, state)
+        self.assertEqual(state.bag_name, 'bag_4')
+        self.monotonic.return_value = 104.0
+        node._publish_recording_state()
+        node.mqtt.publish_ros_msg.assert_called_once()
+        self.assertIsNone(node.recording_sample)
+        # Recovery uses a new state; the expired one is never replayed.
+        recovered = self.messages['RecordingState']()
+        node.subscriptions[rt.SUB.RECORDING_STATE](recovered)
+        node._publish_recording_state()
+        self.assertEqual(node.mqtt.publish_ros_msg.call_count, 2)
+        node.mqtt.publish_ros_msg.assert_called_with(rt.MQTT.PUB.RECORDING_STATE, recovered)
 
     def test_command_constructor_only_recording_and_queue_handoff(self):
         node = self.command_node()
+        self.assertEqual(node.process_rate_hz, 20.0)
+        self.assertEqual([(period, callback.__name__) for period, callback in node.timers],
+                         [(0.05, '_process_commands')])
         self.assertEqual(set(node.config), node.declared)
         self.assertEqual(set(node.clients), {
             Services.Shared.START_RECORDING, Services.Shared.STOP_RECORDING})
@@ -269,10 +358,10 @@ class WiringTests(unittest.TestCase):
         rt = Topics.TELEMETRY_GATEWAY_NODE
         self.assertEqual(rt.SUB.ULTRASONIC_LEFT, sensors.ULTRASONIC_LEFT_NODE.PUB.RANGE)
         self.assertEqual(rt.SUB.ULTRASONIC_RIGHT, sensors.ULTRASONIC_RIGHT_NODE.PUB.RANGE)
-        self.assertEqual(rt.SUB.ATTITUDE, processing.IMU_NODE.PUB.RPY_AERO)
+        self.assertEqual(rt.SUB.ATTITUDE, processing.IMU_NODE.PUB.IMU_AERO)
         self.assertEqual(rt.SUB.HEIGHT, processing.ULTRASONIC_FILTER_NODE.PUB.HEIGHT)
         self.assertEqual(rt.SUB.BATTERY, sensors.BATTERY_NODE.PUB.BATTERY_DATA)
-        self.assertEqual(rt.SUB.GPS, processing.HEADING_NODE.PUB.GPS_SUMMARY)
+        self.assertEqual(rt.SUB.GPS, sensors.GPS_NODE.PUB.GPS_DATA)
         self.assertEqual(rt.SUB.RECORDING_STATE,
                          recorder['Topics'].ROSBAG_MANAGER_NODE.PUB.RECORDING_STATE)
         for name in ('START_RECORDING', 'STOP_RECORDING'):

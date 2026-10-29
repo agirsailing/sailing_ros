@@ -3,12 +3,13 @@
 from collections import deque
 import copy
 import math
+import time
 
+from marti_common_msgs.msg import Float64Stamped
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import Imu, Range
-from sail_msgs.msg import BoatHeight
 from sail_common.freshness import is_fresh
 
 from sensors.generated.ros_endpoints import Topics as SensorTopics
@@ -30,6 +31,8 @@ class UltrasonicFilterNode(Node):
         self.right_frame_id = self.declare_parameter('right.frame_id', Parameter.Type.STRING).value
         self.attitude_frame_id = self.declare_parameter('attitude_frame_id', Parameter.Type.STRING).value
         self.reference_frame_id = self.declare_parameter('reference_frame_id', Parameter.Type.STRING).value
+        self.publish_rate_hz = self.declare_parameter(
+            'publish_rate_hz', Parameter.Type.DOUBLE).value
         self.max_range_age_s = self.declare_parameter('max_range_age_s', Parameter.Type.DOUBLE).value
         self.max_attitude_age_s = self.declare_parameter('max_attitude_age_s', Parameter.Type.DOUBLE).value
         self.max_pair_dt_s = self.declare_parameter('max_pair_dt_s', Parameter.Type.DOUBLE).value
@@ -51,10 +54,11 @@ class UltrasonicFilterNode(Node):
         self.estimates = {}
         self.last_range_stamps = {}
         self.last_now = None
+        self.latest_height = None
 
         # 3. Publish a single height referred to the configured waterline point.
         self.height_pub = self.create_publisher(
-            BoatHeight, Topics.ULTRASONIC_FILTER_NODE.PUB.HEIGHT, self.qos_depth)
+            Float64Stamped, Topics.ULTRASONIC_FILTER_NODE.PUB.HEIGHT, self.qos_depth)
 
         # 4. Orientation and independent range subscriptions.
         self.attitude_sub = self.create_subscription(
@@ -65,9 +69,16 @@ class UltrasonicFilterNode(Node):
         self.right_sub = self.create_subscription(
             Range, SensorTopics.ULTRASONIC_RIGHT_NODE.PUB.RANGE,
             self.receive_right, self.qos_depth)
+        # Input callbacks always compute; the timer only republishes fresh results.
+        self.publish_timer = None
+        if self.publish_rate_hz > 0:
+            self.publish_timer = self.create_timer(
+                1.0 / self.publish_rate_hz, self.publish_height)
 
     def _validate_parameters(self):
         self.get_parameters(self.list_parameters([], depth=0).names)
+        if not math.isfinite(self.publish_rate_hz) or self.publish_rate_hz < 0:
+            raise ValueError('publish_rate_hz must be finite and nonnegative')
         for side, mounting in (('left', self.left_mounting), ('right', self.right_mounting)):
             if len(mounting) != 5 or not all(math.isfinite(v) for v in mounting):
                 raise ValueError(f'{side}.mounting must contain five finite values: '
@@ -102,6 +113,7 @@ class UltrasonicFilterNode(Node):
             self.attitudes.clear()
             self.estimates.clear()
             self.last_range_stamps.clear()
+            self.latest_height = None
         self.last_now = now
         history_s = self.max_range_age_s + self.max_attitude_age_s
         while self.attitudes and now - self.attitudes[0][0] > history_s:
@@ -119,12 +131,14 @@ class UltrasonicFilterNode(Node):
         if msg.header.frame_id != self.attitude_frame_id or msg.orientation_covariance[0] == -1:
             self.attitudes.clear()
             self.estimates.clear()
+            self.latest_height = None
             return
         q = msg.orientation
         up = vertical_row((q.x, q.y, q.z, q.w))
         if up is None:
             self.attitudes.clear()
             self.estimates.clear()
+            self.latest_height = None
             return
         self.attitudes.append((stamp, up))
 
@@ -142,6 +156,10 @@ class UltrasonicFilterNode(Node):
         if not is_fresh(msg.header.stamp, now, self.max_range_age_s):
             return
         self.last_range_stamps[side] = stamp
+        # Invalidate cached results that depend on this side; a failing second
+        # sensor must not suppress a fresh single-sensor estimate from the first.
+        if self.latest_height is not None and side in self.latest_height[1]:
+            self.latest_height = None
         # A new invalid reading invalidates that side's previous candidate.
         self.estimates.pop(side, None)
         if msg.header.frame_id != self.frames[side]:
@@ -159,21 +177,38 @@ class UltrasonicFilterNode(Node):
         self.estimates[side] = estimate
 
         # Fuse corrected heights only when their measurement times are close.
-        candidates = [
-            item for item in self.estimates.values()
+        candidates = {
+            name: item for name, item in self.estimates.items()
             if is_fresh(item.stamp_s, now, self.max_range_age_s)
             and abs(stamp - item.stamp_s) <= self.max_pair_dt_s
-        ]
+        }
         height = fuse_estimates(
-            candidates, self.incidence_weight_power, self.max_disagreement_m)
+            list(candidates.values()), self.incidence_weight_power, self.max_disagreement_m)
         if height is None:
+            self.latest_height = None
             self.get_logger().warning('Conflicting ultrasonic heights with equal incidence')
             return
-        output = BoatHeight()
+        output = Float64Stamped()
         # The scalar is a world-vertical clearance at this boat-fixed reference.
         output.header = copy.deepcopy(msg.header)
         output.header.frame_id = self.reference_frame_id
-        output.height_m = height
+        output.value = height
+        # Include every candidate's source age, not just the triggering range.
+        self.latest_height = (output, {name: item.stamp_s for name, item in candidates.items()},
+                              time.monotonic())
+        if self.publish_rate_hz == 0:
+            self.publish_height()
+
+    def publish_height(self):
+        now = self._now()
+        if self.latest_height is None:
+            return
+        output, stamps, received_at = self.latest_height
+        if (not all(is_fresh(stamp, now, self.max_range_age_s) for stamp in stamps.values())
+                or not is_fresh(received_at, time.monotonic(), self.max_range_age_s)):
+            self.latest_height = None
+            return
+        # Repeating a cached height must never renew its measurement timestamp.
         self.height_pub.publish(output)
 
 

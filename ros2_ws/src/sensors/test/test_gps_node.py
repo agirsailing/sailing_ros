@@ -25,8 +25,11 @@ def packet(**overrides):
 
 
 class GpsMessage:
+    COVARIANCE_TYPE_UNKNOWN = 0
+
     def __init__(self):
         self.header = NS(stamp=None, frame_id='')
+        self.status = NS()
 
 
 class GPSTests(unittest.TestCase):
@@ -66,7 +69,8 @@ class GPSTests(unittest.TestCase):
         tree = ast.parse(path.read_text(encoding='utf-8'))
         definition = next(item for item in tree.body if isinstance(item, ast.ClassDef))
         scope = dict(Node=FakeNode, Parameter=NS(Type=NS(STRING=1, INTEGER=2, DOUBLE=3)),
-                     Serial=self.serial, UBXReader=self.ubx, GpsData=GpsMessage,
+                     Serial=self.serial, UBXReader=self.ubx, GPSFix=GpsMessage,
+                     GPSStatus=NS(STATUS_FIX=0, STATUS_NO_FIX=-1, SOURCE_GPS=1, SOURCE_NONE=0),
                      Topics=NS(GPS_NODE=NS(PUB=NS(GPS_DATA='/gps/data'))),
                      math=math, threading=self.threads, time=NS(monotonic=self.monotonic),
                      InterruptibleSerialStream=InterruptibleSerialStream,
@@ -88,19 +92,57 @@ class GPSTests(unittest.TestCase):
         self.node.publish_gps()
         self.node.gps_pub.publish.assert_called_once()
         msg = self.node.gps_pub.publish.call_args.args[0]
-        self.assertEqual(msg.latitude_deg, 59.3)
-        self.assertEqual(msg.ground_speed_mps, 1.5)
-        self.assertEqual(msg.altitude_msl_m, 12.0)
-        self.assertEqual(msg.horizontal_accuracy_m, 0.5)
+        self.assertEqual(msg.latitude, 59.3)
+        self.assertEqual(msg.longitude, 18.1)
+        self.assertEqual(msg.speed, 1.5)
+        self.assertEqual(msg.track, 123.4)
+        self.assertEqual(msg.altitude, 12.0)
+        self.assertEqual(msg.pdop, 1.25)
+        self.assertEqual(msg.status.satellites_used, 12)
         self.assertEqual(msg.header.frame_id, 'gps')
-        self.assertTrue(msg.fix_valid)
+        self.assertEqual(msg.status.status, 0)
+        self.assertEqual(msg.status.position_source, 1)
+        self.assertEqual(msg.status.header, msg.header)
+
+    def test_unknown_gpsfix_fields_are_not_fabricated(self):
+        self.node._read_packet()
+        self.node.publish_gps()
+        msg = self.node.gps_pub.publish.call_args.args[0]
+        for field in ('time', 'climb', 'pitch', 'roll', 'dip', 'err', 'err_horz',
+                      'err_vert', 'err_track', 'err_speed', 'err_climb', 'err_time',
+                      'err_pitch', 'err_roll', 'err_dip'):
+            self.assertTrue(math.isnan(getattr(msg, field)), field)
+        for field in ('gdop', 'hdop', 'vdop', 'tdop'):
+            self.assertEqual(getattr(msg, field), -1.0)
+        self.assertEqual(msg.position_covariance_type, 0)
+        self.assertEqual(msg.status.motion_source, 0)
+        self.assertEqual(msg.status.orientation_source, 0)
+
+    def test_fix_type_is_mapped_to_status_not_copied_as_a_status_code(self):
+        for fix_type in range(6):
+            self.reader.read.return_value = (b'', packet(fixType=fix_type))
+            self.node._read_packet()
+            self.node.publish_gps()
+            msg = self.node.gps_pub.publish.call_args.args[0]
+            valid = fix_type in (2, 3, 4)
+            self.assertEqual(msg.status.status, 0 if valid else -1)
+            if fix_type in (3, 4):
+                self.assertEqual(msg.altitude, 12.0)
+            else:
+                self.assertTrue(math.isnan(msg.altitude))
+            if not valid:
+                for field in ('latitude', 'longitude', 'speed', 'track'):
+                    self.assertTrue(math.isnan(getattr(msg, field)))
 
     def test_no_fix_replaces_valid_fix_and_recovery_is_published(self):
         for flag in (1, 0, 1):
             self.reader.read.return_value = (b'', packet(gnssFixOk=flag))
             self.node._read_packet()
             self.node.publish_gps()
-            self.assertEqual(self.node.gps_pub.publish.call_args.args[0].fix_valid, bool(flag))
+            msg = self.node.gps_pub.publish.call_args.args[0]
+            self.assertEqual(msg.status.status, 0 if flag else -1)
+            if not flag:
+                self.assertTrue(math.isnan(msg.latitude))
         self.assertEqual(self.node.gps_pub.publish.call_count, 3)
 
     def test_repeated_publications_preserve_stamp_and_expire_without_packets(self):
@@ -158,7 +200,7 @@ class GPSTests(unittest.TestCase):
         self.node._stop.wait.assert_called_once_with(0.5)
         self.assertEqual(self.reader.read.call_count, 3)
         self.node.publish_gps()
-        self.assertEqual(self.node.gps_pub.publish.call_args.args[0].latitude_deg, 59.5)
+        self.assertEqual(self.node.gps_pub.publish.call_args.args[0].latitude, 59.5)
 
     def test_serial_failure_clears_cache_and_backs_off(self):
         self.node._read_packet()

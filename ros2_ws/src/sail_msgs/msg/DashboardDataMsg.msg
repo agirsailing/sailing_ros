@@ -1,6 +1,8 @@
 # Snapshot for the web dashboard. Header stamp is snapshot time (ROS clock).
 # Angles use aerospace axes: right side down / bow up / turn right positive.
-# Yaw is relative to IMU initialization, not north. Invalid numbers are NaN.
+# Yaw is in [0, 360) degrees; BNO085 rotation_vector references magnetic north.
+# Game rotation vector / raw 6-DOF fallback has no north reference.
+# Invalid numbers are NaN.
 std_msgs/Header header
 bool attitude_valid
 float64 roll_deg

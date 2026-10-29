@@ -26,7 +26,6 @@ setup(
         'console_scripts': [
             'ultrasonic_filter_node = data_elaboration.ultrasonic_filter_node:main',
             'imu_node = data_elaboration.imu_node:main',
-            'heading_node = data_elaboration.heading_node:main',
         ],
     },
 )

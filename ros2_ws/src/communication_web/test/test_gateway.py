@@ -22,6 +22,14 @@ def sample(**fields):
     return NS(header=NS(stamp=stamp()), **fields)
 
 
+def attitude(roll=12.0, pitch=-3.0, yaw=375.0):
+    r, p, y = (math.radians(v) / 2 for v in (roll, pitch, yaw))
+    cr, sr, cp, sp, cy, sy = math.cos(r), math.sin(r), math.cos(p), math.sin(p), math.cos(y), math.sin(y)
+    return sample(orientation=NS(x=sr*cp*cy-cr*sp*sy, y=cr*sp*cy+sr*cp*sy,
+                                 z=cr*cp*sy-sr*sp*cy, w=cr*cp*cy+sr*sp*sy),
+                  orientation_covariance=[0.0] * 9)
+
+
 class TelemetryTests(unittest.TestCase):
     def test_ultrasonic_distances_expire_and_validate_independently(self):
         self.state.update('ultrasonic_left', sample(range=0.62, min_range=0.03, max_range=4.5), 100)
@@ -50,11 +58,11 @@ class TelemetryTests(unittest.TestCase):
         self.state = TelemetrySnapshot(0.5, 0.5, 3.0, 2.0)
 
     def populate(self):
-        self.state.update('attitude', sample(roll_deg=12.0, pitch_deg=-3.0, yaw_deg=375.0), 100)
-        self.state.update('height', sample(height_m=-0.05), 100)
+        self.state.update('attitude', attitude(), 100)
+        self.state.update('height', sample(value=-0.05), 100)
         self.state.update('battery', sample(low=False, voltage_v=12.4), 100)
-        self.state.update('gps', sample(gps_stamp=stamp(), fix_valid=True,
-                                       latitude_deg=59.3, longitude_deg=18.0, sog_mps=6.2), 100)
+        self.state.update('gps', sample(status=NS(status=0), latitude=59.3,
+                                       longitude=18.0, speed=6.2, track=270.0), 100)
 
     def test_missing_inputs_are_unknown_and_valid_json(self):
         telemetry, position, gps_stamp = self.state.build(100)
@@ -69,7 +77,9 @@ class TelemetryTests(unittest.TestCase):
     def test_degrees_signed_height_and_mps_are_preserved(self):
         self.populate()
         data, position, source_stamp = self.state.build(100.1)
-        self.assertEqual((data['roll_deg'], data['pitch_deg'], data['yaw_deg']), (12, -3, 375))
+        self.assertAlmostEqual(data['roll_deg'], 12)
+        self.assertAlmostEqual(data['pitch_deg'], -3)
+        self.assertAlmostEqual(data['yaw_deg'], 15)
         self.assertEqual(data['height_m'], -0.05)
         self.assertTrue(data['battery_valid'])
         self.assertFalse(data['battery_low'])
@@ -89,9 +99,10 @@ class TelemetryTests(unittest.TestCase):
         self.assertFalse(position['fix_valid'])
         self.assertFalse(data['battery_valid'])
 
-    def test_fresh_summary_cannot_refresh_stale_gps(self):
-        self.state.update('gps', sample(gps_stamp=stamp(90), fix_valid=True,
-                                       latitude_deg=59.3, longitude_deg=18.0, sog_mps=6.2), 100)
+    def test_recent_reception_cannot_refresh_stale_gps(self):
+        gps = sample(status=NS(status=0), latitude=59.3, longitude=18.0, speed=6.2)
+        gps.header.stamp = stamp(90)
+        self.state.update('gps', gps, 100)
         data, position, source_stamp = self.state.build(100)
         self.assertFalse(position['fix_valid'])
         self.assertFalse(data['sog_valid'])
@@ -103,6 +114,30 @@ class TelemetryTests(unittest.TestCase):
         self.assertTrue(data['battery_valid'])
         self.assertTrue(data['battery_low'])
         self.assertIsNone(json_safe(data)['battery_voltage_v'])
+
+    def test_no_fix_and_course_do_not_replace_or_invalidate_imu_attitude(self):
+        self.populate()
+        gps = self.state.samples['gps'][0]
+        for status in (0, 19, -1):
+            gps.status.status = status
+            gps.track = float('nan')
+            data, position, _ = self.state.build(100)
+            self.assertEqual(position['fix_valid'], status >= 0)
+            self.assertEqual(data['sog_valid'], status >= 0)
+            self.assertTrue(data['attitude_valid'])
+            self.assertAlmostEqual(data['yaw_deg'], 15.0)
+
+    def test_repeated_fix_keeps_source_age_and_future_fix_is_rejected(self):
+        self.populate()
+        gps = self.state.samples['gps'][0]
+        self.state.update('gps', gps, 103)
+        data, position, source = self.state.build(103)
+        self.assertFalse(position['fix_valid'])
+        self.assertFalse(data['sog_valid'])
+        self.assertEqual(source.sec, 100)
+        gps.header.stamp = stamp(105)
+        self.state.update('gps', gps, 103)
+        self.assertFalse(self.state.build(103)[1]['fix_valid'])
 
     def test_battery_uses_source_stamp_and_expires_both_fields(self):
         for source_time, now in ((90, 100), (102, 100), (100, 104)):
@@ -116,8 +151,8 @@ class TelemetryTests(unittest.TestCase):
                 self.assertIsNone(json_safe(data)['battery_voltage_v'])
 
     def test_invalid_coordinates_fix_speed_and_nonfinite_values(self):
-        for fields in (dict(latitude_deg=91), dict(longitude_deg=181),
-                       dict(fix_valid=False), dict(sog_mps=-1), dict(sog_mps=float('inf'))):
+        for fields in (dict(latitude=91), dict(longitude=181),
+                       dict(status=NS(status=-1)), dict(speed=-1), dict(speed=float('inf'))):
             with self.subTest(fields=fields):
                 self.populate()
                 msg, received = self.state.samples['gps']
@@ -129,7 +164,7 @@ class TelemetryTests(unittest.TestCase):
 
     def test_nonfinite_attitude_does_not_invalidate_height(self):
         self.populate()
-        self.state.samples['attitude'][0].roll_deg = float('nan')
+        self.state.samples['attitude'][0].orientation.x = float('nan')
         data, _, _ = self.state.build(100)
         self.assertFalse(data['attitude_valid'])
         self.assertTrue(data['height_valid'])

@@ -9,7 +9,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from serial import Serial
 from pyubx2 import UBXReader
-from sail_msgs.msg import GpsData
+from gps_msgs.msg import GPSFix, GPSStatus
 from sail_common.freshness import is_fresh
 
 from sensors.drivers.gps_driver import InterruptibleSerialStream, nav_pvt_values
@@ -35,7 +35,7 @@ class GPSNode(Node):
 
         # 3. GPS data publisher.
         self.gps_pub = self.create_publisher(
-            GpsData,
+            GPSFix,
             Topics.GPS_NODE.PUB.GPS_DATA,
             self.qos_depth
         )
@@ -136,23 +136,42 @@ class GPSNode(Node):
                 or not is_fresh(received_at, time.monotonic(), self.max_sample_age_s)):
             return
 
-        msg = GpsData()
+        msg = GPSFix()
         # Cached publications preserve acquisition time and receiver fix status.
         msg.header.stamp = stamp
         msg.header.frame_id = self.frame_id
 
-        # The driver decodes the receiver fields and converts physical units.
-        msg.latitude_deg = values['latitude_deg']
-        msg.longitude_deg = values['longitude_deg']
-        msg.altitude_msl_m = values['altitude_msl_m']
-        msg.ground_speed_mps = values['ground_speed_mps']
-        msg.course_deg = values['course_deg']
-        msg.position_dop = values['position_dop']
-        msg.horizontal_accuracy_m = values['horizontal_accuracy_m']
-        msg.vertical_accuracy_m = values['vertical_accuracy_m']
-        msg.satellites_used = values['satellites_used']
-        msg.fix_type = values['fix_type']
-        msg.fix_valid = values['fix_valid']
+        msg.status.header = msg.header
+        valid = values['fix_valid']
+        msg.status.status = GPSStatus.STATUS_FIX if valid else GPSStatus.STATUS_NO_FIX
+        msg.status.satellites_used = values['satellites_used']
+        msg.status.position_source = GPSStatus.SOURCE_GPS if valid else GPSStatus.SOURCE_NONE
+        # NAV-PVT does not identify the source of each motion/orientation estimate.
+        msg.status.motion_source = GPSStatus.SOURCE_NONE
+        msg.status.orientation_source = GPSStatus.SOURCE_NONE
+
+        nan = float('nan')
+        msg.latitude = values['latitude_deg'] if valid else nan
+        msg.longitude = values['longitude_deg'] if valid else nan
+        # GPSFix permits an explicit altitude reference; here it is mean sea level.
+        # A 2D fix must not advertise a measured altitude.
+        msg.altitude = values['altitude_msl_m'] if valid and values['fix_type'] in (3, 4) else nan
+        msg.speed = values['ground_speed_mps'] if valid else nan
+        msg.track = values['course_deg'] if valid else nan
+        msg.pdop = values['position_dop']
+        # GPSFix defines nonpositive DOP as unknown. Do not invent other DOPs.
+        msg.gdop = msg.hdop = msg.vdop = msg.tdop = -1.0
+        if not math.isfinite(msg.pdop) or msg.pdop <= 0:
+            msg.pdop = -1.0
+
+        # GPSFix errors require 95% confidence. NAV-PVT hAcc/vAcc cannot be
+        # copied into these fields without establishing their statistical mapping.
+        # No receiver epoch, attitude, climb or covariance is supplied here either.
+        for field in ('time', 'climb', 'pitch', 'roll', 'dip', 'err', 'err_horz',
+                      'err_vert', 'err_track', 'err_speed', 'err_climb', 'err_time',
+                      'err_pitch', 'err_roll', 'err_dip'):
+            setattr(msg, field, nan)
+        msg.position_covariance_type = GPSFix.COVARIANCE_TYPE_UNKNOWN
 
         self.gps_pub.publish(msg)
 

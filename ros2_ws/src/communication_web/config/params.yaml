@@ -2,7 +2,13 @@ telemetry_gateway_node:
   ros__parameters:
     # Match the processing nodes. Set true for an eventual /clock-driven bag replay.
     use_sim_time: false
-    publish_rate_hz: 3.0
+    # Independent ROS/MQTT output timers; positive Hz, applied at startup.
+    dashboard_publish_rate_hz: 3.0
+    map_publish_rate_hz: 3.0
+    # MQTT only: ROS recording state continues at the manager's own rate.
+    recording_state_publish_rate_hz: 0.5
+    # RecordingState has no header: expire by elapsed time since ROS reception.
+    recording_state_timeout_s: 1.5
     attitude_timeout_s: 0.5
     height_timeout_s: 0.5
     battery_timeout_s: 3.0
@@ -14,7 +20,8 @@ command_gateway_node:
   ros__parameters:
     # Allow time for rosbag_manager to stop and flush its recording.
     service_timeout_s: 15.0
-    poll_period_s: 0.05
+    # Process queued requests and service responses; not an MQTT publish rate.
+    process_rate_hz: 20.0
     command_queue_size: 32
     response_cache_size: 128
     max_payload_bytes: 4096

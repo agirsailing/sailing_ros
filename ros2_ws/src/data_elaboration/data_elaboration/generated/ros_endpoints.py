@@ -8,11 +8,7 @@ class Topics:
         TRANSFORMER_MAG_OUT = '~/mag_out'
         BOAT_HEIGHT = '/processed/boat_height'
         IMU_DATA = '/processed/imu/data'
-        IMU_RPY = '/processed/imu/rpy'
         IMU_DATA_AERO = '/processed/imu/data/aero'
-        IMU_RPY_AERO = '/processed/imu/rpy/aero'
-        HEADING_DEG = '/processed/heading_deg'
-        GPS_SUMMARY = '/processed/gps/summary'
 
     class ULTRASONIC_FILTER_NODE:
         class PUB:
@@ -25,9 +21,7 @@ class Topics:
 
         class PUB:
             IMU = '/processed/imu/data'
-            RPY = '/processed/imu/rpy'
             IMU_AERO = '/processed/imu/data/aero'
-            RPY_AERO = '/processed/imu/rpy/aero'
 
     class IMU_MOUNT_TRANSFORMER_NODE:
         class PUB:
@@ -39,8 +33,3 @@ class Topics:
 
         class PUB:
             IMU_OUT = '/internal/imu/aero_body'
-
-    class HEADING_NODE:
-        class PUB:
-            HEADING_DEG = '/processed/heading_deg'
-            GPS_SUMMARY = '/processed/gps/summary'

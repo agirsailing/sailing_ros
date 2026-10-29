@@ -68,6 +68,8 @@ RUN apt-get update && apt-get install -y --install-recommends \
     ros-${ROS_DISTRO}-rclpy \
     ros-${ROS_DISTRO}-std-msgs \
     ros-${ROS_DISTRO}-sensor-msgs \
+    ros-${ROS_DISTRO}-gps-msgs \
+    ros-${ROS_DISTRO}-marti-common-msgs \
     ros-${ROS_DISTRO}-geometry-msgs \
     ros-${ROS_DISTRO}-launch-ros \
     && rm -rf /var/lib/apt/lists/*

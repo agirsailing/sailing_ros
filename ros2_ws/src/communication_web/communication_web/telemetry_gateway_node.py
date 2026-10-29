@@ -1,14 +1,18 @@
 """Aggregate processed boat data and publish typed ROS messages and MQTT JSON."""
 
 import math
+import time
 
+from gps_msgs.msg import GPSFix
+from marti_common_msgs.msg import Float64Stamped
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from sail_common.freshness import is_fresh
 from sail_msgs.msg import (
-    BatteryData, BoatHeight, MapDataMsg, GpsSummary, RecordingState, RollPitchYaw, DashboardDataMsg,
+    BatteryData, MapDataMsg, RecordingState, DashboardDataMsg,
 )
-from sensor_msgs.msg import Range
+from sensor_msgs.msg import Imu, Range
 
 from communication_web.gateway.mqtt_client import MqttClientWrapper
 from communication_web.gateway.telemetry import TelemetrySnapshot
@@ -20,7 +24,14 @@ class TelemetryGatewayNode(Node):
         super().__init__('telemetry_gateway_node')
 
         # 1. Declare and validate the snapshot configuration.
-        self.publish_rate_hz = self.declare_parameter('publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.dashboard_publish_rate_hz = self.declare_parameter(
+            'dashboard_publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.map_publish_rate_hz = self.declare_parameter(
+            'map_publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.recording_state_publish_rate_hz = self.declare_parameter(
+            'recording_state_publish_rate_hz', Parameter.Type.DOUBLE).value
+        self.recording_state_timeout_s = self.declare_parameter(
+            'recording_state_timeout_s', Parameter.Type.DOUBLE).value
         self.attitude_timeout_s = self.declare_parameter('attitude_timeout_s', Parameter.Type.DOUBLE).value
         self.height_timeout_s = self.declare_parameter('height_timeout_s', Parameter.Type.DOUBLE).value
         self.battery_timeout_s = self.declare_parameter('battery_timeout_s', Parameter.Type.DOUBLE).value
@@ -28,6 +39,7 @@ class TelemetryGatewayNode(Node):
         self.ultrasonic_timeout_s = self.declare_parameter('ultrasonic_timeout_s', Parameter.Type.DOUBLE).value
         self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
         self._validate_parameters()
+        self.recording_sample = None
         self.snapshot = TelemetrySnapshot(
             self.attitude_timeout_s, self.height_timeout_s,
             self.battery_timeout_s, self.gps_timeout_s, self.ultrasonic_timeout_s)
@@ -40,22 +52,22 @@ class TelemetryGatewayNode(Node):
         self.position_pub = self.create_publisher(
             MapDataMsg, self.rt.PUB.POSITION, self.qos_depth)
 
-        # 3. Consume processed data; aerospace angles are already in degrees.
+        # 3. Consume sensor snapshots and processed attitude/height directly.
         self.attitude_sub = self.create_subscription(
-            RollPitchYaw, self.rt.SUB.ATTITUDE,
+            Imu, self.rt.SUB.ATTITUDE,
             lambda msg: self._receive('attitude', msg), self.qos_depth)
         self.height_sub = self.create_subscription(
-            BoatHeight, self.rt.SUB.HEIGHT,
+            Float64Stamped, self.rt.SUB.HEIGHT,
             lambda msg: self._receive('height', msg), self.qos_depth)
         self.battery_sub = self.create_subscription(
             BatteryData, self.rt.SUB.BATTERY,
             lambda msg: self._receive('battery', msg), self.qos_depth)
         self.gps_sub = self.create_subscription(
-            GpsSummary, self.rt.SUB.GPS,
+            GPSFix, self.rt.SUB.GPS,
             lambda msg: self._receive('gps', msg), self.qos_depth)
         self.recording_sub = self.create_subscription(
             RecordingState, self.rt.SUB.RECORDING_STATE,
-            self._publish_recording_state, self.qos_depth)
+            self._receive_recording_state, self.qos_depth)
         self.ultrasonic_left_sub = self.create_subscription(
             Range, self.rt.SUB.ULTRASONIC_LEFT,
             lambda msg: self._receive('ultrasonic_left', msg), self.qos_depth)
@@ -64,12 +76,19 @@ class TelemetryGatewayNode(Node):
             lambda msg: self._receive('ultrasonic_right', msg), self.qos_depth)
 
         # 4. Publish periodic snapshots and start the asynchronous MQTT loop.
-        self.timer = self.create_timer(1.0 / self.publish_rate_hz, self.publish_snapshot)
+        self.dashboard_timer = self.create_timer(
+            1.0 / self.dashboard_publish_rate_hz, self.publish_dashboard)
+        self.map_timer = self.create_timer(
+            1.0 / self.map_publish_rate_hz, self.publish_map)
+        self.recording_state_timer = self.create_timer(
+            1.0 / self.recording_state_publish_rate_hz, self._publish_recording_state)
         self.mqtt.start()
 
     def _validate_parameters(self):
         self.get_parameters(self.list_parameters([], depth=0).names)
-        for name in ('publish_rate_hz', 'attitude_timeout_s', 'height_timeout_s',
+        for name in ('dashboard_publish_rate_hz', 'map_publish_rate_hz',
+                     'recording_state_publish_rate_hz', 'recording_state_timeout_s',
+                     'attitude_timeout_s', 'height_timeout_s',
                      'battery_timeout_s', 'gps_timeout_s', 'ultrasonic_timeout_s'):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
@@ -80,26 +99,41 @@ class TelemetryGatewayNode(Node):
     def _receive(self, name, message):
         self.snapshot.update(name, message, self.get_clock().now().nanoseconds / 1e9)
 
-    def publish_snapshot(self):
+    def publish_dashboard(self):
         now = self.get_clock().now()
-        data, location, gps_stamp = self.snapshot.build(now.nanoseconds / 1e9)
+        data, _, _ = self.snapshot.build(now.nanoseconds / 1e9)
         telemetry = DashboardDataMsg()
         telemetry.header.stamp = now.to_msg()
         for name, value in data.items():
             setattr(telemetry, name, value)
+        self.telemetry_pub.publish(telemetry)
+        self.mqtt.publish_ros_msg(self.rt.MQTT.PUB.TELEMETRY, telemetry)
+
+    def publish_map(self):
+        now = self.get_clock().now()
+        _, location, gps_stamp = self.snapshot.build(now.nanoseconds / 1e9)
         position = MapDataMsg()
         position.header.stamp = now.to_msg()
         if gps_stamp is not None:
             position.gps_stamp = gps_stamp
         for name, value in location.items():
             setattr(position, name, value)
-        self.telemetry_pub.publish(telemetry)
         self.position_pub.publish(position)
-        self.mqtt.publish_ros_msg(self.rt.MQTT.PUB.TELEMETRY, telemetry)
         self.mqtt.publish_ros_msg(self.rt.MQTT.PUB.POSITION, position)
 
-    def _publish_recording_state(self, message):
-        # Periodic manager state; no retained copy that could survive the manager.
+    def _receive_recording_state(self, message):
+        # Operational state has no source header; only receipt freshness is known.
+        self.recording_sample = (message, time.monotonic())
+
+    def _publish_recording_state(self):
+        if self.recording_sample is None:
+            return
+        message, received_at = self.recording_sample
+        if not is_fresh(received_at, time.monotonic(), self.recording_state_timeout_s):
+            self.recording_sample = None
+            return
+        # The independent MQTT timer sends only the latest live state, without
+        # renewing its receipt time or replaying a backlog of ROS state updates.
         self.mqtt.publish_ros_msg(self.rt.MQTT.PUB.RECORDING_STATE, message)
 
     def destroy_node(self):

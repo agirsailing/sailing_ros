@@ -8,7 +8,6 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'sail_common'))
 from data_elaboration.processing.imu_filter import ImuFilter
-from data_elaboration.processing.heading import choose_heading
 
 
 class ProcessingTests(unittest.TestCase):
@@ -34,15 +33,6 @@ class ProcessingTests(unittest.TestCase):
         filt.update(0.0, (0, 0, 9.80665), (0, 0, 1))
         self.assertEqual(filt.yaw, 0)
 
-    def test_heading_selects_course_or_compass_and_rejects_stale_data(self):
-        args = (10.0, 1.0, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0)
-        compass = (9.9, 0.0, 100.0)
-        self.assertEqual(choose_heading((9.9, True, 1.0, 270), compass, *args), 270)
-        self.assertEqual(choose_heading((9.9, True, 0.1, 270), compass, *args), 90)
-        self.assertEqual(choose_heading((9.9, False, 1.0, 270), compass, *args), 90)
-        self.assertTrue(math.isnan(choose_heading((8.0, True, 1.0, 270),
-                                                  (8.0, 0.0, 100.0), *args)))
-        self.assertTrue(math.isnan(choose_heading(None, (9.9, 0.0, 0.0), *args)))
 
 
 if __name__ == '__main__':

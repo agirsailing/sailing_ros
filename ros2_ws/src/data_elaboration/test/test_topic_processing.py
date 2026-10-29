@@ -23,17 +23,12 @@ from data_elaboration.processing.imu_frames import (
     quaternion_from_degrees, rotation_matrix,
     rotate_covariance, multiply,
 )
-from data_elaboration.processing.heading import choose_navigation_direction
 from data_elaboration.processing.boat_height import (
     beam_direction, fuse_estimates, project_height, vertical_row,
 )
 
 
 class Message:
-    DIRECTION_NONE = 0
-    DIRECTION_GPS_COG = 1
-    DIRECTION_COMPASS = 2
-
     def __init__(self):
         self.header = SimpleNamespace(
             stamp=SimpleNamespace(sec=1, nanosec=0), frame_id='sensor')
@@ -49,15 +44,13 @@ class Message:
 def load_node(filename):
     tree = ast.parse((PACKAGE / 'data_elaboration' / filename).read_text())
     cls = next(item for item in tree.body if isinstance(item, ast.ClassDef))
-    scope = dict(Node=object, math=math, copy=copy, BoatHeight=Message, is_fresh=is_fresh,
-                 RollPitchYaw=Message, time=SimpleNamespace(monotonic=lambda: 100.0),
+    scope = dict(Node=object, math=math, copy=copy, Float64Stamped=Message, is_fresh=is_fresh,
+                 time=SimpleNamespace(monotonic=lambda: 100.0),
                  deque=deque, vertical_row=vertical_row, beam_direction=beam_direction,
                  project_height=project_height, fuse_estimates=fuse_estimates,
                  quaternion_from_degrees=quaternion_from_degrees, rotation_matrix=rotation_matrix,
                  rotate_covariance=rotate_covariance, multiply=multiply,
-                 choose_navigation_direction=choose_navigation_direction,
-                 seconds=lambda stamp: stamp.sec + stamp.nanosec * 1e-9,
-                 GpsSummary=Message, Float64=Message)
+                 seconds=lambda stamp: stamp.sec + stamp.nanosec * 1e-9)
     exec(compile(ast.Module(body=[cls], type_ignores=[]), filename, 'exec'), scope)
     node = object.__new__(scope[cls.name])
     node.get_logger = Mock()
@@ -72,16 +65,23 @@ def load_node(filename):
         node.frame_aero = 'imu_link_frd'
         node.world_quaternion = quaternion_from_degrees(180, 0, 0)
         node.world_rotation = rotation_matrix(node.world_quaternion)
-        node.aero_last_stamp = node.aero_last_yaw = None
-        node.aero_continuous_yaw = 0.0
-        node.aero_imu_pub, node.aero_rpy_pub = Mock(), Mock()
+        node.aero_last_stamp = None
+        node.aero_imu_pub = Mock()
     return node, scope
 
 
 class TopicProcessingTests(unittest.TestCase):
+    def assertQuaternionEqual(self, message, rpy):
+        expected = quaternion_from_degrees(*rpy)
+        q = message.orientation
+        dot = sum(a*b for a, b in zip((q.x, q.y, q.z, q.w), expected))
+        self.assertAlmostEqual(abs(dot), 1.0)
+
     def height_node(self):
         node, _ = load_node('ultrasonic_filter_node.py')
         node.height_pub = Mock()
+        node.publish_rate_hz = 0.0
+        node.latest_height = None
         node.attitudes = deque()
         node.estimates = {}
         node.last_range_stamps = {}
@@ -128,6 +128,13 @@ class TopicProcessingTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         node._validate_parameters()
             setattr(node, side + '_mounting', original)
+        for invalid_rate in (-1.0, math.nan, math.inf):
+            node.publish_rate_hz = invalid_rate
+            with self.assertRaisesRegex(ValueError, 'publish_rate_hz'):
+                node._validate_parameters()
+        for valid_rate in (0.0, 20.0):
+            node.publish_rate_hz = valid_rate
+            node._validate_parameters()
 
     @staticmethod
     def range_sample(side, distance, nanosec=0):
@@ -147,7 +154,7 @@ class TopicProcessingTests(unittest.TestCase):
         sample = self.range_sample('left', 1.4, 20_000_000)
         node.receive_left(sample)
         result = node.height_pub.publish.call_args.args[0]
-        self.assertAlmostEqual(result.height_m, 1.4 * math.cos(math.radians(15)) - 0.4)
+        self.assertAlmostEqual(result.value, 1.4 * math.cos(math.radians(15)) - 0.4)
         self.assertEqual(result.header.frame_id, 'boat_waterline')
         self.assertEqual(sample.header.frame_id, 'ultrasonic_left')
         self.assertEqual(result.header.stamp, sample.header.stamp)
@@ -160,17 +167,17 @@ class TopicProcessingTests(unittest.TestCase):
         cosine = math.cos(math.radians(15))
         node.receive_left(self.range_sample('left', 1.4 / cosine))
         node.receive_right(self.range_sample('right', 1.5 / cosine))
-        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].height_m, 1.05)
+        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].value, 1.05)
         node.get_clock().now().nanoseconds = 1_020_000_000
         node.receive_right(self.range_sample('right', float('inf'), 20_000_000))
         self.assertNotIn('right', node.estimates)
         node.receive_left(self.range_sample('left', 1.4 / cosine, 20_000_000))
-        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].height_m, 1.0)
+        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].value, 1.0)
         # A right sample older than the pairing window must not enter fusion.
         node.get_clock().now().nanoseconds = 1_300_000_000
         node.receive_attitude(self.attitude(300_000_000))
         node.receive_right(self.range_sample('right', 1.5 / cosine, 300_000_000))
-        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].height_m, 1.1)
+        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].value, 1.1)
 
     def test_height_rejects_stale_attitude_range_wrong_frames_and_invalid_quaternion(self):
         node = self.height_node()
@@ -199,7 +206,7 @@ class TopicProcessingTests(unittest.TestCase):
         node.receive_attitude(self.attitude(80_000_000, roll_deg=30))
         # Delayed range predates the new attitude: it must use the level sample.
         node.receive_left(self.range_sample('left', 1.4, 20_000_000))
-        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].height_m,
+        self.assertAlmostEqual(node.height_pub.publish.call_args.args[0].value,
                                1.4 * math.cos(math.radians(15)) - 0.4)
         node.get_clock().now().nanoseconds = 500_000_000
         node._now()
@@ -207,26 +214,103 @@ class TopicProcessingTests(unittest.TestCase):
         self.assertFalse(node.estimates)
         self.assertFalse(node.last_range_stamps)
 
-    def test_rpy_degrees_match_quaternion_while_imu_keeps_si_units(self):
+    def test_raw_filter_publishes_quaternion_and_keeps_si_units(self):
         node, _ = load_node('imu_node.py')
         node.filter = ImuFilter(0, 9.80665, 0.98, 0.2)
         node.imu_pub = Mock()
-        node.rpy_pub = Mock()
         sample = Message()
         node.publish_attitude(sample)
         sample.header.stamp.nanosec = 100_000_000
         node.publish_attitude(sample)
-        angles = node.rpy_pub.publish.call_args.args[0]
         imu = node.imu_pub.publish.call_args.args[0]
-        self.assertAlmostEqual(angles.yaw_deg, math.degrees(0.1))
-        self.assertAlmostEqual(angles.roll_deg, 0.0)
-        self.assertAlmostEqual(angles.pitch_deg, 0.0)
-        self.assertAlmostEqual(imu.orientation.z, math.sin(math.radians(angles.yaw_deg) / 2))
-        self.assertAlmostEqual(imu.orientation.w, math.cos(math.radians(angles.yaw_deg) / 2))
+        self.assertAlmostEqual(imu.orientation.z, math.sin(0.1 / 2))
+        self.assertAlmostEqual(imu.orientation.w, math.cos(0.1 / 2))
         self.assertAlmostEqual(imu.angular_velocity.z, 1.0)  # rad/s, not deg/s
-        self.assertEqual(angles.header, imu.header)
+        self.assertEqual(imu.header, sample.header)
         self.assertEqual(sample.orientation_covariance[0], -1.0)
         self.assertEqual(imu.orientation_covariance[0], 0.0)
+
+    def test_height_periodic_output_uses_latest_result_and_original_stamp(self):
+        node = self.height_node()
+        node.publish_rate_hz = 20.0
+        node.receive_attitude(self.attitude())
+        node.receive_left(self.range_sample('left', 1.4))
+        node.get_clock().now().nanoseconds = 1_020_000_000
+        node.receive_left(self.range_sample('left', 1.5, 20_000_000))
+        node.height_pub.publish.assert_not_called()
+        node.publish_height()
+        result = node.height_pub.publish.call_args.args[0]
+        self.assertAlmostEqual(result.value, 1.5 * math.cos(math.radians(15)) - 0.4)
+        self.assertEqual(result.header.stamp.nanosec, 20_000_000)
+        node.get_clock().now().nanoseconds = 1_070_000_000
+        node.publish_height()
+        self.assertEqual(node.height_pub.publish.call_count, 2)
+        self.assertEqual(node.height_pub.publish.call_args.args[0].header, result.header)
+        node.get_clock().now().nanoseconds = 1_521_000_000
+        node.publish_height()
+        self.assertEqual(node.height_pub.publish.call_count, 2)
+        self.assertIsNone(node.latest_height)
+
+    def test_height_timer_expires_oldest_fusion_input_and_clears_on_clock_rewind(self):
+        node = self.height_node()
+        node.publish_rate_hz = 20.0
+        node.receive_attitude(self.attitude())
+        node.receive_left(self.range_sample('left', 1.4))
+        node.get_clock().now().nanoseconds = 1_080_000_000
+        node.receive_right(self.range_sample('right', 1.4, 80_000_000))
+        node.publish_height()
+        self.assertEqual(node.height_pub.publish.call_count, 1)
+        node.get_clock().now().nanoseconds = 1_501_000_000
+        node.publish_height()  # The triggering right sample alone is still fresh.
+        self.assertEqual(node.height_pub.publish.call_count, 1)
+        self.assertIsNone(node.latest_height)
+        node.get_clock().now().nanoseconds = 2_000_000_000
+        attitude, reading = self.attitude(), self.range_sample('left', 1.4)
+        attitude.header.stamp.sec = reading.header.stamp.sec = 2
+        node.receive_attitude(attitude)
+        node.receive_left(reading)
+        self.assertIsNotNone(node.latest_height)
+        node.get_clock().now().nanoseconds = 1_900_000_000
+        node.publish_height()
+        self.assertIsNone(node.latest_height)
+
+    def test_height_invalid_inputs_do_not_repeat_obsolete_fusion_or_starve_good_side(self):
+        node = self.height_node()
+        node.publish_rate_hz = 20.0
+        node.receive_attitude(self.attitude())
+        node.receive_left(self.range_sample('left', 1.4))
+        node.receive_right(self.range_sample('right', 1.4))
+        node.get_clock().now().nanoseconds = 1_020_000_000
+        node.receive_right(self.range_sample('right', math.inf, 20_000_000))
+        node.publish_height()
+        node.height_pub.publish.assert_not_called()
+        node.receive_left(self.range_sample('left', 1.4, 20_000_000))
+        node.get_clock().now().nanoseconds = 1_040_000_000
+        node.receive_right(self.range_sample('right', math.inf, 40_000_000))
+        node.publish_height()
+        node.height_pub.publish.assert_called_once()
+        invalid = self.attitude(40_000_000)
+        invalid.orientation.w = 0.0
+        node.receive_attitude(invalid)
+        node.publish_height()
+        node.height_pub.publish.assert_called_once()
+        self.assertIsNone(node.latest_height)
+
+    def test_height_conflict_and_monotonic_expiry_stop_republication(self):
+        node = self.height_node()
+        node.publish_rate_hz = 20.0
+        node.receive_attitude(self.attitude())
+        node.receive_left(self.range_sample('left', 1.4))
+        node.receive_right(self.range_sample('right', 2.4))
+        node.publish_height()
+        node.height_pub.publish.assert_not_called()
+        node.get_clock().now().nanoseconds = 1_020_000_000
+        node.receive_right(self.range_sample('right', 1.4, 20_000_000))
+        output, stamps, _ = node.latest_height
+        node.latest_height = (output, stamps, 99.4)  # Monotonic mock is 100.
+        node.publish_height()
+        node.height_pub.publish.assert_not_called()
+        self.assertIsNone(node.latest_height)
 
     def fused_sample(self, roll=10, pitch=20, yaw=30, nanos=0):
         msg = Message()
@@ -238,7 +322,7 @@ class TopicProcessingTests(unittest.TestCase):
 
     def test_bno_fusion_is_preserved_without_software_filter_or_duplicate_processing(self):
         node, _ = load_node('imu_node.py')
-        node.imu_pub, node.rpy_pub, node.filter = Mock(), Mock(), Mock()
+        node.imu_pub, node.filter = Mock(), Mock()
         sample = self.fused_sample()
         node.publish_attitude(sample)
         node.publish_attitude(sample)
@@ -247,13 +331,11 @@ class TopicProcessingTests(unittest.TestCase):
         output = node.imu_pub.publish.call_args.args[0]
         self.assertEqual(output.header, sample.header)
         self.assertEqual(output.orientation_covariance, sample.orientation_covariance)
-        angles = node.rpy_pub.publish.call_args.args[0]
-        for actual, expected in ((angles.roll_deg, 10), (angles.pitch_deg, 20), (angles.yaw_deg, 30)):
-            self.assertAlmostEqual(actual, expected)
+        self.assertQuaternionEqual(output, (10, 20, 30))
 
     def test_periodic_output_keeps_only_latest_result_and_original_stamp(self):
         node, _ = load_node('imu_node.py')
-        node.imu_pub, node.rpy_pub = Mock(), Mock()
+        node.imu_pub = Mock()
         node.publish_rate_hz = 20.0
         node.publish_attitude(self.fused_sample(yaw=10))
         latest = self.fused_sample(yaw=20, nanos=50_000_000)
@@ -262,12 +344,12 @@ class TopicProcessingTests(unittest.TestCase):
         for _ in range(2):
             node.publish_latest()
         self.assertEqual(node.imu_pub.publish.call_count, 2)
-        self.assertAlmostEqual(node.rpy_pub.publish.call_args.args[0].yaw_deg, 20)
+        self.assertQuaternionEqual(node.imu_pub.publish.call_args.args[0], (10, 20, 20))
         self.assertEqual(node.imu_pub.publish.call_args.args[0].header.stamp, latest.header.stamp)
 
     def test_expiry_future_input_and_paused_clock_are_checked(self):
         node, scope = load_node('imu_node.py')
-        node.imu_pub, node.rpy_pub = Mock(), Mock()
+        node.imu_pub = Mock()
         node.get_clock().now().nanoseconds = 2_000_000_000
         node.publish_attitude(self.fused_sample())  # One second old.
         future = self.fused_sample()
@@ -287,13 +369,13 @@ class TopicProcessingTests(unittest.TestCase):
         node.world_quaternion = quaternion_from_degrees(180, 0, 90)
         node.world_rotation = rotation_matrix(node.world_quaternion)
         node.publish_aero(self.transformed_aero_sample(yaw_deg=90))
-        self.assertAlmostEqual(node.aero_rpy_pub.publish.call_args.args[0].yaw_deg, 0)
+        self.assertQuaternionEqual(node.aero_imu_pub.publish.call_args.args[0], (0, 0, 0))
         node.publish_aero(self.transformed_aero_sample(yaw_deg=0, tick=1))
-        self.assertAlmostEqual(node.aero_rpy_pub.publish.call_args.args[0].yaw_deg, 90)
+        self.assertQuaternionEqual(node.aero_imu_pub.publish.call_args.args[0], (0, 0, 90))
 
     def test_out_of_order_fused_samples_do_not_replace_newer_result(self):
         node, _ = load_node('imu_node.py')
-        node.imu_pub, node.rpy_pub = Mock(), Mock()
+        node.imu_pub = Mock()
         node.publish_attitude(self.fused_sample(nanos=50_000_000))
         node.publish_attitude(self.fused_sample())
         node.imu_pub.publish.assert_called_once()
@@ -305,7 +387,6 @@ class TopicProcessingTests(unittest.TestCase):
         node, _ = load_node('imu_node.py')
         node.filter = ImuFilter(2, 9.80665, 0.98, 0.2)
         node.imu_pub = Mock()
-        node.rpy_pub = Mock()
         sample = Message()
         sample.linear_acceleration_covariance[0] = -1.0
         node.publish_attitude(sample)
@@ -313,7 +394,6 @@ class TopicProcessingTests(unittest.TestCase):
         sample.linear_acceleration_covariance[0] = 0.0
         node.publish_attitude(sample)
         node.imu_pub.publish.assert_not_called()
-        node.rpy_pub.publish.assert_not_called()
 
     @staticmethod
     def transformed_aero_sample(roll_deg=0, pitch_deg=0, yaw_deg=0, tick=0):
@@ -334,10 +414,6 @@ class TopicProcessingTests(unittest.TestCase):
         raw = self.transformed_aero_sample(10, -20, 30)
         node.publish_aero(raw)
         output = node.aero_imu_pub.publish.call_args.args[0]
-        angles = node.aero_rpy_pub.publish.call_args.args[0]
-        self.assertAlmostEqual(angles.roll_deg, 10)
-        self.assertAlmostEqual(angles.pitch_deg, 20)
-        self.assertAlmostEqual(angles.yaw_deg, -30)
         expected = quaternion_from_degrees(10, 20, -30)
         actual = output.orientation
         dot = sum(a*b for a, b in zip((actual.x, actual.y, actual.z, actual.w), expected))
@@ -349,20 +425,17 @@ class TopicProcessingTests(unittest.TestCase):
         self.assertAlmostEqual(output.orientation_covariance[1], -0.1)
         self.assertAlmostEqual(raw.orientation_covariance[1], 0.1)
 
-    def test_aero_yaw_starts_zero_unwraps_turns_and_resets_with_backwards_time(self):
+    def test_aero_quaternions_represent_turns_and_reset_with_backwards_time(self):
         node, _ = load_node('imu_node.py')
         for tick, yaw in enumerate((0, 90, 180, 270, 360, 400)):
             sample = self.transformed_aero_sample(yaw_deg=yaw, tick=tick)
             node.publish_aero(sample)
-            angles = node.aero_rpy_pub.publish.call_args.args[0]
-            self.assertAlmostEqual(angles.yaw_deg, -yaw)
-            self.assertAlmostEqual(angles.roll_deg, 0)
-            self.assertAlmostEqual(angles.pitch_deg, 0)
+            self.assertQuaternionEqual(node.aero_imu_pub.publish.call_args.args[0], (0, 0, -yaw))
         node.publish_aero(sample)  # Duplicate timestamp does not publish twice.
         self.assertEqual(node.aero_imu_pub.publish.call_count, 6)
         node.get_clock().now().nanoseconds = 1_000_000_000  # Actual ROS clock reset.
         node.publish_aero(self.transformed_aero_sample())
-        self.assertAlmostEqual(node.aero_rpy_pub.publish.call_args.args[0].yaw_deg, 0)
+        self.assertQuaternionEqual(node.aero_imu_pub.publish.call_args.args[0], (0, 0, 0))
 
     def test_world_adapter_rejects_missing_orientation_and_wrong_frame(self):
         node, _ = load_node('imu_node.py')
@@ -394,7 +467,7 @@ class TopicProcessingTests(unittest.TestCase):
 
     def test_robotic_and_aero_callbacks_publish_independently_in_the_same_node(self):
         node, _ = load_node('imu_node.py')
-        node.imu_pub, node.rpy_pub = Mock(), Mock()
+        node.imu_pub = Mock()
         node.filter = Mock()
         node.filter.roll = node.filter.pitch = node.filter.yaw = 0.0
         node.filter.update.return_value = ((0, 0, 9.80665), (0, 0, 0), (0, 0, 0, 1))
@@ -403,9 +476,7 @@ class TopicProcessingTests(unittest.TestCase):
         node.aero_imu_pub.publish.assert_not_called()
         node.publish_aero(self.transformed_aero_sample())
         node.imu_pub.publish.assert_called_once()
-        node.rpy_pub.publish.assert_called_once()
         node.aero_imu_pub.publish.assert_called_once()
-        node.aero_rpy_pub.publish.assert_called_once()
         node.filter.update.assert_called_once()
         self.assertEqual(node.aero_imu_pub.publish.call_args.args[0].header.frame_id, node.frame_aero)
 
@@ -419,43 +490,6 @@ class TopicProcessingTests(unittest.TestCase):
         unknown = [-1] + [0] * 8
         self.assertEqual(rotate_covariance(rotation, unknown), unknown)
 
-    def test_gps_summary_is_structured_and_distinguishes_direction_source(self):
-        node, _ = load_node('heading_node.py')
-        node.max_input_age_s, node.speed_threshold = 1.0, 0.5
-        node.compass_x_sign = node.compass_y_sign = 1.0
-        node.compass_x_bias = node.compass_y_bias = node.heading_offset_deg = 0.0
-        node.last_now = None
-        node.get_clock = Mock()
-        node.get_clock().now().nanoseconds = 1_100_000_000
-        node.get_clock().now().to_msg.return_value = SimpleNamespace(sec=1, nanosec=100_000_000)
-        node.summary_pub, node.heading_pub = Mock(), Mock()
-        node.gps = SimpleNamespace(header=Message().header, fix_valid=True,
-                                   latitude_deg=59.3, longitude_deg=18.1,
-                                   ground_speed_mps=2.0, course_deg=270.0)
-        node.compass = SimpleNamespace(header=Message().header, vector=SimpleNamespace(x=0, y=100))
-        node.publish_heading()
-        msg = node.summary_pub.publish.call_args.args[0]
-        self.assertEqual((msg.latitude_deg, msg.longitude_deg, msg.sog_mps), (59.3, 18.1, 2.0))
-        self.assertEqual((msg.direction_source, msg.direction_deg), (Message.DIRECTION_GPS_COG, 270))
-        self.assertTrue(msg.fix_valid and msg.direction_valid)
-        self.assertEqual(msg.gps_stamp, node.gps.header.stamp)
-        node.gps.ground_speed_mps = 0.1
-        node.publish_heading()
-        msg = node.summary_pub.publish.call_args.args[0]
-        self.assertEqual((msg.direction_source, msg.direction_deg), (Message.DIRECTION_COMPASS, 90))
-        # Missing GPS may still yield a valid compass direction.
-        node.gps = None
-        node.publish_heading()
-        msg = node.summary_pub.publish.call_args.args[0]
-        self.assertFalse(msg.fix_valid)
-        self.assertTrue(math.isnan(msg.latitude_deg))
-        self.assertTrue(msg.direction_valid)
-        node.compass = None
-        node.publish_heading()
-        msg = node.summary_pub.publish.call_args.args[0]
-        self.assertFalse(msg.direction_valid)
-        self.assertEqual(msg.direction_source, Message.DIRECTION_NONE)
-        self.assertTrue(math.isnan(msg.direction_deg))
 
 
 if __name__ == '__main__':

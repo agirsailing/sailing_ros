@@ -13,7 +13,6 @@ from rclpy.parameter import Parameter
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import TransformStamped
 from tf2_ros import StaticTransformBroadcaster
-from sail_msgs.msg import RollPitchYaw
 from sail_common.freshness import is_fresh
 
 from data_elaboration.generated.ros_endpoints import Topics
@@ -56,33 +55,22 @@ class ImuNode(Node):
             self.max_sample_dt_s
         )
 
-        # Track aerodynamic yaw independently from the robotic filter.
+        # Complete the aerodynamic world conversion after the body transformer.
         self.world_quaternion = quaternion_from_degrees(*self.world_rotation_rpy_deg)
         self.world_rotation = rotation_matrix(self.world_quaternion)
         self.aero_last_stamp = None
-        self.aero_last_yaw = None
-        self.aero_continuous_yaw = 0.0
         self._robotic_last_stamp = None
         self._last_clock_ns = None
         self._robotic_sample = None
 
-        # 3. Processed IMU and explicit angle publishers.
+        # 3. Standard processed IMU publishers; web angles are derived by the gateway.
         self.imu_pub = self.create_publisher(
             Imu,
             Topics.IMU_NODE.PUB.IMU,
             self.qos_depth
         )
-        self.rpy_pub = self.create_publisher(
-            RollPitchYaw,
-            Topics.IMU_NODE.PUB.RPY,
-            self.qos_depth
-        )
-
         self.aero_imu_pub = self.create_publisher(
             Imu, Topics.IMU_NODE.PUB.IMU_AERO, self.qos_depth)
-        self.aero_rpy_pub = self.create_publisher(
-            RollPitchYaw, Topics.IMU_NODE.PUB.RPY_AERO, self.qos_depth)
-
         # Describe the physical mounting without relocating acceleration to the COM.
         self.tf_broadcaster = StaticTransformBroadcaster(self)
         self._publish_static_frames()
@@ -96,7 +84,7 @@ class ImuNode(Node):
         )
         self.aero_imu_sub = self.create_subscription(
             Imu, Topics.IMU_NODE.SUB.IMU_AERO, self.publish_aero, self.qos_depth)
-        # Filtering/angle extraction always runs on new input. Periodic mode
+        # Orientation processing always runs on new input. Periodic mode
         # throttles only the robotic output; the aero branch follows that output
         # immediately, avoiding a second timer delay in the conversion chain.
         self.publish_timer = None
@@ -189,13 +177,12 @@ class ImuNode(Node):
             self.filter.reset()
             self._robotic_last_stamp = None
             self._robotic_sample = None
-            self.aero_last_stamp = self.aero_last_yaw = None
-            self.aero_continuous_yaw = 0.0
+            self.aero_last_stamp = None
         self._last_clock_ns = now.nanoseconds
         return now
 
-    def _store_robotic(self, output, angles):
-        self._robotic_sample = (output, angles, time.monotonic())
+    def _store_robotic(self, output):
+        self._robotic_sample = (output, time.monotonic())
         if self.publish_rate_hz == 0:
             self.publish_latest()
 
@@ -203,11 +190,10 @@ class ImuNode(Node):
         now = self._now()
         if self._robotic_sample is None:
             return
-        output, angles, received_at = self._robotic_sample
+        output, received_at = self._robotic_sample
         if (is_fresh(output.header.stamp, now, self.max_sample_age_s)
                 and is_fresh(received_at, time.monotonic(), self.max_sample_age_s)):
             self.imu_pub.publish(output)
-            self.rpy_pub.publish(angles)
 
     def publish_attitude(self, msg):
         now = self._now()
@@ -263,13 +249,7 @@ class ImuNode(Node):
         output.angular_velocity_covariance = self._diagonal(self.cov_vel)
         output.linear_acceleration_covariance = self._diagonal(self.cov_acc)
 
-        angles = RollPitchYaw()
-        angles.header = copy.deepcopy(output.header)
-        angles.roll_deg = math.degrees(self.filter.roll)
-        angles.pitch_deg = math.degrees(self.filter.pitch)
-        angles.yaw_deg = math.degrees(self.filter.yaw)
-
-        self._store_robotic(output, angles)
+        self._store_robotic(output)
 
     # Pass through sensor-fused orientation (ENU world for the BNO085 rotation vector).
     def _publish_fused(self, msg):
@@ -289,13 +269,7 @@ class ImuNode(Node):
             if value > 0:
                 setattr(output, field, self._diagonal(value))
 
-        rotation = rotation_matrix(quaternion)
-        angles = RollPitchYaw()
-        angles.header = copy.deepcopy(output.header)
-        angles.roll_deg = math.degrees(math.atan2(rotation[2][1], rotation[2][2]))
-        angles.pitch_deg = math.degrees(math.asin(max(-1.0, min(1.0, -rotation[2][0]))))
-        angles.yaw_deg = math.degrees(math.atan2(rotation[1][0], rotation[0][0]))
-        self._store_robotic(output, angles)
+        self._store_robotic(output)
         return True
 
     # Complete only the world-reference conversion after the aero transformer.
@@ -319,22 +293,8 @@ class ImuNode(Node):
         output.orientation.x, output.orientation.y, output.orientation.z, output.orientation.w = transformed
         output.orientation_covariance = rotate_covariance(self.world_rotation, msg.orientation_covariance)
 
-        rotation = rotation_matrix(transformed)
-        roll = math.atan2(rotation[2][1], rotation[2][2])
-        pitch = math.asin(max(-1.0, min(1.0, -rotation[2][0])))
-        yaw = math.atan2(rotation[1][0], rotation[0][0])
-        if self.aero_last_yaw is None:
-            self.aero_continuous_yaw = yaw
-        else:
-            self.aero_continuous_yaw += math.remainder(yaw - self.aero_last_yaw, 2 * math.pi)
-        self.aero_last_yaw, self.aero_last_stamp = yaw, stamp
-        angles = RollPitchYaw()
-        angles.header = copy.deepcopy(msg.header)
-        angles.roll_deg = math.degrees(roll)
-        angles.pitch_deg = math.degrees(pitch)
-        angles.yaw_deg = math.degrees(self.aero_continuous_yaw)
+        self.aero_last_stamp = stamp
         self.aero_imu_pub.publish(output)
-        self.aero_rpy_pub.publish(angles)
 
 
 def main(args=None):

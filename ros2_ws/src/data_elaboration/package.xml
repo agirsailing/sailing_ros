@@ -11,6 +11,7 @@
   <exec_depend>sail_msgs</exec_depend>
   <exec_depend>sail_common</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>marti_common_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>

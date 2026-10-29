@@ -37,6 +37,4 @@ def generate_launch_description():
                  ('mag_in', Topics.Shared.TRANSFORMER_MAG_IN),
                  ('mag_out', Topics.Shared.TRANSFORMER_MAG_OUT),
              ]),
-        Node(package='data_elaboration', executable='heading_node',
-             name='heading_node', parameters=[params], output='screen'),
     ])

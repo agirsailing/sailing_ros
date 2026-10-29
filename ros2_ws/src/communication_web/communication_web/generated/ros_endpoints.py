@@ -2,10 +2,10 @@
 
 class Topics:
     class Shared:
-        ATTITUDE = '/processed/imu/rpy/aero'
+        ATTITUDE = '/processed/imu/data/aero'
         HEIGHT = '/processed/boat_height'
         BATTERY = '/battery/data'
-        GPS = '/processed/gps/summary'
+        GPS = '/gps/data'
         ULTRASONIC_LEFT = '/ultrasonic/left'
         ULTRASONIC_RIGHT = '/ultrasonic/right'
         RECORDING_STATE = '/local_state/recording_state'
@@ -21,10 +21,10 @@ class Topics:
 
     class TELEMETRY_GATEWAY_NODE:
         class SUB:
-            ATTITUDE = '/processed/imu/rpy/aero'
+            ATTITUDE = '/processed/imu/data/aero'
             HEIGHT = '/processed/boat_height'
             BATTERY = '/battery/data'
-            GPS = '/processed/gps/summary'
+            GPS = '/gps/data'
             ULTRASONIC_LEFT = '/ultrasonic/left'
             ULTRASONIC_RIGHT = '/ultrasonic/right'
             RECORDING_STATE = '/local_state/recording_state'

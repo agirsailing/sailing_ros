@@ -32,8 +32,9 @@ after changing the package YAML.
 
 Start/stop handling and detected unexpected exits also publish immediately.
 Routine process checks do not publish additional messages when nothing changes.
-For example, `publish_rate_hz: 0.5` sends a periodic state every two seconds while
-`process_check_rate_hz: 2.0` keeps checking the recorder every half second.
+The current settings publish state and check the process every half second.
+The telemetry gateway independently limits MQTT state to 0.5 Hz using its own
+`recording_state_publish_rate_hz`; reducing web traffic does not slow ROS state.
 Timers share the node's executor: a blocking stop operation can postpone them
 while it waits for the recorder to exit. Frequencies are nominal, not hard deadlines.
 

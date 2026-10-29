@@ -38,9 +38,12 @@ Migration is incremental. Current users:
 - `data_elaboration/ultrasonic_filter_node.py`: checks incoming ranges, attitude
   history eligibility and candidates before height fusion. Clock-reset cleanup
   and duplicate rejection remain local to the estimator.
+- `communication_web/telemetry_gateway_node.py`: checks recording-state receipt
+  age before each MQTT state tick (no source header is available in RecordingState).
 - `communication_web/gateway/telemetry.py`: checks source and receipt times for
-  left/right ultrasound, derived height and original GPS data on each dashboard
-  tick. GPS freshness uses `gps_stamp`, not the aggregate header timestamp.
+  every input on each dashboard tick, including processed attitude, height,
+  battery, ultrasound and GPSFix received directly from `/gps/data`.
+  GPS freshness uses its original header, copied to `MapDataMsg.gps_stamp`.
 - `sensors/gps_node.py`: checks source ROS time and elapsed monotonic time before
   publishing cached NAV-PVT data, independently of `fix_valid`.
 - `sensors/battery_node.py`: checks the cached GPIO alarm using source ROS time
@@ -52,11 +55,11 @@ Migration is incremental. Current users:
 - `sensors/imu_sensor_node.py` and `drivers/imu_driver.py`: check each BNO085
   component independently and expire cached UART measurements without renewing
   timestamps on republication.
+- `data_elaboration/ultrasonic_filter_node.py`: checks range/attitude alignment
+  during computation, then rechecks source ages and elapsed monotonic time before
+  publishing a cached Float64Stamped height. Repeats never renew source stamps.
 - `data_elaboration/imu_node.py`: accepts fresh mounted/aero input, rejects repeated
   timestamps and expires periodic robotic output using source and receipt times.
-- `data_elaboration/heading_node.py` and `processing/heading.py`: check the GPS
-  input before summarizing position or using course over ground. Compass and
-  other telemetry fields retain existing checks until their migration step.
 
 Limits remain in the owning package's YAML. There is no duplicate global rates
 or timeout file. Consumers declare an `exec_depend` on `sail_common`.

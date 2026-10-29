@@ -5,10 +5,10 @@ meta:
     python: true
 
 topics:
-  attitude: "/processed/imu/rpy/aero"
+  attitude: "/processed/imu/data/aero"
   height: "/processed/boat_height"
   battery: "/battery/data"
-  gps: "/processed/gps/summary"
+  gps: "/gps/data"
   ultrasonic_left: "/ultrasonic/left"
   ultrasonic_right: "/ultrasonic/right"
   recording_state: "/local_state/recording_state"

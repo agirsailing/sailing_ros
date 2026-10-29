@@ -1,6 +1,9 @@
 # Processing configuration for nodes in data_elaboration.
 ultrasonic_filter_node:
   ros__parameters:
+    # 0.0 publishes each new result; positive values repeat the latest fresh one.
+    # Calculations still run on new range samples, independently of this timer.
+    publish_rate_hz: 20.0
     # Origin: fixed point on the design waterline below the centre of mass.
     # mounting: [x_m, y_m, z_m, lateral_tilt_deg, forward_tilt_deg].
     # Position from the origin in boat-fixed axes: +x forward, +y left, +z up.
@@ -20,6 +23,7 @@ ultrasonic_filter_node:
     attitude_frame_id: imu_link_flu
     reference_frame_id: boat_waterline
     # Use ROS time; bag replay requires matching use_sim_time and /clock.
+    # Also limits cached output age; repeats retain the source timestamp.
     max_range_age_s: 0.5
     max_attitude_age_s: 0.1
     max_pair_dt_s: 0.15
@@ -35,7 +39,7 @@ imu_node:
   ros__parameters:
     # 0.0: publish each new result; positive: periodically publish the latest.
     # The aero conversion follows robotic publications without a second timer.
-    publish_rate_hz: 0.0
+    publish_rate_hz: 50.0
     # Check the original acquisition timestamp, not just callback arrival time.
     max_sample_age_s: 0.5
     frame_base: base_link
@@ -70,16 +74,3 @@ imu_mount_transformer_node:
 imu_aero_transformer_node:
   ros__parameters:
     target_frame: imu_link_frd
-
-heading_node:
-  ros__parameters:
-    rate_hz: 10.0
-    gps_speed_threshold_mps: 0.5
-    max_input_age_s: 1.0
-    # Compass axes/bias must be checked against the installed sensor.
-    compass_x_sign: 1.0
-    compass_y_sign: 1.0
-    compass_x_bias: 0.0
-    compass_y_bias: 0.0
-    heading_offset_deg: 0.0
-    qos_depth: 10

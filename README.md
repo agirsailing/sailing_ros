@@ -86,17 +86,16 @@ The table reflects the merged configuration, including the BNO085 UART driver.
 | `ultrasonic_left_node` | Reader thread waits for incoming serial data (`read_rate_hz: 0.0`); device frame rate is external | Parse complete frames as available; retain the latest valid sample and its decoding timestamp | Target 20 Hz on `/ultrasonic/left`, repeating the latest sample only while fresh (0.5 s maximum) | [sensors params](ros2_ws/src/sensors/config/params.yaml), `read_rate_hz`, `publish_rate_hz`, `max_sample_age_s` |
 | `ultrasonic_right_node` | Independent reader, same arrival-driven mode as left | Same as left | Target 20 Hz on `/ultrasonic/right`, with the same freshness policy | sensors params, same three parameters |
 | `gps_node` | Reader thread waits for incoming packets (`read_rate_hz: 0.0`); receiver output rate is external | Decode NAV-PVT and cache the latest solution, including `fix_valid=false`; other packets do not refresh its age | Target 10 Hz on `/gps/data`, preserving source stamps on repeats; stop after 1 s without new NAV-PVT | sensors params, `read_rate_hz`, `publish_rate_hz`, `max_sample_age_s` |
-| `imu_sensor_node` | BNO085 over UART; wait for data (`read_rate_hz: 0.0`); request orientation/acceleration/gyro at 100 Hz and magnetometer at 50 Hz | Decode reports, check component freshness and cache fused orientation | Target 100 Hz on `/imu/data` and `/imu/mag`; repeats preserve timestamps, expire after 0.5 s | sensors params, `report_rate_hz`, `magnetometer_rate_hz`, `read_rate_hz`, `publish_rate_hz`, `max_sample_age_s` |
+| `imu_sensor_node` | BNO085 over UART; wait for data (`read_rate_hz: 0.0`); request orientation/acceleration/gyro at 100 Hz and magnetometer at 50 Hz | Decode reports, check component freshness and cache fused orientation | Target 50 Hz on `/imu/data` and `/imu/mag`; repeats preserve timestamps, expire after 0.5 s | sensors params, `report_rate_hz`, `magnetometer_rate_hz`, `read_rate_hz`, `publish_rate_hz`, `max_sample_age_s` |
 | `i2c_sensors_node`: compass | Worker reads requested at 10 Hz on the I2C mux | Conversion per read (unchanged 20 ms wait), snapshot caching | Independent target 10 Hz on `/compass/data`; retain source stamp on repeats, expire after 0.5 s | sensors params, `compass.read_rate_hz`, `compass.publish_rate_hz`, `compass.max_sample_age_s` |
 | `battery_node` | Voltage decoded asynchronously from GPIO edges; sender sample rate is external. Low GPIO polled at 10 Hz | Cache voltage/alarm and evaluate shutdown on each successful read, independently of publication | Independent target 10 Hz on `/battery/data`; preserve GPIO stamp on repeats, stop after 0.5 s without a fresh alarm read; expired voltage becomes NaN after 5 s | sensors params, `read_rate_hz`, `publish_rate_hz`, `max_sample_age_s`, `voltage_max_age_s` |
-| `imu_mount_transformer_node` | `/imu/data`, nominally up to 100 Hz | Transform each available input using TF | Input-driven `/internal/imu/mounted`, normally near input rate when TF is available | [processing params](ros2_ws/src/data_elaboration/config/params.yaml); no output timer |
-| `imu_node` | Mounted IMU and aero-body messages, nominally up to 100 Hz each | Use BNO085 fused orientation directly; extract angles per new, fresh timestamp. Raw 6-DOF input retains the legacy filter | Input-driven by default (`publish_rate_hz: 0.0`); positive values schedule robotic IMU/RPY, aero follows new transformed results immediately | processing params, `publish_rate_hz`, `max_sample_age_s` |
-| `imu_aero_transformer_node` | `/processed/imu/data`, up to about 100 Hz | Transform each available input using TF | Input-driven `/internal/imu/aero_body`, normally near input rate | processing params; no output timer |
-| `ultrasonic_filter_node` | Left target 20 Hz + right target 20 Hz + robotic IMU up to about 100 Hz | Store attitude history on IMU callbacks; reject repeated range timestamps and attempt projection/fusion for new samples | Up to about **40 Hz**, often lower; only when frame, freshness, geometry and fusion checks pass | processing params; no output timer |
-| `heading_node` | GPS up to 10 Hz + compass target 10 Hz; callbacks store latest inputs | Timer selects direction and builds summary at 10 Hz | 10 Hz **per topic**: `/processed/heading_deg`, `/processed/gps/summary`; snapshots may reuse inputs | processing params, `rate_hz` |
-| `telemetry_gateway_node` | Independently receives aero RPY up to ~100, height up to ~40, battery ~10, GPS summary ~10, left/right up to 20 each, state 2 Hz plus events | Cache on input callbacks; build dashboard AND map at 3 Hz. State forwarded in its callback | Each ROS dashboard/map topic at 3 Hz; each corresponding MQTT topic at 3 Hz; MQTT state follows manager | [communication params](ros2_ws/src/communication_web/config/params.yaml), `publish_rate_hz` |
-| `command_gateway_node` | MQTT commands on demand; asynchronous service responses | Queue/timeouts checked every 0.05 s (20 Hz) | MQTT responses on demand, **not** 20 messages/s | communication params, `poll_period_s` |
-| `rosbag_manager_node` | Start/stop service requests on demand | Handle requests; independently check recorder process at 2 Hz | Periodic state at 2 Hz, plus after start/stop handling and detected unexpected exits | [rosbag manager params](ros2_ws/src/rosbag_manager/config/params.yaml), `process_check_rate_hz`, `publish_rate_hz` |
+| `imu_mount_transformer_node` | `/imu/data`, nominally up to 50 Hz | Transform each available input using TF | Input-driven `/internal/imu/mounted`, normally near input rate when TF is available | [processing params](ros2_ws/src/data_elaboration/config/params.yaml); no output timer |
+| `imu_node` | Mounted IMU nominally up to 50 Hz; aero-body messages follow the 50 Hz robotic output | Use BNO085 fused orientation directly; process each new, fresh timestamp. Raw 6-DOF input retains the legacy filter | Target 50 Hz (`publish_rate_hz: 50.0`) for fresh cached robotic Imu; aero follows new transformed results immediately | processing params, `publish_rate_hz`, `max_sample_age_s` |
+| `imu_aero_transformer_node` | `/processed/imu/data`, target 50 Hz | Transform each available input using TF | Input-driven `/internal/imu/aero_body`, normally near input rate | processing params; no output timer |
+| `ultrasonic_filter_node` | Left target 20 Hz + right target 20 Hz + robotic IMU target 50 Hz | Store attitude history on IMU callbacks; reject repeated range timestamps and attempt projection/fusion for new samples | Target **20 Hz** for fresh cached `Float64Stamped` results; original stamps preserved, no publication after expiry | processing params, `publish_rate_hz` (0 means on-result), `max_range_age_s` |
+| `telemetry_gateway_node` | Independently receives aero Imu up to ~50, height target 20, battery ~10, GPSFix ~10, left/right up to 20 each, state 2 Hz plus events | Cache on input callbacks; independent dashboard and map timers, each at 3 Hz. Latest live state cached for a separate 0.5 Hz MQTT timer | Each ROS dashboard/map topic at 3 Hz; each corresponding MQTT topic at 3 Hz; MQTT state at 0.5 Hz while manager updates are fresh | [communication params](ros2_ws/src/communication_web/config/params.yaml), `dashboard_publish_rate_hz`, `map_publish_rate_hz`, `recording_state_publish_rate_hz` |
+| `command_gateway_node` | MQTT commands on demand; asynchronous service responses | Queue/timeouts checked every 0.05 s (20 Hz) | MQTT responses on demand, **not** 20 messages/s | communication params, `process_rate_hz` |
+| `rosbag_manager_node` | Start/stop service requests on demand | Handle requests; independently check recorder process at 2 Hz | Periodic ROS state at 2 Hz, plus after start/stop handling and detected unexpected exits | [rosbag manager params](ros2_ws/src/rosbag_manager/config/params.yaml), `process_check_rate_hz`, `publish_rate_hz` |
 
 The same node can have multiple input/output rates: summing the two IMU callbacks
 into a single "node Hz" would hide what is actually happening. These are nominal
@@ -105,11 +104,11 @@ serial timeouts, I2C conversion waits and executor load can reduce actual throug
 The BNO085 now owns its UART independently of the I2C compass. The compass
 conversion wait remains 20 ms; its requested read rate is not a timing guarantee.
 The battery's 100-baud link is a bit rate, not 100
-voltage measurements/s. The two ultrasound callbacks can each publish a fused
-height, so fusion does not imply one output per simultaneous left/right pair.
+voltage measurements/s. Both ultrasound callbacks can update the fused height;
+its publication timer is independent and does not imply synchronized range pairs.
 
-The live gateway therefore has a nominal baseline of **3 + 3 + 2 = 8 MQTT
-publications/s**, plus recording-state updates caused by commands. This is
+The live gateway therefore has a nominal baseline of **3 + 3 + 0.5 = 6.5 MQTT
+publications/s** while sources are live; command responses add separate traffic. This is
 different from the diagnostic simulator's 5 Hz dashboard + 2 Hz map + 0.5 Hz
 recording state (7.5 publications/s). A successful simulator run does not prove
 that the real gateway, hardware or exact live load behaves identically.
@@ -143,24 +142,21 @@ there is no second general rates file. Ultrasound and GPS separate `read_rate_hz
 See the [sensor documentation](ros2_ws/src/sensors/README.md#ultrasound-reading-and-publication)
 for timestamp preservation, stale-sample expiry and custom YAML migration.
 
-**The following publication modes are future proposals for the other nodes,
-not currently implemented parameters.**
+Dashboard and map publication timers are now independent:
 
 ```yaml
-# Proposed example only: these publication.* parameters are not implemented yet.
-heading_node:
-  ros__parameters:
-    publication.mode: periodic
-    publication.rate_hz: 10.0
-
 telemetry_gateway_node:
   ros__parameters:
-    dashboard.publication.mode: periodic
-    dashboard.publication.rate_hz: 5.0
-    map.publication.mode: periodic
-    map.publication.rate_hz: 2.0
-
+    dashboard_publish_rate_hz: 3.0
+    map_publish_rate_hz: 3.0
 ```
+
+Recording-state ROS publication and process checks are configured at 2 Hz in the
+manager's YAML. MQTT state publication is independently configured at 0.5 Hz in
+the gateway. State changes publish immediately on ROS and reach MQTT at the next
+state tick; command responses are sent independently when ready.
+These gateway rates must be positive; on-data is not implemented for web outputs.
+General design guidance for the rest of the system:
 
 - `on_data`: publish when a new valid sample/result is available, even if its
   numeric value equals the previous one. This is different from publishing only
@@ -186,10 +182,9 @@ telemetry_gateway_node:
   and avoid duplicate publication; a successful `ros2 param set` alone is not proof
   that an existing timer changed.
 
-Recommended order: expose the recording-state interval in YAML, separate dashboard
-and map timers, then introduce the common publication policy while keeping hardware
-readers and estimator input processing independent. Preserve existing defaults
-until each behavior change has been tested against recorded data or hardware.
+Recording-state timing and independent web output timers are implemented. Remaining
+validation should measure effective source/output rates and disconnect behavior
+on the Raspberry, with the real sensors and web app.
 For MQTT latency/disconnection tests without ROS or a Raspberry, use
 [the standalone MQTT diagnostics](tools/mqtt_diagnostics/README.md). It includes
 a local Mosquitto broker, synthetic dashboard/map data, native and WebSocket

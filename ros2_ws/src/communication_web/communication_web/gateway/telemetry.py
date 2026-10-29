@@ -2,10 +2,7 @@
 
 import math
 from sail_common.freshness import is_fresh
-
-
-def seconds(stamp):
-    return stamp.sec + stamp.nanosec * 1e-9
+from communication_web.gateway.orientation import dashboard_angles
 
 
 def json_safe(value):
@@ -45,18 +42,11 @@ class TelemetrySnapshot:
             return None
         message, received = sample
         age_limit = self.timeouts[name]
-        # Migrated paths: ultrasound/height and original GPS measurements.
-        stamp = message.gps_stamp if name == 'gps' else message.header.stamp
-        if name in ('ultrasonic_left', 'ultrasonic_right', 'height', 'gps'):
-            if (is_fresh(received, now, age_limit)
-                    and is_fresh(stamp, now, age_limit)):
-                return message
-            return None
-        if not 0 <= now - received <= age_limit:
-            return None
-        if not 0 <= now - seconds(stamp) <= age_limit:
-            return None
-        return message
+        # Periodic repeats must retain their source acquisition timestamp.
+        if (is_fresh(received, now, age_limit)
+                and is_fresh(message.header.stamp, now, age_limit)):
+            return message
+        return None
 
     def build(self, now):
         self._check_clock(now)
@@ -77,28 +67,30 @@ class TelemetrySnapshot:
             telemetry[name + '_valid'] = valid
             telemetry[name + '_m'] = reading.range if valid else nan
         attitude = self._fresh('attitude', now)
-        if attitude is not None and all(math.isfinite(v) for v in (
-                attitude.roll_deg, attitude.pitch_deg, attitude.yaw_deg)):
-            telemetry.update(attitude_valid=True, roll_deg=attitude.roll_deg,
-                             pitch_deg=attitude.pitch_deg, yaw_deg=attitude.yaw_deg)
+        angles = dashboard_angles(attitude) if attitude is not None else None
+        if angles is not None:
+            telemetry.update(attitude_valid=True, roll_deg=angles[0],
+                             pitch_deg=angles[1], yaw_deg=angles[2])
         height = self._fresh('height', now)
-        if height is not None and math.isfinite(height.height_m):
-            telemetry.update(height_valid=True, height_m=height.height_m)
+        if height is not None and math.isfinite(height.value):
+            telemetry.update(height_valid=True, height_m=height.value)
         battery = self._fresh('battery', now)
         if battery is not None:
             telemetry.update(battery_valid=True, battery_low=bool(battery.low),
                              battery_voltage_v=battery.voltage_v
                              if math.isfinite(battery.voltage_v) else nan)
         gps = self._fresh('gps', now)
-        if (gps is not None and gps.fix_valid
+        # GPSStatus.STATUS_FIX is 0; STATUS_NO_FIX is -1. Other valid fixes
+        # (e.g. differential/RTK) have positive status codes.
+        if (gps is not None and gps.status.status >= 0
                 and all(math.isfinite(v) for v in (
-                    gps.latitude_deg, gps.longitude_deg, gps.sog_mps))
-                and -90 <= gps.latitude_deg <= 90
-                and -180 <= gps.longitude_deg <= 180 and gps.sog_mps >= 0):
-            telemetry.update(sog_valid=True, sog_mps=gps.sog_mps)
-            position.update(fix_valid=True, latitude_deg=gps.latitude_deg,
-                            longitude_deg=gps.longitude_deg, sog_mps=gps.sog_mps)
+                    gps.latitude, gps.longitude, gps.speed))
+                and -90 <= gps.latitude <= 90
+                and -180 <= gps.longitude <= 180 and gps.speed >= 0):
+            telemetry.update(sog_valid=True, sog_mps=gps.speed)
+            position.update(fix_valid=True, latitude_deg=gps.latitude,
+                            longitude_deg=gps.longitude, sog_mps=gps.speed)
         # Preserve the source timestamp even when a cached fix has expired.
         gps_sample = self.samples.get('gps')
-        gps_stamp = gps_sample[0].gps_stamp if gps_sample else None
+        gps_stamp = gps_sample[0].header.stamp if gps_sample else None
         return telemetry, position, gps_stamp

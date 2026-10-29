@@ -7,11 +7,10 @@ No node in this package opens serial, I2C or GPIO devices.
 
 | Node | Inputs | Outputs |
 | --- | --- | --- |
-| ultrasonic_filter_node | /ultrasonic/left, /ultrasonic/right (Range), /processed/imu/data (Imu) | /processed/boat_height (sail_msgs/BoatHeight) |
+| ultrasonic_filter_node | /ultrasonic/left, /ultrasonic/right (Range), /processed/imu/data (Imu) | /processed/boat_height (marti_common_msgs/Float64Stamped) |
 | imu_mount_transformer_node (imu_transformer) | /imu/data (Imu) | /internal/imu/mounted (Imu, boat-aligned axes) |
-| imu_node | /internal/imu/mounted and /internal/imu/aero_body (Imu), handled by separate callbacks | /processed/imu/data and /processed/imu/data/aero (Imu); /processed/imu/rpy and /processed/imu/rpy/aero (RollPitchYaw) |
+| imu_node | /internal/imu/mounted and /internal/imu/aero_body (Imu), handled by separate callbacks | /processed/imu/data and /processed/imu/data/aero (Imu) |
 | imu_aero_transformer_node (imu_transformer) | /processed/imu/data (Imu) | /internal/imu/aero_body (Imu, FRD body axes) |
-| heading_node | /gps/data (GpsData), /compass/data (Vector3Stamped) | /processed/heading_deg (Float64), /processed/gps/summary (sail_msgs/GpsSummary) |
 
 Configuration belongs in config/params.yaml. Output names belong in
 config/endpoints.yaml and its generated Python module. Raw input names are
@@ -53,7 +52,7 @@ imu_mount_transformer_node uses the published mounting TF to align measurements
 to boat FLU before imu_node estimates attitude. The height estimator expects frame_robotic
 (imu_link_flu by default), using the same axes as the mounting vectors.
 Its attitude_frame_id checks the message frame name; it does not look up TF.
-reference_frame_id identifies O in BoatHeight; the height node does not publish
+reference_frame_id identifies O in Float64Stamped.header; the height node does not publish
 that reference TF. IMU placement does not change the ultrasonic mounting origin.
 
 ## Projection formula
@@ -94,7 +93,7 @@ Invalid/unavailable quaternions, out-of-range or non-finite distances, beams bey
 max_incidence_deg, duplicate/out-of-order ranges and stale inputs produce no new
 height. There is no fallback to an assumed level attitude.
 
-Each new usable range triggers output, optionally paired with the other side
+Each new usable range computes a result, optionally paired with the other side
 when the measurement timestamps differ by no more than max_pair_dt_s and both
 are fresh. Each candidate retains its own attitude correction.
 
@@ -105,7 +104,7 @@ At level attitude the symmetric beams have equal weights. Heeling smoothly
 favours the more vertical beam. A single valid sensor is sufficient. A missing
 echo need not be an infinite distance; if acquisition stops publishing valid
 returns, the old candidate ages out. Invalid new returns clear that side's
-candidate immediately. If both sensors stop, height publication stops.
+candidate immediately. If both sensors stop, cached height expires and publication stops.
 
 If candidate heights differ by more than max_disagreement_m, the more vertical
 beam wins; an equal-incidence tie suppresses output. This and the incidence
@@ -120,6 +119,38 @@ timing, beam behaviour and thresholds on water. ROS time must match sensor
 timestamps; bag replay needs /clock and use_sim_time. Backwards ROS clock jumps
 clear cached samples.
 
+## Height publication and message
+
+`publish_rate_hz: 20.0` publishes the latest fresh estimate every 50 ms.
+Reception remains callback-driven: new range timestamps trigger computation;
+IMU callbacks only update the attitude history. The timer does not rerun fusion.
+Set `publish_rate_hz: 0.0` to publish each new usable result instead. Negative or
+non-finite values are rejected. Change YAML and restart the node to change mode.
+
+`/processed/boat_height` uses `marti_common_msgs/msg/Float64Stamped`:
+
+- `header.stamp`: original triggering range timestamp, unchanged on repeats.
+- `header.frame_id`: configured boat waterline reference; no TF is created.
+- `value`: signed world-vertical height in metres, positive above the local water
+  plane and negative below. This is not distance along body Z.
+
+The shared freshness helper checks every range candidate used in the cached
+calculation against `max_range_age_s` (0.5 s), as well as monotonic elapsed time
+since calculation. This prevents timer repeats from keeping old measurements alive.
+The paired sample can predate the output stamp by up to `max_pair_dt_s`.
+An invalid new range clears a cached result that depended on that sensor; a fresh
+single-sensor result from the other side remains usable. Invalid attitude, an
+unresolved fusion conflict or a backwards clock jump clears the cached result.
+No output is published before the first usable estimate or after expiry.
+
+The community ROS package [marti_common_msgs](https://index.ros.org/p/marti_common_msgs/)
+provides this stamped scalar in Jazzy. It replaces `sail_msgs/BoatHeight`; the
+web gateway translates `value` into the existing dashboard `height_m` field.
+ROS/MQTT web payloads are unchanged. Rebuild the Docker image (both Dockerfiles
+install `ros-${ROS_DISTRO}-marti-common-msgs`) and run `bash scripts/build.sh --clean`
+inside `ros2_ws` to remove the old generated interface. Update external ROS
+subscribers to the new type and field; old BoatHeight bags need conversion.
+
 ## IMU attitude, mounting and standards
 
 The UART BNO085 now publishes acceleration (m/s^2, including gravity), angular
@@ -130,9 +161,9 @@ separate compass is not fed into this firmware fusion.
 The existing mounting pipeline is preserved:
 
     /imu/data -> imu_mount_transformer_node -> /internal/imu/mounted
-      -> imu_node -> /processed/imu/data (+ /processed/imu/rpy)
+      -> imu_node -> /processed/imu/data
       -> imu_aero_transformer_node -> /internal/imu/aero_body
-      -> imu_node aero callback -> /processed/imu/data/aero (+ /processed/imu/rpy/aero)
+      -> imu_node aero callback -> /processed/imu/data/aero
 
 Both transformers are instances of the external ROS `imu_transformer` package.
 They retain the sample timestamp and apply body-axis transformations. The two
@@ -143,7 +174,7 @@ boat. Translating the frame does not compensate accelerations for a lever arm.
 The near-centre-of-mass assumption is retained.
 
 If orientation is present (`orientation_covariance[0] != -1`), `imu_node` validates
-and normalizes the supplied quaternion, preserves it and extracts roll/pitch/yaw.
+and normalizes the supplied quaternion, preserves it. The web gateway extracts roll/pitch/yaw when building the dashboard.
 It does not run the complementary filter or stationary calibration on BNO085
 orientation. Existing covariance is retained unless a positive characterized YAML
 variance overrides it. Zero configured variance means unknown, not perfect accuracy.
@@ -159,8 +190,10 @@ The latter limits integration gaps, not the age of a message relative to now.
 The configured world rotation is `[180.0, 0.0, 90.0]` degrees. Combined with the
 FLU-to-FRD body transform, it maps magnetic ENU to magnetic NED. Robotic yaw is
 zero towards east; aero yaw is zero towards magnetic north, increasing towards
-east. Declination is not applied, so this is not true north. Aero yaw is unwrapped
-across successive samples and can exceed 360 degrees. The conversion changes the
+east. Declination is not applied, so this is not true north. Both outputs retain
+quaternions; there is no accumulated yaw angle. The gateway represents aero yaw
+in [0, 360) degrees, while a conventional robotic Euler extraction uses yaw
+counterclockwise from east (usually [-pi, pi] radians). The conversion changes the
 orientation reference, not acceleration/gyro a second time. For the former local
 up/down convention use `[180.0, 0.0, 0.0]`; it does not establish a north reference
 for raw gyro integration or the BNO085 game rotation vector.
@@ -168,13 +201,15 @@ for raw gyro integration or the BNO085 game rotation vector.
 ### IMU timing and freshness
 
 ```yaml
-publish_rate_hz: 0.0
+publish_rate_hz: 50.0
 max_sample_age_s: 0.5
 ```
 
-There is no `read_rate_hz`: subscriptions process new input immediately. Zero
+The configured publication target is 50 Hz (one tick every 20 ms), provided
+the cached result is still fresh. There is no `read_rate_hz`: subscriptions
+process new input immediately. Zero
 `publish_rate_hz` publishes each new valid result; a positive value periodically
-publishes the newest robotic IMU/RPY pair, preserving the acquisition timestamp.
+publishes the newest robotic Imu message, preserving the acquisition timestamp.
 All new inputs are still processed, including when publication is slower. The
 aero transformer and callback follow these publications immediately, without a
 second timer delay. Repeated input timestamps are not reprocessed, so aero
@@ -192,7 +227,7 @@ startup; rebuild/install and restart after YAML changes.
 
 After deploying the merged setup and rebuilding, verify `/dev/ttyAMA0` and run
 one live acquisition/processing stack. Inspect `/imu/data`, `/imu/mag`,
-`/processed/imu/rpy` and `/processed/imu/rpy/aero` with `ros2 topic echo` and
+`/processed/imu/data` and `/processed/imu/data/aero` with `ros2 topic echo` and
 measure frequency with `ros2 topic hz`. Check level orientation, known roll/pitch
 motions and magnetic heading with the sensor mounted as configured. Stop the
 UART stream: acquisition and periodic processed output must expire rather than
@@ -200,28 +235,26 @@ repeat indefinitely. Restore it and check reconnection. Offline tests cover
 protocol decoding, cache expiry and conversions; physical wiring, calibration,
 serial reliability and real ROS scheduling still require this hardware check.
 
-## Navigation direction and GPS summary
+## GPS and navigation
 
-heading_node selects GPS course over ground when speed is above the configured
-threshold (0.5 m/s); otherwise it uses a magnetic bearing derived from compass
-X/Y counts. Inputs must be fresh. Without usable input, heading_deg is NaN.
-This is a selector, not full heading fusion or tilt compensation, and it does
-not correct the IMU yaw. Course over ground can differ from bow heading because
-of leeway and current. Compass axis signs, biases and offset need calibration.
-Bearing is nominally degrees clockwise from north, unlike ROS yaw.
+The telemetry gateway subscribes directly to `/gps/data` (`gps_msgs/msg/GPSFix`)
+and `/processed/imu/data/aero`. GPS `speed` is SOG in m/s and `track` is course
+over ground in degrees. IMU yaw describes orientation, not direction of travel.
+There is no speed-based switch between GPS course and a separate compass.
+With BNO085 `rotation_vector`, aero yaw references magnetic north, increases
+clockwise and is displayed in [0, 360) degrees; calibration and mounting must be verified.
 
-gps_summary now publishes sail_msgs/GpsSummary rather than text:
-- latitude_deg, longitude_deg and sog_mps (SI metres/second, not knots).
-- direction_deg (clockwise from north) and direction_source
-  (DIRECTION_NONE, DIRECTION_GPS_COG or DIRECTION_COMPASS).
-- fix_valid and direction_valid; unavailable numeric values are NaN.
-- Header processing time, gps_stamp and direction_stamp for source freshness.
+`heading_node`, `GpsSummary`, `/processed/heading_deg` and
+`/processed/gps/summary` have been removed. The gateway validates GPS status,
+coordinates, speed and the source header using its own `gps_timeout_s` setting.
+Dashboard/map ROS and MQTT payloads are unchanged; GPS course remains available
+in GPSFix, not in the current web messages. The separate I2C compass acquisition
+is still available for diagnostics/recording but is no longer a navigation input.
 
-The 0.5 m/s threshold is a software selection rule in heading_node, not a
-receiver command or a hardware switch. The GPS driver publishes NAV-PVT course
-without applying that threshold. Missing GPS can coexist with a valid compass
-direction; the validity flags distinguish this. Altitude, satellites, accuracy
-and DOP remain in the raw GpsData message.
+Run `bash scripts/build.sh --clean` inside the container to remove the obsolete
+installed executable and generated message. Update any custom launches and
+external subscribers that used the removed interfaces. Old summary-only bags
+cannot feed the new gateway; it needs `/gps/data` with the GPSFix type.
 
 ## Battery
 
@@ -246,16 +279,14 @@ tools/bag_replay_to_csv.py still targets older Polimi topic names and message
 layouts; it must be adapted before exporting the current Agir streams.
 
 live_data_elaboration.launch.py and the compatibility data_elaboration_launch.py
-start five nodes, including both transformer instances, as does replay_data_elaboration.launch.py.
+start four nodes, including both transformer instances, as does replay_data_elaboration.launch.py.
 The sensors replay launch still accesses hardware until that pipeline is
 implemented. Rebuild sail_msgs and the workspace before using new interfaces.
 
 ## TODO / work to revisit
 
-- Heading semantics: decide whether to publish GPS course over ground and bow
-  heading separately, and whether/how to fuse them. Revisit the current 0.5 m/s
-  selection threshold and transitions; validate compass mounting, calibration,
-  tilt compensation and magnetic/true-north handling before claiming bow heading.
+- Navigation references: validate IMU calibration, mounting and magnetic
+  declination before comparing bow heading with GPS course over ground.
 - Ultrasonic fusion: measure echo availability, noise and height error against
   an independent reference over the expected roll/pitch range. Use recorded bags
   to tune incidence_weight_power, max_incidence_deg and max_disagreement_m.
@@ -285,3 +316,8 @@ already install imu-pipeline; no Docker commands were run for this change.
 
 - imu_transformer orientation semantics (fixed since 0.3.1):
   https://docs.ros.org/en/jazzy/p/imu_transformer/__CHANGELOG.html
+
+The former `RollPitchYaw` interface and both RPY topics are removed. The gateway
+converts the standard aero Imu quaternion to dashboard degrees. Clean-build to
+remove the old generated message and update any external subscribers or RPY-only
+bag playback. IMU mounting, transforms, freshness and publication rates are unchanged.

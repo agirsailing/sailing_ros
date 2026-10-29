@@ -13,8 +13,13 @@
   <exec_depend>sail_common</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>gps_msgs</exec_depend>
+  <exec_depend>marti_common_msgs</exec_depend>
   <exec_depend>rosidl_runtime_py</exec_depend>
   <exec_depend>python3-paho-mqtt</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>sensors</test_depend>
+  <test_depend>data_elaboration</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

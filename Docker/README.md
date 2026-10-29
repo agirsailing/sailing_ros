@@ -10,6 +10,12 @@ The container setup includes:
 - A `compose.yaml` file to run the container with optional shared volumes.
 - An `entrypoint.sh` script that initializes the environment and passes commands correctly.
 
+Both images explicitly install `ros-${ROS_DISTRO}-gps-msgs` for the standard
+`gps_msgs/msg/GPSFix` interface on `/gps/data`. After updating from the custom
+`sail_msgs/GpsData` interface, rebuild the image and run a clean workspace build
+(`bash scripts/build.sh --clean` from `ros2_ws` inside the container), then restart
+all GPS publishers/consumers. Webapp MQTT messages retain their current format.
+
 This is ideal for robotics development, CI setups, or cross-platform compatibility when using ROS 2.
 
 For an overview of what docker is, how it works and why we use it, see the [Why Docker README](why_docker.md).
@@ -210,3 +216,9 @@ The next time you want to work on your project, you don't need to rebuild the im
     * From Docker Desktop: In the Containers section of Docker Desktop, select Start ("play" button) on your container.
 
 3. Attach VS Code: Once the container is running, use `Ctrl+Shift+P` to attach to it.
+
+The height estimator and web gateway require `ros-${ROS_DISTRO}-marti-common-msgs`
+(installed by both Dockerfiles). After migrating `/processed/boat_height` from
+BoatHeight to Float64Stamped, rebuild the image and run
+`bash scripts/build.sh --clean` inside `ros2_ws`. The scalar field is now `value`
+in metres; the web dashboard continues to use `height_m`.

@@ -13,11 +13,7 @@ topics:
   transformer_mag_out: ~/mag_out
   boat_height: /processed/boat_height
   imu_data: /processed/imu/data
-  imu_rpy: /processed/imu/rpy
   imu_data_aero: /processed/imu/data/aero
-  imu_rpy_aero: /processed/imu/rpy/aero
-  heading_deg: /processed/heading_deg
-  gps_summary: /processed/gps/summary
 
 nodes:
   ultrasonic_filter_node:
@@ -29,9 +25,7 @@ nodes:
       imu_aero: "@imu_aero_body"
     pub:
       imu: "@imu_data"
-      rpy: "@imu_rpy"
       imu_aero: "@imu_data_aero"
-      rpy_aero: "@imu_rpy_aero"
   imu_mount_transformer_node:
     pub:
       imu_out: "@imu_mounted"
@@ -40,7 +34,3 @@ nodes:
       imu_in: "@imu_data"
     pub:
       imu_out: "@imu_aero_body"
-  heading_node:
-    pub:
-      heading_deg: "@heading_deg"
-      gps_summary: "@gps_summary"
