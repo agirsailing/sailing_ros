@@ -19,6 +19,7 @@ sys.path.insert(0, str(PACKAGE))
 sys.path.insert(0, str(PACKAGE.parent / 'sail_common'))
 from sail_common.freshness import is_fresh
 from data_elaboration.processing.imu_filter import ImuFilter
+from data_elaboration.processing.lever_arm import LeverArmCompensator
 from data_elaboration.processing.imu_frames import (
     quaternion_from_degrees, rotation_matrix,
     rotate_covariance, multiply,
@@ -58,6 +59,7 @@ def load_node(filename):
         node.max_sample_age_s, node.publish_rate_hz = 0.5, 0.0
         node._last_clock_ns = node._robotic_last_stamp = node._robotic_sample = None
         node.filter = ImuFilter(0, 9.80665, 0.98, 0.2)
+        node.lever_arm = LeverArmCompensator((0, 0, 0), 0.2)
         node.get_clock = Mock()
         node.get_clock().now.return_value = SimpleNamespace(nanoseconds=1_100_000_000)
         node.frame_robotic = 'sensor'
@@ -332,6 +334,54 @@ class TopicProcessingTests(unittest.TestCase):
         self.assertEqual(output.header, sample.header)
         self.assertEqual(output.orientation_covariance, sample.orientation_covariance)
         self.assertQuaternionEqual(output, (10, 20, 30))
+
+    def test_lever_arm_corrects_acceleration_once_before_both_output_branches(self):
+        node, _ = load_node('imu_node.py')
+        node.imu_pub = Mock()
+        node.lever_arm = LeverArmCompensator((1, 0, 0), 0.2)
+        first = self.fused_sample(nanos=0)
+        first.linear_acceleration.x = -1.0  # Centripetal at omega_z=1, r_x=1.
+        node.publish_attitude(first)
+        node.imu_pub.publish.assert_not_called()
+        second = self.fused_sample(nanos=100_000_000)
+        second.angular_velocity.z = 1.2
+        second.linear_acceleration.x = -1.44
+        second.linear_acceleration.y = 2.0  # alpha_z=2 rad/s^2.
+        second.linear_acceleration_covariance = [1.0] * 9
+        node.publish_attitude(second)
+        output = node.imu_pub.publish.call_args.args[0]
+        self.assertAlmostEqual(output.linear_acceleration.x, 0)
+        self.assertAlmostEqual(output.linear_acceleration.y, 0)
+        self.assertAlmostEqual(output.linear_acceleration.z, 9.80665)
+        self.assertEqual(output.linear_acceleration_covariance, [0.0] * 9)
+        self.assertQuaternionEqual(output, (10, 20, 30))
+        self.assertEqual(output.header.stamp, second.header.stamp)
+        self.assertEqual(second.linear_acceleration.x, -1.44)  # Input untouched.
+        node.publish_attitude(second)
+        node.imu_pub.publish.assert_called_once()
+        aero = copy.deepcopy(output)
+        aero.header.frame_id = node.frame_aero
+        aero.linear_acceleration.z *= -1
+        node.publish_aero(aero)
+        self.assertEqual(node.aero_imu_pub.publish.call_args.args[0].linear_acceleration,
+                         aero.linear_acceleration)
+
+    def test_lever_arm_reseeds_after_clock_reset_and_long_gap(self):
+        node, _ = load_node('imu_node.py')
+        node.imu_pub = Mock()
+        node.lever_arm = LeverArmCompensator((1, 0, 0), 0.2)
+        node.publish_attitude(self.fused_sample())
+        node.publish_attitude(self.fused_sample(nanos=100_000_000))
+        node.imu_pub.publish.assert_called_once()
+        node.get_clock().now().nanoseconds = 1_400_000_000
+        node.publish_attitude(self.fused_sample(nanos=400_000_000))
+        self.assertIsNone(node._robotic_sample)
+        node.get_clock().now().nanoseconds = 1_000_000_000
+        node.publish_attitude(self.fused_sample())
+        node.imu_pub.publish.assert_called_once()
+        node.get_clock().now().nanoseconds = 1_100_000_000
+        node.publish_attitude(self.fused_sample(nanos=100_000_000))
+        self.assertEqual(node.imu_pub.publish.call_count, 2)
 
     def test_periodic_output_keeps_only_latest_result_and_original_stamp(self):
         node, _ = load_node('imu_node.py')

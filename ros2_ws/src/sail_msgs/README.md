@@ -1,66 +1,178 @@
-# sail_msgs
+# sail_msgs — messaggi e servizi di Agir
 
-ROS 2 interface package based on the Polimi Sailing Team definitions.
-It contains 6 messages, 3 recording services and the `PingMark` service:
+_Aggiornato al giorno: 30/10/2026_
 
-- BatteryData
-- SerialMsg
-- Mark
-- MapDataMsg
-- RecordingState
-- DashboardDataMsg
+[English](README_ENG.md) · [Workspace](../../README.md)
 
-In Agir, `SerialMsg` is currently used only by `ros2_ws/tools/gen_bag_test.py`
-to write synthetic raw packets to `/serial/raw_rx` in test bags. No live Agir
-node publishes or subscribes to it. It contains `header`, a packet `id` and byte
-`payload`; ultrasound acquisition publishes `sensor_msgs/Range` directly instead.
+## Introduzione
 
-All measurement/telemetry messages use `std_msgs/Header header`, including raw
-`SerialMsg` packets. Header timestamps keep their documented acquisition or
-snapshot meaning. GPS source timestamps (`gps_stamp`, `direction_stamp`) remain
-additional fields: they identify the original inputs, not the aggregate's age.
-`Mark` describes a saved course landmark: its header preserves the GPS sample
-timestamp/frame captured by `PingMark`. `RecordingState` describes recorder state
-and has no header.
+Per scambiare dati, due nodi devono conoscere la stessa struttura del messaggio. Questo pacchetto definisce le strutture specifiche di Agir, come i dati della dashboard, le boe e le richieste di registrazione.
 
-`SerialMsg.stamp` has moved to `SerialMsg.header.stamp`. The test bag generator
-uses the new field and leaves `header.frame_id` empty for multiplexed packets.
-Rebuild `sail_msgs` and its consumers together. Old SerialMsg bags and external
-producers/readers using the former layout need conversion or the old interface;
-they are not wire-compatible with the new layout. This does not change the
-dashboard/map MQTT payloads or any existing live measurement interface.
+Non contiene nodi e non pubblica topic. Durante la build, ROS genera dai file `.msg` e `.srv` i tipi che gli altri pacchetti importano e usano.
 
-DashboardDataMsg is the dashboard snapshot. MapDataMsg replaces the unused
-legacy map definition with the position snapshot actually consumed by Agir.
-`Mark` uses English constants COMMITTEE=0, PIN=1 and WINDWARD=2, a source header,
-and float64 `lat`/`lon` in WGS84 degrees. `MapDataMsg.marks` carries up to one saved
-mark of each type. `PingMark` takes the type and returns success/error plus the
-captured mark. Rebuild all consumers; the former Mark/MapDataMsg layouts are not
-wire-compatible. Marks are held in memory by telemetry_gateway_node until restart.
+## Struttura del pacchetto
 
-Raw receiver data now uses the existing `gps_msgs/msg/GPSFix` type on `/gps/data`.
-The former `GpsData.msg` has been removed; old raw GPS bags are not compatible
-with the new subscribers. Clean-build the workspace after installing `gps_msgs`.
-`GpsSummary` has also been removed: the gateway reads GPSFix and processed IMU
-attitude directly, then prepares DashboardDataMsg and MapDataMsg.
-`BoatHeight` has been replaced by `marti_common_msgs/msg/Float64Stamped` on
-`/processed/boat_height`. Its `value` is signed vertical clearance in metres,
-referenced to the design-waterline point below the centre of mass; the header
-retains the measurement timestamp and boat reference. Rebuild consumers and
-clean-build to remove the old interface.
-`RollPitchYaw` is also removed: standard `sensor_msgs/Imu` carries orientation in
-a quaternion. The gateway converts the aero Imu to dashboard angles and wraps yaw
-to [0, 360) degrees. With BNO085 rotation_vector it references magnetic north;
-game rotation vector / raw fallback has no north reference.
+```text
+sail_msgs/
+├── msg/               BatteryData, DashboardDataMsg, MapDataMsg, Mark,
+│                      RecordingState, SerialMsg
+├── srv/               StartRecording, StopRecording, PingMark, ManageRecording
+├── CMakeLists.txt
+└── package.xml
+```
 
-DashboardDataMsg aggregates aerospace angles in degrees, waterline-reference height
-in metres, raw left/right ultrasonic beam distances (`ultrasonic_left_m` and
-`ultrasonic_right_m`), battery voltage, a low-battery alarm and SOG in m/s, with independent validity flags.
-MapDataMsg contains latitude/longitude in degrees, SOG in m/s and GPS validity.
-Both carry a snapshot timestamp; MapDataMsg also preserves the source GPS stamp.
-The communication gateway converts unavailable floating-point values from ROS NaN
-to JSON null for the web app.
+I messaggi sono in [msg/](msg/) e i servizi in [srv/](srv/). [CMakeLists.txt](CMakeLists.txt) elenca le interfacce da generare: attualmente sei messaggi e quattro servizi.
 
-The workspace build script builds this package first so its generated interfaces
-are available to the remaining packages. Add new interfaces to CMakeLists.txt
-and declare any new dependencies in package.xml.
+## Dove vengono usate le interfacce
+
+Le frecce associano le definizioni ai topic e servizi che le usano. Non indicano pubblicazioni da parte di `sail_msgs`: i publisher e i server appartengono agli altri pacchetti.
+
+```mermaid
+flowchart LR
+    msg["msg/"]
+    srv["srv/"]
+    battery["/battery/data"]
+    web["/web/ros/dashboard<br/>/web/ros/map"]
+    state["/local_state/recording_state"]
+    ping{{"/local_cmd/ping_mark"}}
+    rec{{"/local_cmd/start_recording<br/>/local_cmd/stop_recording"}}
+    msg -->|BatteryData| battery
+    msg -->|DashboardDataMsg / MapDataMsg| web
+    msg -->|RecordingState| state
+    srv -->|PingMark| ping
+    srv -->|StartRecording / StopRecording| rec
+```
+
+| Interfaccia | A cosa serve |
+|---|---|
+| `BatteryData` | Riunisce tensione e allarme low; l'header riguarda la lettura dell'allarme. |
+| `DashboardDataMsg` | Riunisce i valori mostrati in dashboard e i flag che indicano quali sono utilizzabili. |
+| `MapDataMsg` | Porta posizione, timestamp originale del GPS e lista delle boe. |
+| `Mark` | Descrive una boa: Committee, Pin o Windward, con posizione GPS e header. È contenuto nella mappa e nella risposta al ping. |
+| `RecordingState` | Descrive lo stato della registrazione, senza header. |
+| `StartRecording`, `StopRecording` | Chiedono al manager di iniziare o terminare una registrazione. |
+| `PingMark` | Chiede al telemetry gateway di memorizzare una boa; la risposta `mark` va usata solo se `success` è vero. |
+| `SerialMsg`, `ManageRecording` | Interfacce legacy ancora generate, ma non usate nel percorso live attuale. |
+
+Per le misure che hanno già un tipo adatto usiamo pacchetti ROS esistenti: `gps_msgs/GPSFix` per GPS, `sensor_msgs/Imu` per IMU, `sensor_msgs/Range` per ultrasuoni e `marti_common_msgs/Float64Stamped` per altezza. Non occorre ricrearle qui.
+
+`Header` contiene timestamp e nome del frame. Non rende automaticamente valida o fresca una misura: i nodi controllano questi aspetti prima di usarla. Le unità e il riferimento dei campi vengono spiegati nei README dei pacchetti che producono i dati.
+
+## Come modificare un'interfaccia
+
+Quando aggiungi un campo o ne cambi il tipo, aggiorna i nodi che scrivono e leggono il messaggio. Se il dato arriva alla web app, aggiorna anche la conversione MQTT e il relativo consumer. Poi esegui una build pulita del workspace e i test dei pacchetti coinvolti.
+
+Una bag o un programma compilato prima della modifica può contenere ancora lo schema precedente: non considerarlo automaticamente compatibile.
+
+## Definizioni dei messaggi e dei servizi
+
+Le definizioni riportate sotto permettono di leggere i campi senza aprire ogni file. I sorgenti collegati rimangono il riferimento da modificare; aggiorna anche questa sezione quando cambia uno schema.
+### [BatteryData.msg](msg/BatteryData.msg)
+
+```text
+std_msgs/Header header
+float32 voltage_v
+bool low
+```
+
+### [DashboardDataMsg.msg](msg/DashboardDataMsg.msg)
+
+```text
+std_msgs/Header header
+bool attitude_valid
+float64 roll_deg
+float64 pitch_deg
+float64 yaw_deg
+bool height_valid
+float64 height_m
+bool battery_valid
+bool battery_low
+float32 battery_voltage_v
+bool sog_valid
+float64 sog_mps
+bool ultrasonic_left_valid
+float64 ultrasonic_left_m
+bool ultrasonic_right_valid
+float64 ultrasonic_right_m
+```
+
+### [MapDataMsg.msg](msg/MapDataMsg.msg)
+
+```text
+std_msgs/Header header
+builtin_interfaces/Time gps_stamp
+bool fix_valid
+float64 latitude_deg
+float64 longitude_deg
+float64 sog_mps
+sail_msgs/Mark[] marks
+```
+
+### [Mark.msg](msg/Mark.msg)
+
+```text
+uint8 COMMITTEE=0
+uint8 PIN=1
+uint8 WINDWARD=2
+
+std_msgs/Header header
+uint8 type
+float64 lat
+float64 lon
+```
+
+### [RecordingState.msg](msg/RecordingState.msg)
+
+```text
+bool recording
+string bag_name
+string last_error
+```
+
+### [SerialMsg.msg](msg/SerialMsg.msg)
+
+```text
+std_msgs/Header header
+uint8 id
+std_msgs/UInt8MultiArray payload
+```
+
+### [ManageRecording.srv](srv/ManageRecording.srv)
+
+```text
+string name
+float32 overall
+float32 duration
+
+---
+bool success
+string message
+```
+
+### [PingMark.srv](srv/PingMark.srv)
+
+```text
+uint8 type
+---
+bool success
+string error_message
+sail_msgs/Mark mark
+```
+
+### [StartRecording.srv](srv/StartRecording.srv)
+
+```text
+---
+bool success
+string error_message
+string effective_bag_name
+```
+
+### [StopRecording.srv](srv/StopRecording.srv)
+
+```text
+---
+bool success
+string error_message
+string last_bag_name
+```

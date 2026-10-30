@@ -252,7 +252,7 @@ class BatteryNodeTests(unittest.TestCase):
         self.node.publish_battery()
         self.assertEqual(self.node.battery_pub.publish.call_count, 2)
 
-    def test_replay_disables_shutdown_after_loading_the_shared_parameters(self):
+    def test_replay_starts_no_hardware_while_live_loads_battery_parameters(self):
         launch_dir = Path(__file__).resolve().parents[1] / 'launch'
         for filename in ('live_sensors.launch.py', 'sensors_launch.py', 'replay_sensors.launch.py'):
             with self.subTest(filename=filename):
@@ -266,14 +266,14 @@ class BatteryNodeTests(unittest.TestCase):
                              PathJoinSubstitution=lambda parts: '/'.join(parts))
                 exec(compile(ast.Module(body=[function], type_ignores=[]), filename, 'exec'), scope)
                 nodes = scope['generate_launch_description']()
+                if filename == 'replay_sensors.launch.py':
+                    self.assertEqual(nodes, [])
+                    continue
                 battery = [node for node in nodes if getattr(node, 'name', '') == 'battery_node']
                 self.assertEqual(len(battery), 1)
                 params = battery[0].parameters
                 self.assertEqual(params[0], 'sensors_params_file')
-                if filename == 'replay_sensors.launch.py':
-                    self.assertEqual(params[-1], {'shutdown_enabled': False})
-                else:
-                    self.assertEqual(params, ['sensors_params_file'])
+                self.assertEqual(params, ['sensors_params_file'])
 
 
 if __name__ == '__main__':

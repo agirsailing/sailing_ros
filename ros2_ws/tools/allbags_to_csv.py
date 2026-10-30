@@ -1,189 +1,138 @@
-import os
-import sys
+#!/usr/bin/env python3
+"""Export every recorded topic to CSV, without topic or message presets."""
+
 import argparse
-import pandas as pd
+import array
+import csv
+from contextlib import ExitStack
+import json
 from pathlib import Path
+import re
+import sys
 
-import rosbag2_py
-from rclpy.serialization import deserialize_message
-from rosidl_runtime_py.utilities import get_message
 
-# --- MAPPA DEI TOPIC ---
-TARGET_TOPICS = [
-    '/imu_data',
-    '/wand_angle',
-    '/gps_vel_data',
-    '/gps_data',
-    '/gps/filtered',
-    '/current_height_raw',
-    '/flap_angle_out',
-    '/pid_indicators'
-]
+def _to_builtin(value):
+    """Convert ROS messages and numeric arrays to ordinary Python values."""
+    if hasattr(value, 'get_fields_and_field_types'):
+        return {name: _to_builtin(getattr(value, name))
+                for name in value.get_fields_and_field_types()}
+    if isinstance(value, dict):
+        return {key: _to_builtin(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, array.array, bytes, bytearray)):
+        return [_to_builtin(item) for item in value]
+    if hasattr(value, 'tolist'):
+        return _to_builtin(value.tolist())
+    return value
 
-# --- FUNZIONI AUTOMATICHE (Dal codice del tuo ex-capo) ---
-def _is_ros_message(obj):
-    return hasattr(obj, '__slots__') and hasattr(obj, '__class__')
 
-def _flatten(obj, prefix="", out=None, array_delim=";"):
-    """Appiattisce automaticamente qualsiasi messaggio ROS sconosciuto."""
+def _flatten(value, prefix='', out=None):
+    """Flatten nested fields; keep variable-length arrays in single JSON cells."""
     if out is None:
         out = {}
-    
-    def emit(key, value):
-        out[key if not prefix else f"{prefix}.{key}"] = value
-
-    if _is_ros_message(obj):
-        for slot in obj.__slots__:
-            try:
-                value = getattr(obj, slot)
-            except Exception:
-                value = None
-            _flatten(value, f"{prefix}.{slot}" if prefix else slot, out, array_delim)
-    elif isinstance(obj, dict):
-        for k, v in obj.items():
-            _flatten(v, f"{prefix}.{k}" if prefix else str(k), out, array_delim)
-    elif isinstance(obj, (list, tuple)):
-        try:
-            emit("value", array_delim.join(map(str, obj)))
-        except Exception:
-            emit("value", str(obj))
+    if isinstance(value, dict):
+        for name, item in value.items():
+            _flatten(item, f'{prefix}.{name}' if prefix else name, out)
     else:
-        emit("value" if prefix == "" else prefix.split(".")[-1], obj)
+        out[prefix] = json.dumps(value, ensure_ascii=False) if isinstance(value, list) else value
     return out
 
 
-# --- LOGICA DI ELABORAZIONE DELLA SINGOLA BAG ---
-def process_single_bag(bag_path_obj):
-    bag_path = str(bag_path_obj)
-    nome_bag_originale = bag_path_obj.name
+def _message_fields(message):
+    fields = _flatten(_to_builtin(message))
+    if 'timestamp_ns' in fields:
+        fields['message.timestamp_ns'] = fields.pop('timestamp_ns')
+    return fields
 
-    # Rimuovi 'rosbag2_' dal nome per creare la cartella di output pulita
-    nome_cartella_out = nome_bag_originale.replace('rosbag2_', '')
-    
-    # Il percorso di output sarà nella directory CORRENTE in cui lanci lo script
-    out_dir = Path.cwd() / nome_cartella_out
-    
-    print(f"\n📂 Analizzando: {nome_bag_originale}")
-    
-    # Setup reader
+
+def _topic_filename(topic, used):
+    name = re.sub(r'[^A-Za-z0-9_.-]', '_', topic.strip('/')) or 'topic'
+    if name.split('.')[0].upper() in {'CON', 'PRN', 'AUX', 'NUL',
+                                     *(f'COM{i}' for i in range(1, 10)),
+                                     *(f'LPT{i}' for i in range(1, 10))}:
+        name = f'topic_{name}'
+    candidate, suffix = name, 2
+    while candidate.casefold() in used:
+        candidate = f'{name}__{suffix}'
+        suffix += 1
+    used.add(candidate.casefold())
+    return candidate + '.csv'
+
+
+def process_single_bag(bag_path, output_root=None):
+    # Lazy imports keep --help and helper tests independent of ROS.
+    import rosbag2_py
+    from rclpy.serialization import deserialize_message
+    from rosidl_runtime_py.utilities import get_message
+
+    bag_path = Path(bag_path)
+    out_dir = Path(output_root or Path.cwd()) / bag_path.name.removeprefix('rosbag2_')
+    if out_dir.resolve() == bag_path.resolve():
+        raise ValueError('La cartella CSV non può coincidere con la bag: usa --output-dir.')
     reader = rosbag2_py.SequentialReader()
-    storage_options = rosbag2_py.StorageOptions(uri=bag_path)
-    converter_options = rosbag2_py.ConverterOptions(
-        input_serialization_format='cdr',
-        output_serialization_format='cdr'
-    )
-    
-    try:
-        reader.open(storage_options, converter_options)
-    except Exception as e:
-        print(f" ❌ Errore nell'apertura della bag {nome_bag_originale}: {e}")
-        return
+    reader.open(rosbag2_py.StorageOptions(uri=str(bag_path)),
+                rosbag2_py.ConverterOptions('cdr', 'cdr'))
+    topics = sorted(reader.get_all_topics_and_types(), key=lambda item: item.name)
 
-    topic_types = reader.get_all_topics_and_types()
-    type_map = {t.name: t.type for t in topic_types}
-    dati_estratti = {}
+    # Resolve every type first: never silently skip unavailable custom types.
+    types, schemas = {}, {}
+    for topic in topics:
+        try:
+            types[topic.name] = get_message(topic.type)
+            schemas[topic.name] = list(_message_fields(types[topic.name]()))
+        except Exception as error:
+            raise RuntimeError(f'Tipo non disponibile: {topic.type} ({topic.name}). '
+                               'Compila e carica il workspace che definisce il messaggio.') from error
 
-    while reader.has_next():
-        (topic, data_raw, t) = reader.read_next()
-        
-        if topic not in TARGET_TOPICS:
-            continue
-
-        if topic not in dati_estratti:
-            dati_estratti[topic] = []
-
-        msg_type = get_message(type_map[topic])
-        msg = deserialize_message(data_raw, msg_type)
-
-        row = {'timestamp_ns': t}
-
-        # --- PARSING DEI MESSAGGI (Manuale + Automatico) ---
-        if topic == '/imu_data':
-            row.update({
-                'acc_x': msg.linear_acceleration.x, 'acc_y': msg.linear_acceleration.y, 'acc_z': msg.linear_acceleration.z,
-                'gyro_x': msg.angular_velocity.x, 'gyro_y': msg.angular_velocity.y, 'gyro_z': msg.angular_velocity.z,
-                'quat_x': msg.orientation.x, 'quat_y': msg.orientation.y, 'quat_z': msg.orientation.z, 'quat_w': msg.orientation.w
-            })
-        elif topic in ['/wand_angle', '/flap_angle_out']:
-            row.update({'data': msg.data})
-        elif topic == '/gps_data':
-            row.update({'latitude': msg.latitude, 'longitude': msg.longitude, 'altitude': msg.altitude})
-        elif topic == '/gps_vel_data':
-            row.update({
-                'vel_x': msg.twist.twist.linear.x, 'vel_y': msg.twist.twist.linear.y, 'vel_z': msg.twist.twist.linear.z
-            })
-        elif topic == '/current_height_raw':
-            row.update({
-                'z_height': msg.pose.pose.position.z, 'x_pos': msg.pose.pose.position.x, 'y_pos': msg.pose.pose.position.y
-            })
-        elif topic == '/gps/filtered':
-            if 'NavSatFix' in type_map[topic]:
-                row.update({'latitude': msg.latitude, 'longitude': msg.longitude, 'altitude': msg.altitude})
-            elif 'Odometry' in type_map[topic]:
-                row.update({
-                    'x': msg.pose.pose.position.x, 'y': msg.pose.pose.position.y, 'z': msg.pose.pose.position.z,
-                    'vel_x': msg.twist.twist.linear.x, 'vel_y': msg.twist.twist.linear.y
-                })
-        elif topic == '/pid_indicators':
-            for ind in msg.indicators:
-                prefisso = ind.indicator 
-                row.update({
-                    f'{prefisso}_value': ind.value,
-                    f'{prefisso}_can_increase': ind.can_increase,
-                    f'{prefisso}_can_decrease': ind.can_decrease,
-                    f'{prefisso}_failed': ind.failed
-                })
-        else:
-            # Fallback magico: se c'è un topic nuovo, lo appiattiamo in automatico!
-            row.update(_flatten(msg, prefix=""))
-
-        dati_estratti[topic].append(row)
-
-    # Se la bag non conteneva nessuno dei nostri topic, skippiamo senza creare cartelle vuote
-    if not dati_estratti:
-        print(f" ⚠️ Nessun topic target trovato in {nome_bag_originale}. Salto alla prossima.")
-        return
-
-    # Creiamo la cartella di output solo se ci sono effettivamente dati
-    out_dir.mkdir(exist_ok=True)
-
-    for topic, righe in dati_estratti.items():
-        nome_file = topic.strip('/').replace('/', '_') + '.csv'
-        percorso_file = out_dir / nome_file
-        
-        df = pd.DataFrame(righe)
-        df.to_csv(percorso_file, index=False)
-        print(f"  -> Salvato: {nome_file} ({len(righe)} righe) in {nome_cartella_out}/")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    writers, counts, filenames, used = {}, {}, {}, set()
+    with ExitStack() as stack:
+        for topic in topics:
+            name = topic.name
+            filenames[name] = _topic_filename(name, used)
+            stream = stack.enter_context((out_dir / filenames[name]).open(
+                'w', encoding='utf-8', newline=''))
+            writers[name] = csv.DictWriter(stream, fieldnames=['timestamp_ns', *schemas[name]])
+            writers[name].writeheader()
+            counts[name] = 0
+        while reader.has_next():
+            name, raw, timestamp = reader.read_next()
+            message = deserialize_message(raw, types[name])
+            writers[name].writerow({'timestamp_ns': timestamp, **_message_fields(message)})
+            counts[name] += 1
+    for name in counts:
+        print(f'  {name} -> {out_dir / filenames[name]} ({counts[name]} righe)')
+    return counts
 
 
-# --- LOOP PRINCIPALE SULLE CARTELLE ---
-def main():
-    parser = argparse.ArgumentParser(description="Itera su una cartella e converte le rosbag in CSV.")
-    parser.add_argument("parent_folder", help="Percorso della cartella genitore che contiene le varie rosbag")
-    args = parser.parse_args()
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('parent_folder', type=Path,
+                        help='Cartella delle bag oppure una singola bag con metadata.yaml')
+    parser.add_argument('--output-dir', type=Path, default=Path.cwd(),
+                        help='Cartella padre dei CSV (default: directory corrente)')
+    args = parser.parse_args(argv)
+    parent = args.parent_folder.resolve()
+    if not parent.is_dir():
+        parser.error(f'Cartella inesistente: {parent}')
+    bags = ([parent] if (parent / 'metadata.yaml').is_file() else sorted(
+        path for path in parent.iterdir() if path.is_dir() and (
+            (path / 'metadata.yaml').is_file() or path.name.startswith('rosbag2_'))))
+    if not bags:
+        parser.error(f'Nessuna rosbag trovata in {parent}')
+    names = [path.name.removeprefix('rosbag2_').casefold() for path in bags]
+    if len(names) != len(set(names)):
+        parser.error('Nomi delle cartelle CSV duplicati: esporta le bag separatamente.')
+    failures = 0
+    for bag in bags:
+        print(f'Esportazione: {bag.name}')
+        try:
+            process_single_bag(bag, args.output_dir)
+        except Exception as error:
+            failures += 1
+            print(f'ERRORE {bag.name}: {error}. Eventuali CSV parziali non sono completi.', file=sys.stderr)
+    print(f'Bag completate: {len(bags) - failures}/{len(bags)}')
+    return 1 if failures else 0
 
-    parent_dir = Path(args.parent_folder).resolve()
-    
-    if not parent_dir.exists() or not parent_dir.is_dir():
-        print(f"Errore: La cartella '{parent_dir}' non esiste o non è valida.")
-        sys.exit(1)
-
-    # Troviamo tutte le sottocartelle che iniziano con "rosbag2_"
-    bag_dirs = [d for d in parent_dir.iterdir() if d.is_dir() and d.name.startswith("rosbag2_")]
-
-    if not bag_dirs:
-        print(f"Non ho trovato nessuna sottocartella che inizia con 'rosbag2_' dentro {parent_dir}")
-        sys.exit(0)
-
-    print(f"🚀 Trovate {len(bag_dirs)} bag da processare. Inizio l'estrazione massiva...")
-
-    # Iteriamo su ogni bag trovata mettendole in ordine alfabetico (temporale)
-    for bag_dir in sorted(bag_dirs):
-        process_single_bag(bag_dir)
-
-    print("\n" + "="*50)
-    print("🎯 ELABORAZIONE MASSIVA COMPLETATA CON SUCCESSO! 🎯")
-    print("="*50 + "\n")
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

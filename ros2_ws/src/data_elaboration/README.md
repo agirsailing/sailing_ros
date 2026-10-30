@@ -1,323 +1,162 @@
-# Data elaboration
+# data_elaboration — orientamento e altezza della barca
 
-Consumes ROS sensor messages and publishes derived outputs under /processed/.
-No node in this package opens serial, I2C or GPIO devices.
+_Aggiornato al giorno: 30/10/2026_
 
-## Topics and messages
+[English](README_ENG.md) · [Workspace](../../README.md)
 
-| Node | Inputs | Outputs |
-| --- | --- | --- |
-| ultrasonic_filter_node | /ultrasonic/left, /ultrasonic/right (Range), /processed/imu/data (Imu) | /processed/boat_height (marti_common_msgs/Float64Stamped) |
-| imu_mount_transformer_node (imu_transformer) | /imu/data (Imu) | /internal/imu/mounted (Imu, boat-aligned axes) |
-| imu_node | /internal/imu/mounted and /internal/imu/aero_body (Imu), handled by separate callbacks | /processed/imu/data and /processed/imu/data/aero (Imu) |
-| imu_aero_transformer_node (imu_transformer) | /processed/imu/data (Imu) | /internal/imu/aero_body (Imu, FRD body axes) |
+## Introduzione
 
-Configuration belongs in config/params.yaml. Output names belong in
-config/endpoints.yaml and its generated Python module. Raw input names are
-imported from sensors.generated.ros_endpoints. Parameters are declared and
-assigned in one statement, with validation in _validate_parameters().
+Una misura corretta del sensore non è ancora necessariamente la misura che ci serve sulla barca. L'IMU può essere montata ruotata o lontano dal centro di massa; gli ultrasuoni possono essere inclinati e spostati rispetto al punto di cui vogliamo conoscere l'altezza.
 
-## Boat height: mounting and conventions
+Questo pacchetto tiene conto di questi montaggi. Riceve messaggi da ROS, corregge l'orientamento e l'accelerazione dell'IMU e combina assetto e distanze per stimare l'altezza della linea di galleggiamento. Non apre porte hardware: quelle appartengono a [sensors](../sensors/README.md).
 
-The reference O is a **fixed point on the boat's design waterline below the
-centre of mass**, not the moving intersection with the actual water surface.
-Height is the world-vertical distance of O above the local water plane.
-It is signed: a submerged reference gives negative height.
+## Struttura del pacchetto
 
-Coordinates use boat FLU: X forward, Y left (port), Z up. Measure each sensor's
-position [x, y, z] in metres from O, including the longitudinal bowsprit offset,
-lateral offset and height above the design waterline. The zero positions in YAML
-are **placeholders to replace with measured installation dimensions**. They do
-not represent a calibrated installation.
-
-Each sensor uses one `mounting` array:
-`[x_m, y_m, z_m, lateral_tilt_deg, forward_tilt_deg]`.
-For example, `left.mounting: [2.0, 0.2, 0.6, 15.0, 0.0]` means 2 m forward,
-0.2 m left and 0.6 m above O, with a 15-degree leftward beam tilt and no forward
-tilt. Use decimal values for all five entries (ROS double array). Custom parameter
-files must replace the former separate position and tilt parameters with this array.
-
-Both sensors are on the bow. Positive lateral_tilt_deg points the beam left
-from body-down; negative points right. Positive forward_tilt_deg tilts towards
-the bow. With lateral angle a and forward angle b, the unit beam is:
-
-    u = [sin(b), cos(b) sin(a), -cos(b) cos(a)]
-
-Defaults are +1 degree left, -1 degree right, zero forward tilt. These are
-central-ray approximations; sensor field of view is not an installation angle.
-Both sensor instances are enabled in sensors/config/params.yaml. Port assignments
-remain provisional.
-
-imu_mount_transformer_node uses the published mounting TF to align measurements
-to boat FLU before imu_node estimates attitude. The height estimator expects frame_robotic
-(imu_link_flu by default), using the same axes as the mounting vectors.
-Its attitude_frame_id checks the message frame name; it does not look up TF.
-reference_frame_id identifies O in Float64Stamped.header; the height node does not publish
-that reference TF. IMU placement does not change the ultrasonic mounting origin.
-
-## Projection formula
-
-Let R rotate boat vectors into the gravity-aligned world, r_i be a sensor
-position from O, d_i its slant range, and u_i its beam direction. A return on
-locally horizontal water satisfies:
-
-    0 = h + (R r_i).z + d_i (R u_i).z
-    c_i = -(R u_i).z
-    h_i = d_i c_i - (R r_i).z
-
-The implementation uses the quaternion's third rotation-matrix row directly.
-For roll phi and pitch theta this row is:
-
-    v = [-sin(theta), cos(theta) sin(phi), cos(theta) cos(phi)]
-    h_i = -dot(v, r_i + d_i u_i)
-
-Thus yaw is irrelevant. For a lateral-only beam (b = 0):
-
-    h_i = d_i cos(theta) cos(phi + a_i)
-          + x_i sin(theta)
-          - y_i cos(theta) sin(phi)
-          - z_i cos(theta) cos(phi)
-
-At level attitude: h_i = d_i cos(a_i) - z_i.
-The longitudinal offset x_i therefore matters when pitching, even though it
-does not affect level height. Positive ROS roll lowers the right side, so at
-+15 degrees the right beam is vertical; at -15 degrees the left beam is vertical.
-
-## Fusion and validity
-
-Each valid range is corrected using its most recent preceding attitude sample
-within max_attitude_age_s. A short attitude history handles delayed range
-delivery. No attitude extrapolation or interpolation is performed. Samples must
-be fresh against the node's ROS clock, and their frame IDs must match YAML.
-Invalid/unavailable quaternions, out-of-range or non-finite distances, beams beyond
-max_incidence_deg, duplicate/out-of-order ranges and stale inputs produce no new
-height. There is no fallback to an assumed level attitude.
-
-Each new usable range computes a result, optionally paired with the other side
-when the measurement timestamps differ by no more than max_pair_dt_s and both
-are fresh. Each candidate retains its own attitude correction.
-
-    w_i = c_i ** incidence_weight_power
-    h = sum(w_i h_i) / sum(w_i)
-
-At level attitude the symmetric beams have equal weights. Heeling smoothly
-favours the more vertical beam. A single valid sensor is sufficient. A missing
-echo need not be an infinite distance; if acquisition stops publishing valid
-returns, the old candidate ages out. Invalid new returns clear that side's
-candidate immediately. If both sensors stop, cached height expires and publication stops.
-
-If candidate heights differ by more than max_disagreement_m, the more vertical
-beam wins; an equal-incidence tie suppresses output. This and the incidence
-weights are tunable heuristics, not measured statistical confidence. No temporal
-moving average is applied. Output stamp is the triggering range's stamp and
-frame_id is the configured boat reference, not a transducer.
-
-The geometric model assumes a rigid mounting and locally horizontal water.
-Waves, reflections away from the central beam, acoustic cross-talk and IMU
-acceleration errors cannot be corrected by this projection alone. Validate
-timing, beam behaviour and thresholds on water. ROS time must match sensor
-timestamps; bag replay needs /clock and use_sim_time. Backwards ROS clock jumps
-clear cached samples.
-
-## Height publication and message
-
-`publish_rate_hz: 20.0` publishes the latest fresh estimate every 50 ms.
-Reception remains callback-driven: new range timestamps trigger computation;
-IMU callbacks only update the attitude history. The timer does not rerun fusion.
-Set `publish_rate_hz: 0.0` to publish each new usable result instead. Negative or
-non-finite values are rejected. Change YAML and restart the node to change mode.
-
-`/processed/boat_height` uses `marti_common_msgs/msg/Float64Stamped`:
-
-- `header.stamp`: original triggering range timestamp, unchanged on repeats.
-- `header.frame_id`: configured boat waterline reference; no TF is created.
-- `value`: signed world-vertical height in metres, positive above the local water
-  plane and negative below. This is not distance along body Z.
-
-The shared freshness helper checks every range candidate used in the cached
-calculation against `max_range_age_s` (0.5 s), as well as monotonic elapsed time
-since calculation. This prevents timer repeats from keeping old measurements alive.
-The paired sample can predate the output stamp by up to `max_pair_dt_s`.
-An invalid new range clears a cached result that depended on that sensor; a fresh
-single-sensor result from the other side remains usable. Invalid attitude, an
-unresolved fusion conflict or a backwards clock jump clears the cached result.
-No output is published before the first usable estimate or after expiry.
-
-The community ROS package [marti_common_msgs](https://index.ros.org/p/marti_common_msgs/)
-provides this stamped scalar in Jazzy. It replaces `sail_msgs/BoatHeight`; the
-web gateway translates `value` into the existing dashboard `height_m` field.
-ROS/MQTT web payloads are unchanged. Rebuild the Docker image (both Dockerfiles
-install `ros-${ROS_DISTRO}-marti-common-msgs`) and run `bash scripts/build.sh --clean`
-inside `ros2_ws` to remove the old generated interface. Update external ROS
-subscribers to the new type and field; old BoatHeight bags need conversion.
-
-## IMU attitude, mounting and standards
-
-The UART BNO085 now publishes acceleration (m/s^2, including gravity), angular
-velocity (rad/s) and onboard fused orientation on `/imu/data`. The sensor's
-`rotation_vector` uses its internal accelerometer, gyro and magnetometer; the
-separate compass is not fed into this firmware fusion.
-
-The existing mounting pipeline is preserved:
-
-    /imu/data -> imu_mount_transformer_node -> /internal/imu/mounted
-      -> imu_node -> /processed/imu/data
-      -> imu_aero_transformer_node -> /internal/imu/aero_body
-      -> imu_node aero callback -> /processed/imu/data/aero
-
-Both transformers are instances of the external ROS `imu_transformer` package.
-They retain the sample timestamp and apply body-axis transformations. The two
-callbacks in `imu_node` have distinct inputs/outputs; this is not a feedback loop.
-`imu_node` publishes mounting/static TF at initialization, independently of input.
-`tf_offset` describes the actual sensor mounting in `base_link`; confirm it on the
-boat. Translating the frame does not compensate accelerations for a lever arm.
-The near-centre-of-mass assumption is retained.
-
-If orientation is present (`orientation_covariance[0] != -1`), `imu_node` validates
-and normalizes the supplied quaternion, preserves it. The web gateway extracts roll/pitch/yaw when building the dashboard.
-It does not run the complementary filter or stationary calibration on BNO085
-orientation. Existing covariance is retained unless a positive characterized YAML
-variance overrides it. Zero configured variance means unknown, not perfect accuracy.
-Raw 6-DOF messages with orientation marked absent still use the legacy filter;
-`calibration_samples`, `complementary_alpha` and `max_sample_dt_s` apply only there.
-The latter limits integration gaps, not the age of a message relative to now.
-
-| Output | Body axes | BNO085 rotation-vector world reference |
-| --- | --- | --- |
-| `/processed/imu/data` | FLU: forward, left, up | East, magnetic north, up (ENU) |
-| `/processed/imu/data/aero` | FRD: forward, right, down | Magnetic north, east, down (NED) |
-
-The configured world rotation is `[180.0, 0.0, 90.0]` degrees. Combined with the
-FLU-to-FRD body transform, it maps magnetic ENU to magnetic NED. Robotic yaw is
-zero towards east; aero yaw is zero towards magnetic north, increasing towards
-east. Declination is not applied, so this is not true north. Both outputs retain
-quaternions; there is no accumulated yaw angle. The gateway represents aero yaw
-in [0, 360) degrees, while a conventional robotic Euler extraction uses yaw
-counterclockwise from east (usually [-pi, pi] radians). The conversion changes the
-orientation reference, not acceleration/gyro a second time. For the former local
-up/down convention use `[180.0, 0.0, 0.0]`; it does not establish a north reference
-for raw gyro integration or the BNO085 game rotation vector.
-
-### IMU timing and freshness
-
-```yaml
-publish_rate_hz: 50.0
-max_sample_age_s: 0.5
+```text
+data_elaboration/
+├── config/              params.yaml, endpoints.yaml
+├── data_elaboration/
+│   ├── generated/       ros_endpoints.py
+│   ├── processing/      imu_frames.py, imu_filter.py, lever_arm.py, boat_height.py
+│   ├── imu_node.py
+│   └── ultrasonic_filter_node.py
+├── launch/
+├── test/
+├── package.xml
+└── setup.py
 ```
 
-The configured publication target is 50 Hz (one tick every 20 ms), provided
-the cached result is still fresh. There is no `read_rate_hz`: subscriptions
-process new input immediately. Zero
-`publish_rate_hz` publishes each new valid result; a positive value periodically
-publishes the newest robotic Imu message, preserving the acquisition timestamp.
-All new inputs are still processed, including when publication is slower. The
-aero transformer and callback follow these publications immediately, without a
-second timer delay. Repeated input timestamps are not reprocessed, so aero
-publication can be lower than the robotic repeat rate when no new sample exists.
+[params.yaml](config/params.yaml) raccoglie montaggi, frequenze e soglie. I nomi degli output sono in [endpoints.yaml](config/endpoints.yaml), mentre quelli degli input grezzi vengono dalle costanti generate di `sensors`. Le formule e le conversioni sono in `processing/`, separate dai nodi che ricevono e pubblicano messaggi.
 
-`sail_common.freshness.is_fresh` checks each input's original ROS stamp before
-processing. Cached periodic results also check elapsed monotonic time, including
-with a paused ROS clock. Duplicate and out-of-order samples are ignored. A ROS
-clock jump backwards clears the cache, duplicate tracking and estimator/yaw state.
-The helper is checked independently on the aero input. No missing or expired
-measurement is replaced with a freshly stamped copy. Parameters are read at
-startup; rebuild/install and restart after YAML changes.
+## Nodi, topic e trasformazioni
 
-### Raspberry checks
+Gli ovali sono nodi. Una freccia continua `pub` va dal nodo al topic pubblicato; una freccia tratteggiata `sub` va dal nodo al topic che ascolta. Le frecce di sottoscrizione indicano quindi la dipendenza, non il verso del dato.
 
-After deploying the merged setup and rebuilding, verify `/dev/ttyAMA0` and run
-one live acquisition/processing stack. Inspect `/imu/data`, `/imu/mag`,
-`/processed/imu/data` and `/processed/imu/data/aero` with `ros2 topic echo` and
-measure frequency with `ros2 topic hz`. Check level orientation, known roll/pitch
-motions and magnetic heading with the sensor mounted as configured. Stop the
-UART stream: acquisition and periodic processed output must expire rather than
-repeat indefinitely. Restore it and check reconnection. Offline tests cover
-protocol decoding, cache expiry and conversions; physical wiring, calibration,
-serial reliability and real ROS scheduling still require this hardware check.
+```mermaid
+flowchart LR
+    raw["/imu/data"]
+    mount(["imu_mount_transformer_node"])
+    mounted["/internal/imu/mounted"]
+    imu(["imu_node"])
+    processed["/processed/imu/data"]
+    aero(["imu_aero_transformer_node"])
+    body["/internal/imu/aero_body"]
+    final["/processed/imu/data/aero"]
+    ranges["/ultrasonic/left<br/>/ultrasonic/right"]
+    height(["ultrasonic_filter_node"])
+    out["/processed/boat_height"]
+    tf["/tf_static"]
+    mount -.->|sub| raw
+    mount -->|pub| mounted
+    imu -.->|sub| mounted
+    imu -->|pub| processed
+    aero -.->|sub| processed
+    aero -->|pub| body
+    imu -.->|sub aero callback| body
+    imu -->|pub| final
+    height -.->|sub| ranges
+    height -.->|sub| processed
+    height -->|pub| out
+    imu -->|pub| tf
+    mount -.->|TF lookup| tf
+    aero -.->|TF lookup| tf
+```
 
-## GPS and navigation
+Il percorso principale dell'IMU è: misura grezza, correzione del montaggio, elaborazione, conversione aeronautica. I due transformer sono istanze del pacchetto ROS esterno `imu_transformer`; `imu_node` pubblica le trasformazioni statiche che servono loro.
 
-The telemetry gateway subscribes directly to `/gps/data` (`gps_msgs/msg/GPSFix`)
-and `/processed/imu/data/aero`. GPS `speed` is SOG in m/s and `track` is course
-over ground in degrees. IMU yaw describes orientation, not direction of travel.
-There is no speed-based switch between GPS course and a separate compass.
-With BNO085 `rotation_vector`, aero yaw references magnetic north, increases
-clockwise and is displayed in [0, 360) degrees; calibration and mounting must be verified.
+Il ritorno da `/internal/imu/aero_body` entra in una callback dedicata di `imu_node`. Non ripassa nel percorso robotico: il collegamento di ritorno nel diagramma non è un ciclo che rielabora indefinitamente la stessa misura.
 
-`heading_node`, `GpsSummary`, `/processed/heading_deg` and
-`/processed/gps/summary` have been removed. The gateway validates GPS status,
-coordinates, speed and the source header using its own `gps_timeout_s` setting.
-Dashboard/map ROS and MQTT payloads are unchanged; GPS course remains available
-in GPSFix, not in the current web messages. The separate I2C compass acquisition
-is still available for diagnostics/recording but is no longer a navigation input.
+| Interfacce | Tipo | Utilizzo |
+|---|---|---|
+| Tutti i topic IMU del diagramma | `sensor_msgs/msg/Imu` | Orientamento, velocità angolare, accelerazione e covarianze. |
+| `/ultrasonic/left`, `/ultrasonic/right` | `sensor_msgs/msg/Range` | Distanze grezze dai due sensori. |
+| `/processed/boat_height` | `marti_common_msgs/msg/Float64Stamped` | Altezza in metri nel campo `value`. |
+| `/tf_static` | `tf2_msgs/msg/TFMessage` | Trasformazioni statiche usate dai transformer. |
 
-Run `bash scripts/build.sh --clean` inside the container to remove the obsolete
-installed executable and generated message. Update any custom launches and
-external subscribers that used the removed interfaces. Old summary-only bags
-cannot feed the new gateway; it needs `/gps/data` with the GPSFix type.
+## Come viene elaborata l'IMU
 
-## Battery
+[imu_node.py](data_elaboration/imu_node.py) usa il quaternione già calcolato dal BNO085 quando il messaggio dichiara un orientamento disponibile (`orientation_covariance[0] != -1`). Lo controlla e lo normalizza, senza rifare la fusione dei sensori o una calibrazione statica.
 
-Battery acquisition, alarm confirmation and shutdown now all belong to
-`sensors/battery_node`. The separate battery monitor and `/processed/battery/low`
-output have been removed. Configure `shutdown_enabled`, `low_samples_required`
-and `shutdown_command` under `battery_node` in `sensors/config/params.yaml`.
-The telemetry gateway continues to subscribe directly to `/battery/data`.
-The sensors replay launch explicitly disables shutdown. Rebuild the workspace
-with `scripts/build.sh --clean` to remove the old installed node entry point.
+Per input più vecchi, privi di orientamento, rimane un filtro complementare in [imu_filter.py](data_elaboration/processing/imu_filter.py). I parametri `calibration_samples` e `complementary_alpha` riguardano questo percorso, non il normale quaternione BNO085.
 
-## Recording and replay
+### Montaggio e convenzioni degli assi
 
-There is no live CSV logging node. rosbag_manager independently starts a
-ros2 bag recorder on a start-recording service request, with -a and -s mcap.
-It records discovered visible topics (including new topics discovered later).
-Hidden topics are not included by default. Merely starting the manager does
-not start recording.
+`tf_offset=[x,y,z,roll,pitch,yaw]` descrive posizione e rotazione del sensore: metri per XYZ, gradi per gli angoli. Il riferimento della barca usa **FLU**: X verso prua, Y verso sinistra, Z verso l'alto.
 
-ROS messages stored in MCAP can be converted to CSV offline. The existing
-tools/bag_replay_to_csv.py still targets older Polimi topic names and message
-layouts; it must be adapted before exporting the current Agir streams.
+L'output robotico combina assi barca FLU e riferimento mondo ENU. L'output aeronautico usa assi barca FRD e riferimento mondo NED. Sono due conversioni diverse: `tf_offset_aero=[0,0,0,180,0,0]` cambia gli assi della barca, mentre `world_rotation_rpy_deg=[180,0,90]` cambia il riferimento del mondo.
 
-live_data_elaboration.launch.py and the compatibility data_elaboration_launch.py
-start four nodes, including both transformer instances, as does replay_data_elaboration.launch.py.
-The sensors replay launch still accesses hardware until that pipeline is
-implemented. Rebuild sail_msgs and the workspace before using new interfaces.
+Con `rotation_vector` il riferimento al nord è magnetico. Qui non si corregge la declinazione e non si pubblicano messaggi roll/pitch/yaw separati: il [gateway](../communication_web/README.md) ricava quegli angoli dal quaternione aeronautico, portando lo yaw nell'intervallo [0,360).
 
-## TODO / work to revisit
+### Compensazione del braccio
 
-- Navigation references: validate IMU calibration, mounting and magnetic
-  declination before comparing bow heading with GPS course over ground.
-- Ultrasonic fusion: measure echo availability, noise and height error against
-  an independent reference over the expected roll/pitch range. Use recorded bags
-  to tune incidence_weight_power, max_incidence_deg and max_disagreement_m.
-  The current cosine exponent of 8 is a heuristic, not a sensor noise model.
-  Check wave effects, timing and acoustic cross-talk; keep geometric projection
-  separate from reliability weighting.
-- Installation: replace provisional ultrasonic positions/beam angles and verify
-  the IMU mounting rotation. Keep the near-COM assumption for now; revisit lever-
-  arm compensation only if the actual IMU offset and motion make it significant.
-- IMU estimation / EKF: characterize covariance values and filter behaviour
-  during manoeuvres. Validate BNO085 magnetic heading and declination before
-  interpreting it as true north. Use the robotic Imu stream for the future EKF.
-- Replay / export: implement bag-driven replay without hardware acquisition and
-  adapt CSV export to the current Agir topics and message definitions.
+`base_link` identifica il centro di massa. I primi tre valori di `tf_offset` sono il vettore **dal centro di massa al sensore**, espresso negli assi FLU. Se il sensore è lontano dal centro, misura anche accelerazioni dovute alla rotazione della barca.
 
-The ROS transformer package is declared as a runtime dependency. Both Dockerfiles
-already install imu-pipeline; no Docker commands were run for this change.
+Dopo che il transformer ha ruotato i vettori, [lever_arm.py](data_elaboration/processing/lever_arm.py) sottrae questi contributi una sola volta:
 
-## References
+```text
+a_COM = a_sensore - alpha × r - omega × (omega × r)
+alpha = (omega_attuale - omega_precedente) / dt
+```
 
-- ROS coordinate conventions:
-  https://github.com/ros-infrastructure/rep/blob/master/rep-0103.rst
-- Standard Imu message:
-  https://github.com/ros2/common_interfaces/blob/jazzy/sensor_msgs/msg/Imu.msg
-- ROS bag recording:
-  https://github.com/ros2/rosbag2/tree/jazzy
+`omega` viene dal giroscopio e `dt` dai timestamp originali delle misure. Il timer di pubblicazione non viene usato per stimare questa derivata. La correzione conserva la gravità e non cambia il quaternione; con XYZ a zero non modifica l'accelerazione.
 
-- imu_transformer orientation semantics (fixed since 0.3.1):
-  https://docs.ros.org/en/jazzy/p/imu_transformer/__CHANGELOG.html
+Con un braccio non nullo servono due campioni. Al primo campione, o dopo un intervallo superiore a `max_sample_dt_s`, il nodo aspetta il successivo prima di pubblicare l'accelerazione corretta. La derivata può amplificare il rumore del gyro, quindi la taratura va verificata con misure reali.
 
-The former `RollPitchYaw` interface and both RPY topics are removed. The gateway
-converts the standard aero Imu quaternion to dashboard degrees. Clean-build to
-remove the old generated message and update any external subscribers or RPY-only
-bag playback. IMU mounting, transforms, freshness and publication rates are unchanged.
+I frame di output hanno origine al centro di massa; la trasformazione del sensore conserva invece il montaggio fisico. La conversione aeronautica successiva cambia solo gli assi e non applica di nuovo la compensazione.
+
+### Frequenza e freschezza
+
+Ogni campione nuovo e utilizzabile viene elaborato appena arriva. Il timer pubblica l'ultimo risultato robotico a **50 Hz**, secondo `publish_rate_hz`; impostando zero si pubblica appena il risultato è pronto. Valori negativi o non finiti vengono rifiutati.
+
+Le ripetizioni conservano il timestamp e smettono quando il risultato supera 0,5 s. Si controlla anche il tempo monotono per non mantenere valido un dato se l'orologio ROS si ferma. L'uscita aeronautica segue i nuovi campioni trasformati, senza un secondo timer; duplicati e timestamp fuori ordine vengono ignorati. Un salto indietro del clock svuota lo stato temporale.
+
+Le covarianze originali sono mantenute salvo override positivo configurato. Per l'accelerazione compensata si usa `cov_acc` se positivo, altrimenti l'incertezza resta sconosciuta. Zero non significa errore nullo.
+
+## Come viene stimata l'altezza
+
+[ultrasonic_filter_node.py](data_elaboration/ultrasonic_filter_node.py) unisce le distanze con l'assetto della barca. Il punto di riferimento O è fissato sulla linea di galleggiamento di progetto, sotto il centro di massa. L'altezza indica la distanza verticale di O dal piano dell'acqua: positiva sopra, negativa sotto.
+
+### Posizione e inclinazione degli ultrasuoni
+
+Per ogni sensore si configura un unico array. Per esempio:
+
+```yaml
+left:
+  mounting: [2.0, 0.2, 0.6, 15.0, 0.0]
+```
+
+I cinque elementi sono `[x_m,y_m,z_m,lateral_tilt_deg,forward_tilt_deg]`. Nell'esempio, il sensore si trova 2 m a prua, 20 cm a sinistra e 60 cm sopra O, con il fascio inclinato di 15° verso sinistra rispetto alla verticale verso il basso. Un'inclinazione avanti positiva punta a prua. Questi angoli descrivono il montaggio, non il campo visivo del sensore.
+
+In [boat_height.py](data_elaboration/processing/boat_height.py), con R rotazione dagli assi della barca al mondo, r posizione del sensore, d distanza misurata, a inclinazione laterale e b inclinazione avanti:
+
+```text
+u = [sin(b), cos(b) sin(a), -cos(b) cos(a)]
+c_i = -(R u_i)_z
+h_i = -(R r_i)_z + d_i c_i
+w_i = c_i ** incidence_weight_power
+h = sum(w_i h_i) / sum(w_i)
+```
+
+Seni e coseni proiettano verticalmente il fascio e la posizione del sensore. Per questo non basta sommare un offset costante alla distanza. Un fascio troppo orizzontale, oltre il limite predefinito di 60°, non produce una stima.
+
+### Scelta dei campioni e pubblicazione
+
+Il nodo conserva una breve storia dell'IMU. Per ogni nuova distanza usa l'assetto più recente **precedente** alla misura, entro `max_attitude_age_s=0.1`. Non interpola né suppone la barca piatta se l'assetto manca. Controlla anche il frame `imu_link_flu`: non cerca automaticamente una trasformazione da un altro frame.
+
+Le distanze devono avere meno di 0,5 s; i due lati vengono combinati solo entro `max_pair_dt_s=0.15`. Ogni lato conserva la propria correzione geometrica. Quando entrambi sono utilizzabili, il peso favorisce il fascio più verticale (potenza predefinita 8). Se le stime differiscono di oltre 0,25 m, viene scelta quella più verticale; a pari incidenza il conflitto impedisce la pubblicazione. È possibile produrre una stima anche con un solo lato valido.
+
+Il calcolo segue l'arrivo delle distanze; l'IMU aggiorna soltanto la storia. Il timer pubblica a **20 Hz**, oppure subito al risultato con `publish_rate_hz: 0.0`. L'header conserva il timestamp della distanza che ha prodotto la stima. Prima di ripubblicare, il nodo ricontrolla la freschezza dei campioni coinvolti.
+
+Il frame di output è `boat_waterline`, ma il nodo non crea automaticamente una TF per quel punto. Questa è una correzione geometrica: non è una media mobile e non elimina da sola onde, interferenze tra sensori o riflessioni.
+
+## Avvio e verifica
+
+Con ambiente ROS e workspace caricati nel container:
+
+```bash
+ros2 launch data_elaboration live_data_elaboration.launch.py
+```
+
+I launch live e replay avviano quattro processi: i due transformer, `imu_node` e `ultrasonic_filter_node`. Il replay imposta il tempo simulato. Per un altro file di configurazione usa `data_elaboration_params_file:=/percorso/params.yaml`.
+
+Da `/home/ros/ros2_ws`, esegui `bash scripts/test.sh data_elaboration`. I test verificano frame, quaternioni, geometria, braccio e dati scaduti. Sulla barca confronta anche l'altezza con una misura indipendente a diversi roll e pitch: è il modo per verificare montaggio e soglie.

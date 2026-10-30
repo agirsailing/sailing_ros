@@ -1,310 +1,124 @@
-# communication_web
+# communication_web — collegamento con la web app
 
-Two gateways inspired by Polimi's `web_communication`: one for telemetry, one
-for commands. The existing Agir package name remains `communication_web`.
+_Aggiornato al giorno: 30/10/2026_
 
-`telemetry_gateway_node` aggregates processed attitude/height and raw GPS, battery and range snapshots, publishes two custom ROS
-messages from `sail_msgs`, and forwards the same structures as MQTT JSON.
-`command_gateway_node` exposes rosbag start/stop and course-mark ping services.
-`telemetry_gateway_node` owns the course marks and the GPS capture service.
+[English](README_ENG.md) · [Workspace](../../README.md)
 
-## Buoy ping
+## Introduzione
 
-`agir_gui/cmd/ping_mark` accepts `{"requestId":"unique-id","type":0}`:
-Committee=0, Pin=1, Windward=2. The command gateway calls
-`/local_cmd/ping_mark` (`sail_msgs/srv/PingMark`) in the telemetry gateway.
-ROS takes the latest GPS position when the service runs, not browser coordinates
-or the exact browser click time. Position must be finite, in WGS84 bounds, have
-GPSStatus >= 0 and pass the shared source/receipt freshness check using
-`gps_timeout_s`. Speed is not required to capture a position. A failure leaves
-every existing mark unchanged.
+Questo pacchetto collega il sistema ROS alla web app attraverso MQTT. Riceve le misure già pubblicate dagli altri nodi, prepara dashboard e mappa e gestisce i comandi che arrivano dall'interfaccia.
 
-The non-retained reply on `agir_gui/rsp/ping_mark` contains `requestId`, `success`,
-`error_message`, and `mark` (null on failure). Successful marks contain `type`,
-`lat`, `lon`, and `header` preserving the original GPS sample timestamp/frame.
-Mark coordinates are float64; constants are COMMITTEE, PIN and WINDWARD.
+Il lavoro è diviso tra due nodi: `telemetry_gateway_node` prepara e invia i dati; `command_gateway_node` riceve le richieste dell'utente e chiama i servizi ROS appropriati. Nessuno dei due legge direttamente un sensore.
 
-The telemetry gateway keeps one mark per type in memory; a new successful ping
-replaces only that type. The complete sorted `marks` array is included in every
-`/web/ros/map` and `agir_gui/data/map` publication, at `map_publish_rate_hz` (3 Hz).
-Marks survive GPS loss and browser reconnection, but reset on telemetry-node
-restart. They are course state, so their old capture timestamp does not expire
-them. Rosbag records the state through the existing map topic.
+## Struttura del pacchetto
 
-MQTT handling retains bounded queues, size limits and retained-command rejection.
-Ping has a separate asynchronous request slot from recording. Duplicate request
-IDs return the original response while cached (`response_cache_size`); changing
-the type with the same ID is rejected. `service_timeout_s` also applies to ping:
-a timeout cannot cancel work already executing in ROS, so check the map before
-retrying with a new ID. This is not durable deduplication across node restarts or
-cache eviction. No commands are automatically retried by the browser.
-
-Allow the boat to subscribe to `agir_gui/cmd/ping_mark` and publish
-`agir_gui/rsp/ping_mark`; operators need the reverse permissions plus the map.
-Rebuild `sail_msgs` and consumers together (`bash scripts/build.sh --clean` from
-`ros2_ws` inside the container), then deploy the matching web app. Old Mark and
-MapDataMsg layouts are not wire-compatible; old bags retain their old schema.
-
-## Telemetry contract
-
-| ROS output | Message | MQTT output |
-| --- | --- | --- |
-| `/web/ros/dashboard` | `sail_msgs/DashboardDataMsg` | `agir_gui/data/dashboard` |
-| `/web/ros/map` | `sail_msgs/MapDataMsg` | `agir_gui/data/map` |
-
-ROS and MQTT receive the same snapshot independently. The ROS outputs allow
-local inspection and recording: rosbag_manager uses `ros2 bag record -a`, which
-records ROS topics, not MQTT traffic. MQTT delivers JSON to the browser.
-
-The MQTT names replace `agir_gui/data/telemetry` and `agir_gui/data/position`;
-deploy the gateway and web app together and update any broker topic ACLs.
-The ROS outputs are `/web/ros/dashboard` and `/web/ros/map`, with types
-DashboardDataMsg and MapDataMsg respectively. Rebuild consumers; old bags retain their original message types.
-MapDataMsg uses the Agir position fields below plus the saved `marks` array.
-
-Dashboard and map have independent timers, configured at startup in `config/params.yaml`:
-
-```yaml
-dashboard_publish_rate_hz: 3.0
-map_publish_rate_hz: 3.0
+```text
+communication_web/
+├── communication_web/
+│   ├── gateway/          telemetry, orientation, MQTT client, recording/mark RPC
+│   ├── generated/        ros_endpoints.py
+│   ├── command_gateway_node.py
+│   └── telemetry_gateway_node.py
+├── config/               endpoints.yaml, params.yaml, mqtt_config.example.yaml
+├── launch/
+├── test/
+├── package.xml
+└── setup.py
 ```
 
-Each timer publishes only its own ROS message and matching MQTT message. Both
-rates must be finite and strictly positive; zero/on-data is not supported here.
-Replace the former single `publish_rate_hz` in custom gateway YAML files with
-these two keys and restart/relaunch after installing the updated configuration.
-Changing a rate does not change source-node frequencies or freshness timeouts.
-Recording state has a third, MQTT-only timer:
+I due file `*_node.py` collegano ROS alla logica contenuta in [gateway/](communication_web/gateway/). Qui `telemetry.py` conserva le misure e prepara i dati, `orientation.py` ricava gli angoli dal quaternione e `mqtt_client.py` gestisce Paho, TLS e riconnessione. `recording_rpc.py` e `mark_rpc.py` seguono richieste, risposte e timeout.
 
-```yaml
-recording_state_publish_rate_hz: 0.5
-recording_state_timeout_s: 1.5
+[params.yaml](config/params.yaml) contiene frequenze e limiti; [endpoints.yaml](config/endpoints.yaml) definisce i nomi ROS e MQTT. Il file privato `config/mqtt_config.yaml`, da preparare partendo dal [modello](config/mqtt_config.example.yaml), contiene la configurazione del broker per entrambi i gateway.
+
+## Nodi e collegamenti
+
+Gli ovali sono i due nodi del pacchetto; i rettangoli raccolgono topic ROS o MQTT e gli esagoni sono servizi ROS. `pub` e `sub` partono sempre dal nodo: la freccia tratteggiata indica il topic ascoltato. `client` indica chi chiama un servizio, `server` chi lo offre. I servizi start/stop sono offerti da `rosbag_manager`, esterno a questo diagramma.
+
+```mermaid
+flowchart LR
+    inputs["/processed/imu/data/aero<br/>/processed/boat_height<br/>/battery/data<br/>/gps/data<br/>/ultrasonic/left<br/>/ultrasonic/right"]
+    state["/local_state/recording_state"]
+    tel(["telemetry_gateway_node"])
+    cmd(["command_gateway_node"])
+    ros["/web/ros/dashboard<br/>/web/ros/map"]
+    mqttdata["MQTT<br/>agir_gui/data/dashboard<br/>agir_gui/data/map<br/>agir_gui/data/recording_state"]
+    mqttcmd["MQTT<br/>agir_gui/cmd/start_recording<br/>agir_gui/cmd/stop_recording<br/>agir_gui/cmd/ping_mark"]
+    mqttrsp["MQTT<br/>agir_gui/rsp/start_recording<br/>agir_gui/rsp/stop_recording<br/>agir_gui/rsp/ping_mark"]
+    ping{{"/local_cmd/ping_mark"}}
+    rec{{"/local_cmd/start_recording<br/>/local_cmd/stop_recording"}}
+    tel -.->|sub ROS| inputs
+    tel -.->|sub ROS| state
+    tel -->|pub ROS| ros
+    tel -->|pub MQTT| mqttdata
+    cmd -.->|sub MQTT| mqttcmd
+    cmd -->|pub MQTT| mqttrsp
+    cmd -->|client| ping
+    tel -->|server| ping
+    cmd -->|client| rec
 ```
 
-The manager still publishes ROS state at 2 Hz plus immediate start/stop/failure
-updates. The gateway caches the latest state and sends it over MQTT every 2 s,
-including changes on the next tick (no extra immediate MQTT state publication).
-Command responses remain independent and are returned when ready.
-`RecordingState` has no source header, so the shared freshness helper checks
-monotonic elapsed time since receipt. If no state arrives for more than 1.5 s,
-the next MQTT state tick drops the cache and sends nothing. It never repeatedly
-asserts an old state after the manager disappears. All parameters above must be
-positive and finite and must be included in custom gateway YAML files. Browser
-staleness detection must allow more than the 2 s MQTT interval plus network jitter.
+## Come vengono preparati dashboard e mappa
 
-Both snapshots contain `header.stamp.sec` and
-`header.stamp.nanosec` in ROS time. In live mode this is system time; when all
-participating nodes use simulated time it follows `/clock`. Their `frame_id` is
-empty because these aggregates mix quantities expressed in different frames.
+Il telemetry gateway conserva l'ultimo dato di ogni ingresso. A ogni scadenza del timer costruisce una vista aggiornata della barca, senza riprodurre una coda di misure vecchie. Prima di usare un dato controlla sia il timestamp della misura sia quanto tempo è passato dalla ricezione.
 
-`DashboardDataMsg` contains:
+Le soglie predefinite sono 0,5 s per assetto, altezza e ultrasuoni, 2 s per GPS e 3 s per batteria. Un dato recente deve anche superare i controlli specifici: per esempio il GPS deve avere un fix e coordinate utilizzabili, mentre l'IMU deve contenere un quaternione valido.
 
-- `roll_deg`, `pitch_deg`, `yaw_deg` and `attitude_valid`, computed by the gateway
-  from `/processed/imu/data/aero` (`sensor_msgs/Imu.orientation`). The quaternion
-  is normalized and checked; absent/invalid orientation makes the angles invalid.
-  Mounting and world/body conventions have already been applied by processing.
-  Roll is in [-180, 180] degrees (right side down positive); pitch in [-90, 90]
-  (bow up positive). Yaw is in **[0, 360)**, clockwise from magnetic north with
-  BNO085 `rotation_vector`: 359 -> 0 -> 1 is the normal crossing of north.
-  It is not GPS course or declination-corrected true heading. No turn count is kept.
-  At pitch +/-90, Euler roll and yaw cannot be separated; the converter uses roll=0
-  and an equivalent yaw. The underlying quaternion stays available without this
-  Euler singularity. Game rotation vector / raw fallback does not establish north.
-- `height_m` and `height_valid`, from `/processed/boat_height`
-  (`marti_common_msgs/Float64Stamped.value`): signed vertical clearance in metres
-  of the design-waterline reference below the centre of mass. Source publication
-  is configured at 20 Hz; cached repeats retain the original measurement stamp.
-  Rebuild the image for `marti_common_msgs` and clean-build the workspace after
-  migrating from the removed `BoatHeight` interface. Web payload fields are unchanged.
-- `battery_low`, `battery_voltage_v` and `battery_valid`, directly from
-  `/battery/data` (`sail_msgs/BatteryData`). The gateway displays the raw GPIO
-  alarm; battery_node itself confirms alarms and requests shutdown.
-  `battery_valid` indicates a fresh snapshot and known alarm, not voltage validity
-  or overall health. Voltage can independently be NaN (JSON null), even while
-  the low alarm remains valid. No charge percentage is calculated.
-- `sog_mps` and `sog_valid`, directly from `/gps/data` (`gps_msgs/GPSFix.speed`).
-- `ultrasonic_left_m` / `ultrasonic_left_valid` and
-  `ultrasonic_right_m` / `ultrasonic_right_valid`, from `sensor_msgs/Range`
-  on `/ultrasonic/left` and `/ultrasonic/right`. These are raw beam distances
-  in metres, not the attitude-corrected height. Each side must be finite, within
-  its sensor's min/max range and fresh by both source and reception time.
-  `ultrasonic_timeout_s` defaults to 0.5 seconds; one missing sensor does not
-  invalidate the other sensor or the rest of the telemetry.
+| Uscita ROS | Tipo | Uscita MQTT | Frequenza predefinita |
+|---|---|---|---|
+| `/web/ros/dashboard` | `sail_msgs/msg/DashboardDataMsg` | `agir_gui/data/dashboard` | 3 Hz |
+| `/web/ros/map` | `sail_msgs/msg/MapDataMsg` | `agir_gui/data/map` | 3 Hz |
+| Stato ricevuto da `/local_state/recording_state` | `sail_msgs/msg/RecordingState` | `agir_gui/data/recording_state` | 0,5 Hz |
 
-`MapDataMsg` contains `latitude_deg`, `longitude_deg`, `sog_mps`, `fix_valid`
-and the original `gps_stamp`. Invalid, non-finite, out-of-range or expired GPS
-fixes invalidate all three values. GPS status must be at least `GPSStatus.STATUS_FIX`.
-GPS freshness uses the original `GPSFix.header.stamp`, copied to map `gps_stamp`.
-All inputs use the shared freshness helper on source headers and reception time.
-A fresh no-fix message invalidates position/SOG at the next snapshot. A missing
-or stale IMU does not invalidate GPS, and vice versa. GPS `track` (course) remains
-available on `/gps/data`; the web message schemas have not been extended.
+Dashboard e mappa hanno timer indipendenti, regolati da `dashboard_publish_rate_hz` e `map_publish_rate_hz`. Pubblicare anche su ROS permette di vedere i risultati con `ros2 topic echo` e registrarli nelle bag.
 
-There is no intermediate navigation selector or GPS summary. After updating,
-clean-build the workspace to remove the old installed node/message. Custom launches
-and subscribers to the removed `/processed/gps/summary` or `/processed/heading_deg`
-need updating. Keep GPS/attitude timeout settings in this package's YAML.
+L'header di dashboard e mappa indica quando è stata preparata l'uscita; la mappa conserva anche il timestamp originale del GPS in `gps_stamp`. I numeri non disponibili sono NaN nei messaggi ROS e `null` nel JSON MQTT. Un flag di validità falso indica un dato non utilizzabile, non uno zero misurato.
 
-Each input expires independently using the timeouts in `config/params.yaml`.
-Missing/stale numbers are NaN in ROS and **null in JSON**, with false validity
-flags. Snapshots continue even if a sensor has never published. Snapshots are
-latest-value aggregates, not measurements synchronized to a single acquisition.
+### Significato dei dati mostrati
 
-Example MQTT telemetry payload:
+Il gateway ricava roll, pitch e yaw dal quaternione aeronautico. Gli angoli sono in gradi; lo yaw è in [0,360), con zero al nord magnetico e crescita in senso orario. A pitch ±90° roll e yaw non sono separabili: il convertitore sceglie roll zero e lo yaw equivalente.
 
-```json
-{
-  "header": {"stamp": {"sec": 1789552800, "nanosec": 0}, "frame_id": ""},
-  "attitude_valid": true,
-  "roll_deg": 12.0,
-  "pitch_deg": 1.5,
-  "yaw_deg": 32.0,
-  "height_valid": true,
-  "height_m": 0.45,
-  "battery_valid": true,
-  "battery_low": false,
-  "battery_voltage_v": 12.4,
-  "sog_valid": true,
-  "sog_mps": 6.0,
-  "ultrasonic_left_valid": true,
-  "ultrasonic_left_m": 0.62,
-  "ultrasonic_right_valid": true,
-  "ultrasonic_right_m": 0.58
-}
-```
+SOG è la velocità rispetto al suolo in m/s. Il COG GPS descrive la direzione del movimento e non sostituisce lo yaw. Le due distanze degli ultrasuoni rimangono grezze; `height_m` è invece l'altezza corretta ricevuta da `data_elaboration`.
 
-Example MQTT position payload:
+Per la batteria, un allarme recente può essere valido anche se la tensione non è disponibile: in quel caso il relativo valore viene inviato come `null`.
 
-```json
-{
-  "header": {"stamp": {"sec": 1789552800, "nanosec": 0}, "frame_id": ""},
-  "gps_stamp": {"sec": 1789552799, "nanosec": 900000000},
-  "fix_valid": true,
-  "latitude_deg": 59.3293,
-  "longitude_deg": 18.0686,
-  "sog_mps": 6.0
-}
-```
+### Stato della registrazione
 
-## Rebuild after interface changes
+Il manager pubblica lo stato ROS a 2 Hz e quando cambia. Il gateway lo inoltra a MQTT a **0,5 Hz**, secondo `recording_state_publish_rate_hz`. Se non riceve aggiornamenti per 1,5 s, smette di inoltrare lo stato memorizzato.
 
-BatteryData replaces Bool on `/battery/data`; `/battery/voltage` is removed.
-Rebuild and restart sensors and the gateway together.
-Old bags containing Bool on `/battery/data` are not directly compatible with
-this new subscriber type. Update the dashboard alongside the gateway to show volts.
+`RecordingState` non ha header: qui viene controllato il tempo monotono trascorso dalla ricezione. Le risposte ai comandi start/stop vengono invece inviate appena pronte, senza aspettare il timer dello stato.
 
-After updating BatteryData or DashboardDataMsg, rebuild the interfaces and all
-consumers before restarting the nodes. Inside the ROS container, from `ros2_ws`:
+## Come vengono eseguiti i comandi
+
+Il thread MQTT accoda le richieste; il nodo ROS le esamina ogni 0,05 s con `process_rate_hz: 20.0`. Questo parametro regola l'elaborazione dei comandi, non una pubblicazione periodica su MQTT.
+
+Ogni richiesta deve avere un `requestId`, che permette al chiamante di riconoscere la risposta. I comandi retained vengono ignorati. La coda predefinita contiene al massimo 32 richieste, il payload ha limite 4096 byte e vengono ricordate fino a 128 risposte per gestire i duplicati. Questa memoria si perde al riavvio.
+
+| Topic di richiesta MQTT | Payload | Servizio ROS | Topic di risposta MQTT |
+|---|---|---|---|
+| `agir_gui/cmd/start_recording` | `{"requestId":"id-univoco"}` | `/local_cmd/start_recording` | `agir_gui/rsp/start_recording` |
+| `agir_gui/cmd/stop_recording` | `{"requestId":"id-univoco"}` | `/local_cmd/stop_recording` | `agir_gui/rsp/stop_recording` |
+| `agir_gui/cmd/ping_mark` | `{"requestId":"id-univoco","type":0}` | `/local_cmd/ping_mark` | `agir_gui/rsp/ping_mark` |
+
+Le risposte contengono `requestId`, `success`, `error_message` e, secondo l'operazione, `bag_name` o `mark`. Il timeout predefinito del servizio è 15 s. Un timeout non annulla un servizio già in esecuzione: prima di riprovare una registrazione, controllane lo stato. I messaggi pubblicati dal gateway non sono retained.
+
+### Ping delle boe
+
+Il servizio `PingMark` è offerto dal telemetry gateway, che possiede il GPS corrente. La richiesta indica soltanto il tipo: **COMMITTEE=0, PIN=1, WINDWARD=2**. Le coordinate non arrivano dal browser.
+
+Se il fix è recente e valido, il servizio salva posizione e header originale del GPS. Non richiede che sia disponibile anche la SOG. Si conserva una boa per tipo: un nuovo ping sostituisce solo quella dello stesso tipo, e i duplicati della richiesta non catturano una seconda posizione.
+
+Le boe vengono inserite in `MapDataMsg.marks` e continuano a essere inviate anche quando il fix attuale manca. Restano in memoria fino alla sostituzione o al riavvio del telemetry gateway. Richieste malformate, tipi sconosciuti, GPS vecchio o servizio non disponibile producono una risposta di errore.
+
+## Avvio e test
+
+Prepara `mqtt_config.yaml` per entrambi i nodi, con hostname, porta TCP/TLS, credenziali e CA del broker. Usa il nome host, non l'URL WebSocket del browser.
+
+Con ambiente ROS e workspace caricati:
 
 ```bash
-bash scripts/build.sh --clean
-source install/setup.bash
+ros2 launch communication_web live_communication.launch.py
 ```
 
-This also regenerates endpoint constants and builds sensors, data_elaboration
-and communication_web. Restart their publishers/subscribers against the rebuilt
-interfaces. The web app's voltage display remains unknown with an older gateway.
+Il live avvia entrambi i nodi; il replay avvia soltanto telemetria con tempo simulato. `communication_web_launch.py` è un alias del live. Per file esterni usa `communication_web_params_file` e `communication_web_mqtt_config_file`; le impostazioni si applicano all'avvio.
 
-## Recording commands
-
-
-| MQTT request | ROS service | MQTT response |
-| --- | --- | --- |
-| `agir_gui/cmd/start_recording` | `/local_cmd/start_recording` (`StartRecording`) | `agir_gui/rsp/start_recording` |
-| `agir_gui/cmd/stop_recording` | `/local_cmd/stop_recording` (`StopRecording`) | `agir_gui/rsp/stop_recording` |
-
-Send a JSON object such as `{"requestId":"recording-001"}` with **retain=false**
-and preferably MQTT QoS 1. Each new action needs a unique requestId. The services
-have empty requests: directory, name and MCAP settings belong to rosbag_manager.
-The response follows the Polimi schema:
-
-```json
-{"requestId":"recording-001","success":true,"error_message":"","bag_name":"rosbag2_..."}
-```
-
-The bag name comes from `effective_bag_name` for start and `last_bag_name` for
-stop. `/local_state/recording_state` is also forwarded by the telemetry node to
-`agir_gui/data/recording_state`, with `recording`, `bag_name`, `last_error`.
-It is a periodic, non-retained state stream; the UI should mark it unknown when
-messages stop arriving, rather than keep showing an old recording state.
-
-Calls are asynchronous, one at a time. Retained commands and unknown command
-topics are ignored. A bounded requestId cache prevents repeats while pending and
-replays completed responses without calling ROS again. This cache is in memory,
-bounded and lost at restart; it does not promise exactly-once execution across
-restarts. A busy response means retry later; an unavailable-service response
-requires a new requestId after the manager is ready. Malformed JSON is rejected.
-Oversized commands and a full input queue are logged and dropped.
-
-The configurable service timeout uses wall time. On timeout the actual operation
-may still complete: check the recording-state stream before deciding what to do.
-If a reply is lost during a broker outage, the web app can retry the same requestId
-to retrieve its cached response. Sending a command alone never proves success.
-
-## Configuration and launch
-
-All ROS/MQTT names are in `config/endpoints.yaml` and its matching generated Python
-constants. Configuration is split into:
-
-- `config/params.yaml`: normal node settings, tracked in Git.
-- `config/mqtt_config.example.yaml`: public template with placeholders.
-- `config/mqtt_config.yaml`: local broker settings and credentials, ignored by Git.
-
-Copy the example to `mqtt_config.yaml` on each machine, then configure **both**
-gateway sections before building. A placeholder copy is provided in this working
-tree; it contains no real credentials. The native MQTT/TLS hostname and port are
-for the Raspberry, not the browser's WebSocket URL. The example enables verified
-TLS on port 8883; confirm the port with your provider. An empty CA path uses
-system trust. Replace the `.invalid` hostname and placeholder username/password.
-
-Both launchers load the normal parameters followed by the MQTT file. They accept
-`communication_web_params_file` and `communication_web_mqtt_config_file` for
-absolute-path overrides. A missing MQTT file produces an explicit setup error;
-the example is not used as a silent fallback. Local YAML files are copied into
-the ROS install by the existing `setup.py`; rebuild after edits, or use the
-absolute-path override.
-**The local source and install copies contain credentials**: keep them on the
-development machine/Pi, restrict access, and do not publish build artifacts.
-Gitignore protects new files from accidental commits; it cannot remove secrets
-already committed in history. Do not put this file in the web app.
-
-No broker or web server is started here. Paho MQTT >= 2 is installed by the Agir
-Dockerfiles. Each gateway adds a unique suffix to its MQTT client ID.
-
-The sibling `sailing_web` dashboard uses the same MQTT contract. Browser operators
-enter their own broker client credentials at connection time. Give boat and
-operator credentials separate permissions; neither needs broker-admin access.
-
-MQTT connection/reconnection is asynchronous. ROS snapshots remain available
-without a broker. Data is non-retained, defaults to QoS 0 and is not buffered
-offline; commands/replies default to QoS 1. No backfill/history is provided.
-
-- `live_communication.launch.py`: telemetry plus recording commands.
-- `replay_communication.launch.py`: telemetry only; no recording command gateway.
-- `communication_web_launch.py`: compatibility include for the live launcher.
-
-Orchestrator already includes the respective communication launchers. Its replay
-sensor pipeline still starts hardware nodes: bag-only replay is a separate TODO.
-When that is implemented, enable `use_sim_time` consistently with the processing
-nodes and provide bag `/clock`; avoid replaying recorded `/web/*` snapshots while
-regenerating them. The replay processing launch does not run the battery monitor,
-so the battery remains unknown unless its processed topic is supplied by a bag.
-
-## Offline checks
-
-The standard-library tests in `test/` use fake messages and services, without ROS,
-MQTT connections or hardware. They cover validity/timeouts, strict JSON,
-recording responses, duplicate requests and configuration/wiring. They do not
-replace a ROS build or a broker integration test.
-
-### Command processing rate and interface migration
-
-`command_gateway_node.process_rate_hz: 20.0` checks queued commands, service
-responses and timeouts every 50 ms using a steady clock. It does not publish
-commands or responses periodically. Replace `poll_period_s` in custom YAML with
-`process_rate_hz` (Hz = 1 / old seconds); positive finite values are required.
-
-`RollPitchYaw` and both `/processed/imu/rpy*` topics have been removed. Clean-build
-the workspace and restart producers/consumers. The gateway now takes standard Imu;
-web field names are unchanged, but yaw is wrapped instead of accumulating turns.
-External ROS subscribers and RPY-only bags must migrate to the Imu topics.
+Da `/home/ros/ros2_ws`, esegui `bash scripts/test.sh communication_web`. I test simulano MQTT e verificano anche percorsi ROS e servizi. Quando cambi il contratto, aggiorna lo YAML degli endpoint, i messaggi coinvolti, la web app e i relativi test.
