@@ -1,4 +1,4 @@
-"""Expose only rosbag start/stop commands to MQTT clients."""
+"""Expose recording and course-mark services to MQTT clients."""
 
 import math
 from queue import Empty, Full, Queue
@@ -7,10 +7,11 @@ import rclpy
 from rclpy.clock import Clock, ClockType
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from sail_msgs.srv import StartRecording, StopRecording
+from sail_msgs.srv import PingMark, StartRecording, StopRecording
 
 from communication_web.gateway.mqtt_client import MqttClientWrapper
 from communication_web.gateway.recording_rpc import RecordingRpc
+from communication_web.gateway.mark_rpc import MarkRpc
 from communication_web.generated.ros_endpoints import Services, Topics
 
 
@@ -27,7 +28,7 @@ class CommandGatewayNode(Node):
         self._validate_parameters()
         self.commands = Queue(maxsize=self.command_queue_size)
 
-        # 2. Only recording services are reachable through this gateway.
+        # 2. Explicit service routes; recording and ping requests are independent.
         sv = Services.COMMAND_GATEWAY_NODE.SRV
         mt = Topics.COMMAND_GATEWAY_NODE.MQTT
         self.start_client = self.create_client(StartRecording, sv.START_RECORDING)
@@ -38,9 +39,15 @@ class CommandGatewayNode(Node):
             mt.SUB.STOP_RECORDING: (self.stop_client, StopRecording.Request,
                                     mt.RSP.STOP_RECORDING, 'last_bag_name'),
         }
-        self.mqtt = MqttClientWrapper(self, tuple(routes), self._enqueue_command)
+        self.ping_topic = mt.SUB.PING_MARK
+        self.ping_client = self.create_client(PingMark, sv.PING_MARK)
+        self.mqtt = MqttClientWrapper(
+            self, (*routes, self.ping_topic), self._enqueue_command)
         self.recording_rpc = RecordingRpc(
             routes, self.mqtt.publish_json, self.service_timeout_s, self.response_cache_size)
+        self.mark_rpc = MarkRpc(
+            self.ping_client, PingMark.Request, self.mqtt.publish_json,
+            mt.RSP.PING_MARK, self.service_timeout_s, self.response_cache_size)
 
         # 3. Paho only enqueues bytes. ROS service calls run on the ROS executor.
         # A steady timer keeps command timeouts working when ROS time is paused.
@@ -61,24 +68,28 @@ class CommandGatewayNode(Node):
 
     def _enqueue_command(self, topic, payload, retained):
         if retained:
-            self.get_logger().warning('Ignoring retained recording command')
+            self.get_logger().warning('Ignoring retained command')
             return
         if len(payload) > self.max_payload_bytes:
-            self.get_logger().warning('Ignoring oversized recording command')
+            self.get_logger().warning('Ignoring oversized command')
             return
         try:
             self.commands.put_nowait((topic, payload, retained))
         except Full:
-            self.get_logger().warning('Recording command queue is full')
+            self.get_logger().warning('Command queue is full')
 
     def _process_commands(self):
         self.recording_rpc.poll()
+        self.mark_rpc.poll()
         for _ in range(self.command_queue_size):
             try:
                 command = self.commands.get_nowait()
             except Empty:
                 break
-            self.recording_rpc.handle(*command)
+            if command[0] == self.ping_topic:
+                self.mark_rpc.handle(command[1], command[2])
+            else:
+                self.recording_rpc.handle(*command)
 
     def destroy_node(self):
         self.mqtt.stop()

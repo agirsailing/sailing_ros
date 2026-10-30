@@ -48,6 +48,16 @@ class TelemetrySnapshot:
             return message
         return None
 
+    def gps_position(self, now):
+        """Return a fresh valid geographical fix; speed is not required."""
+        self._check_clock(now)
+        gps = self._fresh('gps', now)
+        if (gps is not None and gps.status.status >= 0
+                and math.isfinite(gps.latitude) and math.isfinite(gps.longitude)
+                and -90 <= gps.latitude <= 90 and -180 <= gps.longitude <= 180):
+            return gps
+        return None
+
     def build(self, now):
         self._check_clock(now)
         nan = float('nan')

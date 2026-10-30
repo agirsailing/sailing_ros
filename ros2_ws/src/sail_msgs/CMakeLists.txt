@@ -23,6 +23,7 @@ set(msg_files
 )
 
 set(srv_files
+  "srv/PingMark.srv"
   "srv/StartRecording.srv"
   "srv/StopRecording.srv"
   "srv/ManageRecording.srv"

@@ -1,0 +1,7 @@
+# Capture the latest fresh boat GPS fix; type uses Mark constants.
+uint8 type
+---
+bool success
+string error_message
+# Meaningful only on success.
+sail_msgs/Mark mark
