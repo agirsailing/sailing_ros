@@ -7,20 +7,12 @@ services:
     container_name: agir-ros-pc
     user: "ros"
     working_dir: /home/ros/ros2_ws
-    environment:
-      - DISPLAY=host.docker.internal:0
-      - QT_X11_NO_MITSHM=1  # Avoid potential X11 shared-memory issues.
     volumes:
       - ../../ros2_ws/src:/home/ros/ros2_ws/src
       - ../../ros2_ws/scripts:/home/ros/ros2_ws/scripts
       - ../../ros2_ws/rosbags:/home/ros/ros2_ws/rosbags
       - ../../ros2_ws/tools:/home/ros/ros2_ws/tools
-      # GPU acceleration and X11 access; these paths must exist on the host.
-      - /dev/dri:/dev/dri
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
-    network_mode: host
-    ipc: host
-    privileged: true
+    # The default bridge supports outbound MQTT and ROS nodes in this container.
+    # Host networking, hardware access and an X server are not required on the PC.
     stdin_open: true
     tty: true

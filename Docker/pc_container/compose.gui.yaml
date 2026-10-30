@@ -1,0 +1,9 @@
+# Optional X11 over TCP for a host X server (Windows/macOS Docker Desktop).
+# Keep the same service and workspace mounts as the default configuration.
+services:
+  jazzy:
+    environment:
+      DISPLAY: ${AGIR_DISPLAY:-host.docker.internal:0}
+      QT_X11_NO_MITSHM: "1"
+      # Software rendering avoids requiring host GPU devices in the container.
+      LIBGL_ALWAYS_SOFTWARE: "1"

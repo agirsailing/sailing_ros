@@ -1,4 +1,4 @@
-"""Start every replay package pipeline, excluding the recording manager."""
+"""Start downstream processing and telemetry for bag replay, without hardware."""
 
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription
@@ -9,9 +9,6 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     return LaunchDescription([
-        IncludeLaunchDescription(PythonLaunchDescriptionSource(
-            PathJoinSubstitution([FindPackageShare('sensors'),
-                                  'launch', 'replay_sensors.launch.py']))),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(
             PathJoinSubstitution([FindPackageShare('data_elaboration'),
                                   'launch', 'replay_data_elaboration.launch.py']))),

@@ -46,9 +46,12 @@ imu_node:
     frame_imu: imu
     frame_robotic: imu_link_flu
     frame_aero: imu_link_frd
-    # Mounting: sensor pose in base_link, [x, y, z, roll, pitch, yaw], m/deg.
-    # Current assumption: IMU is close to the COM; neglect the lever arm for now.
-    # Zero position approximates colocated mounting; rotation still needs confirmation.
+    # Sensor pose relative to base_link at the COM: [x, y, z, roll, pitch, yaw], m/deg.
+    # XYZ is the COM-to-sensor lever arm in boat FLU axes (+x forward, +y left, +z up).
+    # imu_transformer corrects mounting rotation; imu_node subtracts tangential
+    # and centripetal acceleration using XYZ, gyro and timestamp-derived d(gyro)/dt.
+    # Example: [0.5, 0.0, 0.2, 0.0, 0.0, 90.0] = 50 cm forward, 20 cm above COM,
+    # sensor rotated 90 degrees around body z. Zero XYZ means no lever-arm correction.
     tf_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     # Colocated aerospace axes: forward, right, down. This defines the convention.
     tf_offset_aero: [0.0, 0.0, 0.0, 180.0, 0.0, 0.0]
@@ -61,6 +64,8 @@ imu_node:
     calibration_samples: 0
     gravity_mps2: 9.80665
     complementary_alpha: 0.98
+    # Maximum gyro interval for the lever-arm derivative and 6-DOF fallback.
+    # Nonzero lever arms require two samples at startup and after a longer gap.
     max_sample_dt_s: 0.2
     qos_depth: 10
 

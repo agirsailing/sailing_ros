@@ -34,6 +34,6 @@ def generate_launch_description():
         OpaqueFunction(function=check_mqtt_config),
         Node(package='communication_web', executable='telemetry_gateway_node',
              name='telemetry_gateway_node',
-             parameters=[params, mqtt_config],
+             parameters=[params, mqtt_config, {'use_sim_time': True}],
              output='screen'),
     ])

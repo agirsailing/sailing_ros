@@ -17,6 +17,7 @@ from sail_common.freshness import is_fresh
 
 from data_elaboration.generated.ros_endpoints import Topics
 from data_elaboration.processing.imu_filter import ImuFilter
+from data_elaboration.processing.lever_arm import LeverArmCompensator
 from data_elaboration.processing.imu_frames import (
     multiply, quaternion_from_degrees, rotation_matrix, rotate_covariance,
 )
@@ -54,6 +55,7 @@ class ImuNode(Node):
             self.complementary_alpha,
             self.max_sample_dt_s
         )
+        self.lever_arm = LeverArmCompensator(self.tf_offset[:3], self.max_sample_dt_s)
 
         # Complete the aerodynamic world conversion after the body transformer.
         self.world_quaternion = quaternion_from_degrees(*self.world_rotation_rpy_deg)
@@ -71,7 +73,7 @@ class ImuNode(Node):
         )
         self.aero_imu_pub = self.create_publisher(
             Imu, Topics.IMU_NODE.PUB.IMU_AERO, self.qos_depth)
-        # Describe the physical mounting without relocating acceleration to the COM.
+        # Sensor pose is physical; processed frames are colocated at base_link/COM.
         self.tf_broadcaster = StaticTransformBroadcaster(self)
         self._publish_static_frames()
 
@@ -142,10 +144,11 @@ class ImuNode(Node):
 
     def _publish_static_frames(self):
         transforms = []
-        # The processed frames share the IMU position; their axes follow the boat.
+        # imu_transformer rotates vectors only. The callback below transfers
+        # acceleration to the COM before publishing in the processed frames.
         offsets = (
             (self.frame_base, self.frame_imu, self.tf_offset),
-            (self.frame_base, self.frame_robotic, [*self.tf_offset[:3], 0.0, 0.0, 0.0]),
+            (self.frame_base, self.frame_robotic, [0.0] * 6),
             (self.frame_robotic, self.frame_aero, self.tf_offset_aero),
         )
         for parent, child, offset in offsets:
@@ -175,6 +178,7 @@ class ImuNode(Node):
         now = self.get_clock().now()
         if self._last_clock_ns is not None and now.nanoseconds < self._last_clock_ns:
             self.filter.reset()
+            self.lever_arm.reset()
             self._robotic_last_stamp = None
             self._robotic_sample = None
             self.aero_last_stamp = None
@@ -211,11 +215,30 @@ class ImuNode(Node):
                 msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z)):
             return
         if msg.orientation_covariance[0] != -1:
-            # A fusing IMU (BNO085) already estimated orientation: do not refilter.
-            if self._publish_fused(msg):
-                self._robotic_last_stamp = stamp_ns
-            return
+            norm = math.hypot(msg.orientation.x, msg.orientation.y,
+                              msg.orientation.z, msg.orientation.w)
+            if not math.isfinite(norm) or norm == 0:
+                return
         self._robotic_last_stamp = stamp_ns
+        acceleration = self.lever_arm.update(
+            stamp_ns,
+            (msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z),
+            (msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z))
+        if acceleration is None:
+            # Nonzero lever arm needs two consecutive samples. Do not publish
+            # uncorrected data as COM acceleration at startup or after a gap.
+            self._robotic_sample = None
+            return
+        if self.lever_arm.enabled:
+            msg = copy.deepcopy(msg)
+            msg.linear_acceleration.x, msg.linear_acceleration.y, msg.linear_acceleration.z = acceleration
+            # Original sensor covariance excludes gyro/derivative uncertainty.
+            # Zero denotes unknown; a positive override describes corrected data.
+            msg.linear_acceleration_covariance = self._diagonal(self.cov_acc)
+        if msg.orientation_covariance[0] != -1:
+            # A fusing IMU (BNO085) already estimated orientation: do not refilter.
+            self._publish_fused(msg)
+            return
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         acceleration = (
             msg.linear_acceleration.x,

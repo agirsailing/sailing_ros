@@ -1,224 +1,114 @@
-# 🐳 ROS 2 Jazzy Docker Environment
+# Ambiente Docker
 
-This repository provides a fully containerized **ROS 2 Jazzy** development environment using **Docker**, **Docker Compose**, and a custom **entrypoint** script. It allows you to start developing ROS 2 packages easily on any machine, without worrying about local setup or dependencies.
+_Aggiornato al giorno: 30/10/2026_
 
-## 📦 Overview
+[English](README_ENG.md) · [Indice repository](../README.md)
 
-The container setup includes:
+Questa cartella contiene ciò che serve per preparare gli ambienti ROS 2 Jazzy del progetto: uno per sviluppare sul PC e uno per eseguire il sistema sulla barca. I sorgenti dei nodi rimangono nel [workspace ros2_ws](../ros2_ws/README.md); qui definiamo l'ambiente in cui vengono compilati ed eseguiti.
 
-- A `Dockerfile` that builds a ROS 2 Jazzy base image.
-- A `compose.yaml` file to run the container with optional shared volumes.
-- An `entrypoint.sh` script that initializes the environment and passes commands correctly.
+## Perché usiamo Docker
 
-Both images explicitly install `ros-${ROS_DISTRO}-gps-msgs` for the standard
-`gps_msgs/msg/GPSFix` interface on `/gps/data`. After updating from the custom
-`sail_msgs/GpsData` interface, rebuild the image and run a clean workspace build
-(`bash scripts/build.sh --clean` from `ros2_ws` inside the container), then restart
-all GPS publishers/consumers. Webapp MQTT messages retain their current format.
+Nel team sviluppiamo sul PC e poi trasferiamo il codice sul Raspberry tramite Git. Il programma, però, non dipende soltanto dai file che scriviamo: servono anche ROS, il compilatore, i pacchetti dei messaggi e le librerie per sensori e MQTT. Installare tutto a mano su ogni computer rende più difficile capire se un problema dipende dal codice o da un ambiente configurato diversamente.
 
-This is ideal for robotics development, CI setups, or cross-platform compatibility when using ROS 2.
+Docker ci permette di descrivere queste installazioni nei file della repository. Chi entra nel team può costruire l'ambiente a partire da quelle istruzioni, senza installare ROS direttamente su Windows o macOS. Anche sul Raspberry le dipendenze dell'applicazione vengono installate nel container; il sistema operativo del Raspberry continua a gestire rete, dispositivi e servizi di avvio.
 
-For an overview of what docker is, how it works and why we use it, see the [Why Docker README](why_docker.md).
+PC e Raspberry hanno due configurazioni distinte perché svolgono lavori diversi. Sul PC servono strumenti di sviluppo, analisi e, quando necessario, finestre grafiche. Sulla barca servono soprattutto l'accesso ai sensori e l'esecuzione senza schermo. Usiamo la stessa distribuzione ROS e manteniamo le dipendenze necessarie in entrambi gli ambienti, ma compiliamo il codice su ciascuna macchina: i risultati della compilazione del PC non vanno copiati sul Raspberry.
 
----
+## Immagine, container e file condivisi
 
-## 💻 Required Software for Development
-To work efficiently with this ROS 2 Jazzy Docker-based framework, we recommend following the instructions in [Software Necessary README](software_necessary.md).
+L'**immagine** è l'ambiente preparato da Docker: contiene ROS e le dipendenze installate seguendo il `Dockerfile`. Il **container** è l'ambiente in esecuzione ricavato da quell'immagine. Quando VS Code si collega al container, il suo terminale esegue i comandi al suo interno, anche se la finestra di VS Code è sul PC Windows o macOS.
 
----
+I file del progetto vengono condivisi con il container tramite i **montaggi**, indicati in `compose.yaml`. Per esempio, modificando un nodo in `ros2_ws/src` dal PC, la modifica è subito visibile nella cartella corrispondente del container. Non occorre ricostruire l'immagine Docker a ogni modifica del codice: occorre invece ricompilare il workspace ROS quando richiesto.
 
-## 🚀 Getting Started
+## Struttura della cartella
 
-### 1. Build and Run the PC Container
-
-This project provides a PC development image and a separate Raspberry Pi hardware image. Build and start the PC image using the provided helper script.
-
-First, clone this repository locally:
-
-```bash
-git clone https://github.com/agirsailing/sailing_ros.git
+```text
+Docker/
+├── pc_container/
+│   ├── .dockerignore
+│   ├── build.sh
+│   ├── compose.gui.yaml
+│   ├── compose.yaml
+│   ├── Dockerfile
+│   └── entrypoint.sh
+├── raspi_container/
+│   ├── .dockerignore
+│   ├── compose.yaml
+│   ├── Dockerfile
+│   └── entrypoint.sh
+├── README.md
+└── README_ENG.md
 ```
 
-Then move into the project root:
+I file hanno ruoli diversi e si usano insieme:
+
+| File | A cosa serve |
+|---|---|
+| `Dockerfile` | Definisce l'immagine di partenza, installa le dipendenze e prepara l'utente e le cartelle del container. |
+| `compose.yaml` | Definisce come avviare il container: nome, immagine, file condivisi, rete e, sul Raspberry, accesso ai dispositivi. |
+| `entrypoint.sh` | All'avvio del container carica ROS e il workspace, poi esegue il comando ricevuto. |
+| `build.sh` | Sul PC riunisce in un solo comando la costruzione dell'immagine e l'avvio del container. |
+| `compose.gui.yaml` | Aggiunge la configurazione grafica del PC quando si usa `build.sh --gui`. |
+| `.dockerignore` | Esclude file non necessari dall'insieme inviato a Docker durante la costruzione dell'immagine. |
+
+## I due ambienti
+
+| Caratteristica | PC | Raspberry Pi |
+|---|---|---|
+| Cartella | [pc_container](pc_container/) | [raspi_container](raspi_container/) |
+| Utilizzo | Sviluppare, compilare, fare test e analizzare registrazioni. | Leggere i sensori ed eseguire il sistema di bordo. |
+| Immagine di partenza | `osrf/ros:jazzy-desktop-full` | `ros:jazzy-ros-core-noble` |
+| Immagine del progetto | `agirsailing:jazzy-desktop` | `agirsailing:jazzy-raspi` |
+| Nome del container | `agir-ros-pc` | `agir-ros-raspi` |
+| Cartelle condivise dall'host | `ros2_ws/src`, `scripts`, `tools`, `rosbags` | Tutta `ros2_ws` |
+
+In entrambi i container l'utente è `ros` e il workspace si trova in `/home/ros/ros2_ws`. Questo percorso è interno al container: sull'host Raspberry la repository si trova invece in `/home/boat/2025_SOFTWARE/sailing_ros`.
+
+### PC — Sviluppo e prove
+
+Il [Dockerfile PC](pc_container/Dockerfile) parte dalla versione desktop di ROS Jazzy e aggiunge le librerie del progetto e gli strumenti di sviluppo. Contiene anche strumenti di visualizzazione e analisi, come RViz e PlotJuggler, utilizzabili quando è configurata la grafica.
+
+Per costruire e avviare l'ambiente, dalla radice `sailing_ros`, esegui in **Git Bash su Windows** o nel **Terminale su macOS**:
 
 ```bash
-cd sailing_ros
+bash Docker/pc_container/build.sh
 ```
 
-Start Docker Desktop.
+Lo script usa il [Compose PC](pc_container/compose.yaml). L'avvio normale non richiede un server grafico né una GPU condivisa. La rete permette al container di collegarsi al broker MQTT e ai nodi ROS di comunicare al suo interno; per comunicare direttamente via ROS con altre macchine occorre configurare anche quel collegamento di rete.
 
-Now, from the repository root, build and start the PC container:
+Se vuoi aprire le finestre di RViz o di altri strumenti, prepara prima il server X sul PC e usa `bash Docker/pc_container/build.sh --gui`. Questa opzione aggiunge [compose.gui.yaml](pc_container/compose.gui.yaml) e usa il rendering software. I passaggi per collegare VS Code e compilare il codice sono nella [guida al settaggio PC](../guides/italiano/settaggio_pc.md).
 
-1. Open a terminal and run:
+### Raspberry — Esecuzione sulla barca
 
-    ```bash
-    cd Docker/pc_container
-    bash build.sh
-    ```
+Il [Dockerfile Raspberry](raspi_container/Dockerfile) parte da ROS Core e aggiunge i pacchetti necessari al sistema: lettura seriale, I2C e GPIO, GPS, elaborazione, comunicazione MQTT e registrazione delle rosbag.
 
-2. `build.sh` builds the Docker image and starts the container. The script is intended to mount `ros2_ws/` into the container so your workspace is available inside the running environment. Inspect `Docker/pc_container/build.sh` if you need to customize paths or options.
+Il [Compose Raspberry](raspi_container/compose.yaml) condivide l'intero workspace e la cartella dei dispositivi `/dev`, rendendo disponibili al container anche le porte USB, la UART dell'IMU e il bus I2C. Usa la rete e lo spazio IPC dell'host, con esecuzione privilegiata per l'accesso hardware previsto dal progetto. La configurazione delle porte e dei permessi sull'host viene preparata dagli script di setup.
 
-Notes:
+Per la prima installazione si usa `DAY_BEFORE_REGATTA/complete_setup.sh`; per gli aggiornamenti si usa `DAY_BEFORE_REGATTA/quick_setup.sh`. Questi script coordinano Docker e la compilazione ROS. Non serve avviare a mano i singoli passaggi Docker: la [guida al settaggio Raspberry](../guides/italiano/settaggio_raspberry.md) spiega la sequenza completa.
 
-- If you are on Windows, run the script from WSL, Git Bash, or a Bash-capable terminal. On PowerShell you may run the equivalent `bash build.sh` if Bash is available.
-- The first build may take several minutes while base images and dependencies are downloaded. Subsequent runs will be faster thanks to Docker's layer cache.
+Il sistema può funzionare interamente tramite SSH, senza Wayland, X11 o una sessione desktop. L'avvio manuale passa da [`DAY_BEFORE_REGATTA/run.sh`](../DAY_BEFORE_REGATTA/run.sh); l'autostart si abilita separatamente dopo le prove.
 
-If you prefer to use Docker Compose or want to customize mount points manually, see `Docker/pc_container/` for the generated compose snippets and the `Dockerfile` used by the build script.
+## Cosa succede quando avvii il container
 
-### 2. Attach a VSCode window to the running container
+Gli script [entrypoint del PC](pc_container/entrypoint.sh) e [del Raspberry](raspi_container/entrypoint.sh) caricano ROS Jazzy, entrano nel workspace e caricano `install/setup.bash` se il codice è già stato compilato. Poi eseguono il comando ricevuto, oppure aprono Bash.
 
-Since you successfully ran `bash build.sh` in the previous step, your container is now running in the background. To connect your editor to it:
+Avere il container acceso significa quindi avere l'ambiente disponibile, ma non significa che tutti i nodi della barca siano già in esecuzione. Sono tre passaggi distinti:
 
-1. Open VSCode.
-2. Using the extensions listed in the [Software Necessary README](software_necessary.md), you can connect to the container directly from VS Code using one of these two methods:
+| Passaggio | Risultato |
+|---|---|
+| Costruire l'immagine e avviare il container | Prepara l'ambiente con ROS e le dipendenze. Sul PC lo fa `Docker/pc_container/build.sh`. |
+| Compilare il workspace | Prepara pacchetti e messaggi del progetto. Nel container si esegue `bash scripts/build.sh` da `/home/ros/ros2_ws`. Sul Raspberry lo fanno già complete e quick. |
+| Avviare il sistema ROS | Lancia i nodi. Sul Raspberry lo fa `DAY_BEFORE_REGATTA/run.sh`, eseguito sull'host. |
 
-    - Method A: Command Palette. Press `Ctrl+Shift+P` (or `F1`/`Cmd+Shift+P` on Mac) to open the Command Palette. Search for *Dev Containers: Attach to Running Container*, press Enter and select your container (`agir-ros-pc`) from the dropdown list.
-    - Method B: Docker Extension Panel. Click on the Docker icon, usually located on the left sidebar. Go to the Containers section, right-click on your running container, and select 'Attach Visual Studio Code'.
+## Cosa rimane salvato e quando ricompilare
 
-    
-A new VSCode window will open automatically. You are now working directly inside the ROS2 container environment.
+Sul PC, sorgenti, script, strumenti e rosbag rimangono nelle cartelle condivise dell'host. `build`, `install` e `log` restano invece nel container: fermarlo e riavviarlo li conserva, mentre ricrearlo li elimina e richiede una nuova compilazione. Sul Raspberry l'intero workspace è condiviso, quindi anche queste cartelle rimangono sull'host.
 
-> **💡 Important Note for Future Runs**: The Docker engine relies on the Docker Desktop application. If you restart your computer and try to start the container or connect via VSCode, it will fail unless Docker Desktop is running in the background.
-> To avoid manually opening the app every time, open Docker Desktop, go to Settings (Gear icon) > General, and check Start Docker Desktop when you log in. This ensures the Docker engine is always ready when you open VS Code.
+Se modifichi i sorgenti, usa gli [script del workspace](../ros2_ws/scripts/README.md) per ricompilare. Se aggiungi una libreria di sistema, aggiorna il Dockerfile dell'ambiente che la deve usare e ricostruisci l'immagine; se la libreria serve sia sul PC sia a bordo, aggiorna entrambi i Dockerfile. Una libreria installata manualmente solo in un container non entrerà automaticamente nella prossima immagine.
 
+## Guide collegate
 
-
-### 3. Build the ROS 2 Workspace
-
-With the container running and VS Code attached:
-
-1. In the VS Code window, navigate to the ros2_ws/ folder inside the container.
-2. Open a terminal (it should open in the workspace folder by default).
-3. Run:
-    ```bash
-    cd scripts
-    bash build.sh
-    ```
-    This script builds all ROS 2 packages in the workspace with the project defaults.
-4. You can now start testing the software by running or launching nodes as needed.
-
-The workspace run script selects the top-level `orchestrator` launch:
-
-```bash
-bash /home/ros/ros2_ws/scripts/run.sh live
-```
-
-Use `replay` instead of `live` for the replay launch. Both orchestrator launches
-are currently empty and will be connected to the package launch files later.
-
-The existing sensor system can be launched separately with
-`ros2 launch sensors sensors_launch.py`. It starts two ultrasonic nodes,
-GPS, the BNO085 UART IMU, the I2C compass and the battery node; connected
-hardware is required. The PC container is primarily for development.
-The ultrasonic ports, topics and device IDs are configured in
-`ros2_ws/src/sensors/config/params.yaml`, installed to `share/sensors/config/params.yaml`.
-Rebuild the workspace after changing configuration to refresh the installed files.
-
-### 4. Check the Graphical Interface (X Server)
-
-This optional PC-only step verifies that the PC container can display graphical
-applications (e.g., rqt, rviz2) on your host computer. It is not part of Raspberry
-Pi setup or boat autostart.
-
-To test this:
-
-1. Make sure your host system is running an X Server (as provided in the [README](software_necessary.md))
-2. In the container terminal, run a graphical command such as: `rqt`, `rqt_graph` or `rviz2`
-
-On Windows/macOS, the default display is `host.docker.internal:0`; override `DISPLAY`
-if your X server uses a different address. On Linux, enable the optional X11 socket
-and Xauthority mounts in `pc_container/compose.yaml` if those paths exist. The GPU
-mount is optional on PC. The Raspberry Pi configuration runs headless: it has no
-Wayland/X11 sockets, Xauthority file, desktop runtime directory or explicit GPU
-mount. Sensors, processing, MQTT and rosbag recording do not need a desktop login.
-
-Both configurations use host networking for ROS discovery. Docker Desktop requires
-enabling this under **Settings > Resources > Network > Enable host networking**;
-see the [Docker host networking documentation](https://docs.docker.com/engine/network/drivers/host/).
-Communication between the PC and Raspberry Pi still needs checking on the actual network.
-
-### 5. Raspberry Pi Setup
-
-The Raspberry Pi Compose file is `Docker/raspi_container/compose.yaml`. On the Pi,
-enable I2C and connect the devices before starting the hardware container. If the
-container user needs additional I2C/GPIO groups, uncomment their `group_add` entries
-and set the actual numeric device group IDs in the terminal where you run Compose:
-
-```bash
-export I2C_GID=$(stat -c '%g' /dev/i2c-1)
-export GPIO_GID=$(stat -c '%g' /dev/gpiochip0)
-docker compose -f Docker/raspi_container/compose.yaml up -d --build
-```
-
-Run these commands from the repository root. You can also save those two numeric
-values in `Docker/raspi_container/.env` when running Compose from that directory.
-The hardware container is `agir-ros-raspi`; it exposes `/dev` for the existing serial,
-I2C and GPIO code and retains privileged mode. Check serial device access through
-the `dialout` group. The GPS configuration uses the stable `/dev/gps` alias, and the battery
-node expects `/dev/gpiochip0`. The BNO085 uses `/dev/ttyAMA0`, exposed through
-the same `/dev` mount. The [Pi 4 setup](../DAY_BEFORE_REGATTA/README.md) configures
-GPIO UART and I2C and installs hardware permission rules. Reboot after changing
-UART boot settings, then verify `/dev/ttyAMA0` access before starting the IMU.
-
-Manual startup over SSH and system-level autostart use the same headless Compose
-file. No monitor, Wayland session, display server or interactive login is needed
-at boot. Network access is still required by the startup script's ping check.
-Both teams use the same optional I2C/GPIO group examples. They remain commented
-until the actual host group IDs are known; `dialout` and `tty` are enabled.
-
-Compose inherits both `ENTRYPOINT` and `CMD` from the image. The shared
-entrypoint loads ROS and an existing workspace installation before executing Bash.
-
-The battery node's existing `sudo shutdown` call runs inside the container;
-powering off the host Pi needs a separate host integration and is not implemented
-by this Docker configuration.
-
-### Workspace Paths and Dependencies
-
-- Both Compose files resolve `../../ros2_ws` relative to their own directory.
-  The PC mounts `src`, `scripts`, `rosbags`, `tools` and `CSVs` separately. The
-  Raspberry Pi mounts the entire workspace under `/home/ros/ros2_ws`.
-- On PC, build, install and log directories stay inside the container and are lost
-  when it is recreated; rebuild afterward. On Raspberry Pi, these directories
-  persist in its host checkout. CSVs and rosbags persist on both hosts.
-- On Linux, ensure the mounted directories are writable by the container user
-  (default UID/GID `1001`). Keep the username `ros`, since Compose and the entrypoint
-  use `/home/ros`. Create the `ros2_ws/CSVs` folder as your host user before first use.
-- The entrypoint loads ROS and, if available, the built workspace. A fresh container
-  can open a shell before the first workspace build.
-- The Dockerfiles install `rclpy`, message types, launch support, PySerial, SMBus2,
-  lgpio and pyubx2. All listed ROS packages are enabled in both Dockerfiles.
-  MQTT/Bluetooth Python integrations are installed on both images; the PC image
-  also installs pandas. The PC uses `osrf/ros:jazzy-desktop-full`; Raspberry Pi uses
-  `ros:jazzy-ros-core-noble`. Both include APT recommended packages, run
-  `apt-get upgrade` and create the workspace with `chmod 777`.
-  Host bind mounts retain their host permissions.
-  Some ROS tools remain dependencies of the PC desktop-full base image.
-  For each platform, the Agir and Polimi Dockerfiles share the same structure and settings, with
-  separate commented sections for each task. Only Agir adds the Python sensor
-  dependencies (`python3-serial`, `python3-smbus2`, `python3-lgpio` and `pyubx2`).
-- The Python package installs its launch and YAML files using `setup.py`, following
-  the [ROS 2 package installation pattern](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/Launch/Launch-system.html).
-
-
-## Workflow for Subsequent Sessions
-
-The next time you want to work on your project, you don't need to rebuild the image. Just follow this quick routine:
-
-1. Ensure the Docker Engine is running: Make sure the Docker Desktop app is open in the background. 
-
-2. Start the container: You can wake up your existing container using one of three ways:
-
-    * Directly from VSCode (Recommended): Open VS Code, go to the Docker extension, find your container under Containers, right-click it, and select Start.
-    * From the Terminal: Open a terminal in your project folder (where compose.yaml is located) and run:
-
-        ```docker compose start```
-    * From Docker Desktop: In the Containers section of Docker Desktop, select Start ("play" button) on your container.
-
-3. Attach VS Code: Once the container is running, use `Ctrl+Shift+P` to attach to it.
-
-The height estimator and web gateway require `ros-${ROS_DISTRO}-marti-common-msgs`
-(installed by both Dockerfiles). After migrating `/processed/boat_height` from
-BoatHeight to Float64Stamped, rebuild the image and run
-`bash scripts/build.sh --clean` inside `ros2_ws`. The scalar field is now `value`
-in metres; the web dashboard continues to use `height_m`.
+- [Configurazione del PC](../guides/italiano/settaggio_pc.md): avvio dell'ambiente, collegamento di VS Code e prima compilazione.
+- [Configurazione del Raspberry](../guides/italiano/settaggio_raspberry.md): prima installazione, aggiornamenti e abilitazione dell'autostart.
+- [Avvio del sistema ROS](../guides/italiano/avvio_sistema_ros.md): prove manuali e controlli del sistema sulla barca.
+- [Script di bordo](../DAY_BEFORE_REGATTA/README.md): ruolo e configurazione di complete, quick, run e autostart.

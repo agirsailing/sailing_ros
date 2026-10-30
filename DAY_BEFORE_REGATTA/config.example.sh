@@ -10,5 +10,6 @@ export AGIR_BRANCH=main
 
 # Optional: leave unset to reuse origin and Git authentication.
 # Both values are required when explicitly replacing HTTPS credentials.
+# No interactive credential prompts: if no saved credentials exist, fill both here.
 # export AGIR_GIT_USER=""
 # export AGIR_GIT_TOKEN=""

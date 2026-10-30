@@ -52,8 +52,10 @@ class LaunchConfigTests(unittest.TestCase):
             self.assertEqual(len(nodes), 2 if mode == 'live' else 1)
             self.assertEqual(nodes[0]['executable'], 'telemetry_gateway_node')
             for node in nodes:
-                self.assertEqual([p.name for p in node['parameters']], [
+                self.assertEqual([p.name for p in node['parameters'] if isinstance(p, LaunchConfiguration)], [
                     'communication_web_params_file', 'communication_web_mqtt_config_file'])
+                if mode == 'replay':
+                    self.assertEqual(node['parameters'][-1], {'use_sim_time': True})
             self.assertLess(
                 next(i for i, a in enumerate(actions) if a[0] == 'check'),
                 next(i for i, a in enumerate(actions) if a[0] == 'node'))

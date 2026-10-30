@@ -36,7 +36,7 @@ main() {
   echo "🎉 SETUP FINISHED! The system is ready but STOPPED."
   echo "👉 To start use the RUN script."
   echo "Reboot before running sensors so the I2C boot configuration takes effect."
-  echo "Keep USB sensors on their assigned ports: left=1.4, right=1.3, GPS=1.2, IMU=1.1."
+  echo "Keep USB sensors on their assigned ports: left=1.4, right=1.3, GPS=1.2. IMU uses GPIO UART /dev/ttyAMA0."
   echo "Test manually with: bash $REPO_DIR/DAY_BEFORE_REGATTA/run.sh"
   echo "Only after manual testing, enable autostart yourself with: sudo bash $REPO_DIR/DAY_BEFORE_REGATTA/autostart_setup.sh"
 }

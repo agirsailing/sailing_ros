@@ -1,65 +1,75 @@
-# sail_common
+# sail_common — funzioni usate da più pacchetti
 
-Shared Python utilities, installed as an `ament_python` package. This package
-contains no nodes, timers, hardware configuration or message definitions.
+_Aggiornato al giorno: 30/10/2026_
 
-## Freshness
+[English](README_ENG.md) · [Workspace](../../README.md)
+
+## Introduzione
+
+Un nodo può aver ricevuto una misura corretta che, dopo qualche secondo senza aggiornamenti, non descrive più la situazione attuale. `sail_common` raccoglie il controllo condiviso per riconoscere questo caso, evitando che ogni nodo calcoli l'età dei dati in modo diverso.
+
+È una libreria Python, non un nodo ROS: non ha topic, servizi o frequenze di pubblicazione. Attualmente contiene la funzione `is_fresh`; le soglie restano nei file YAML dei pacchetti che la usano.
+
+## Struttura del pacchetto
+
+```text
+sail_common/
+├── sail_common/
+│   ├── __init__.py
+│   └── freshness.py
+├── test/
+├── package.xml
+└── setup.py
+```
+
+La logica si trova in [freshness.py](sail_common/freshness.py). I test verificano tempi ROS, valori numerici e casi limite.
+
+## Come viene usato
+
+Le frecce mostrano l'importazione della funzione, non uno scambio di topic. Il controllo viene eseguito nello stesso processo del nodo chiamante.
+
+```mermaid
+flowchart LR
+    sensor["sensors"] -->|import| helper["sail_common.freshness<br/>is_fresh"]
+    processing["data_elaboration"] -->|import| helper
+    web["communication_web"] -->|import| helper
+    helper --> result["True / False"]
+```
+
+Esempio in una callback o prima di ripubblicare un dato:
 
 ```python
 from sail_common.freshness import is_fresh
 
-usable = is_fresh(msg.header.stamp, node.get_clock().now(), max_age_s)
+usable = is_fresh(
+    msg.header.stamp,
+    node.get_clock().now(),
+    max_age_s,
+)
 ```
 
-The single policy is `0 <= now - stamp <= max_age_s`, with an inclusive expiry
-boundary and a finite, positive limit in seconds. The helper accepts ROS
-`builtin_interfaces/Time`, `rclpy.time.Time`, or numeric seconds. Passing a bare
-`msg.stamp` works too. Integer ROS timestamps retain nanosecond precision.
-Missing, malformed, non-finite and future timestamps return false. Invalid
-limits raise `ValueError`. Time zero is valid during simulation; use `None` or
-an absent cached sample to represent "nothing received yet".
+Il risultato indica soltanto se la misura è abbastanza recente. Un fix GPS senza posizione o una distanza fuori campo possono essere recenti ma inutilizzabili: quei controlli rimangono nel nodo.
 
-Inputs MUST share a clock and epoch. Clock identity is not carried in ROS Time
-messages; the caller must choose the correct clock and synchronize machines.
-Known clock-type mismatches between two `rclpy.time.Time` objects are rejected.
-Numeric arguments are seconds, never raw integer nanoseconds.
+## Quale controllo viene fatto
 
-Call at reception and again before consuming cached measurements. The function
-does not schedule callbacks, mutate caches, check physical validity, or guarantee
-the presence of a publisher. Time going backwards makes future samples stale;
-owners of histories must also clear them when a clock reset occurs, so an old
-sample cannot become usable again when the clock catches up.
+La funzione restituisce vero quando:
 
-Migration is incremental. Current users:
+```text
+0 <= tempo_attuale - timestamp_misura <= max_age_s
+```
 
-- `sensors/ultrasonic_node.py`: checks source ROS time and, separately, elapsed
-  monotonic time before each publication. The latter expires data even when ROS
-  time is paused. The two clock domains are never compared with each other.
-- `data_elaboration/ultrasonic_filter_node.py`: checks incoming ranges, attitude
-  history eligibility and candidates before height fusion. Clock-reset cleanup
-  and duplicate rejection remain local to the estimator.
-- `communication_web/telemetry_gateway_node.py`: checks recording-state receipt
-  age before each MQTT state tick (no source header is available in RecordingState).
-- `communication_web/gateway/telemetry.py`: checks source and receipt times for
-  every input on each dashboard tick, including processed attitude, height,
-  battery, ultrasound and GPSFix received directly from `/gps/data`.
-  GPS freshness uses its original header, copied to `MapDataMsg.gps_stamp`.
-- `sensors/gps_node.py`: checks source ROS time and elapsed monotonic time before
-  publishing cached NAV-PVT data, independently of `fix_valid`.
-- `sensors/battery_node.py`: checks the cached GPIO alarm using source ROS time
-  and elapsed monotonic time before publication. Voltage uses its independent
-  driver timestamp and age limit; expired voltage becomes NaN without suppressing
-  a fresh alarm. Shutdown checks run on new GPIO reads, not republications.
-- `sensors/i2c_sensors_node.py`: checks source ROS time and elapsed monotonic time
-  for compass snapshots before each publication. Its conversion delay is unchanged.
-- `sensors/imu_sensor_node.py` and `drivers/imu_driver.py`: check each BNO085
-  component independently and expire cached UART measurements without renewing
-  timestamps on republication.
-- `data_elaboration/ultrasonic_filter_node.py`: checks range/attitude alignment
-  during computation, then rechecks source ages and elapsed monotonic time before
-  publishing a cached Float64Stamped height. Repeats never renew source stamps.
-- `data_elaboration/imu_node.py`: accepts fresh mounted/aero input, rejects repeated
-  timestamps and expires periodic robotic output using source and receipt times.
+Il limite è incluso. Timestamp mancanti, malformati, futuri o non finiti danno falso. Una soglia non positiva o non finita genera invece `ValueError`, perché indica una configurazione errata.
 
-Limits remain in the owning package's YAML. There is no duplicate global rates
-or timeout file. Consumers declare an `exec_depend` on `sail_common`.
+Sono accettati `builtin_interfaces/msg/Time`, `rclpy.time.Time` e valori numerici in **secondi**. Gli interi in nanosecondi non vanno passati come numeri di secondi. Per i tempi ROS si mantiene la precisione intera in nanosecondi.
+
+I due istanti devono appartenere allo stesso orologio e alla stessa epoca. Non confrontare direttamente `time.monotonic()` con un header ROS: per rilevare anche un clock ROS fermo, il nodo deve effettuare due controlli distinti, ciascuno nel proprio dominio. Se due oggetti `rclpy.time.Time` dichiarano clock diversi, il controllo restituisce falso.
+
+Lo zero è un tempo valido, per esempio all'inizio di una simulazione. Per rappresentare una misura mai ricevuta usa `None` o una cache vuota.
+
+## Cosa deve fare il nodo chiamante
+
+La funzione non imposta un timer, non cancella la misura e non programma la sua scadenza. Il nodo deve richiamarla quando usa o ripubblica il dato, e decidere cosa fare se non è più fresco. Se mantiene una storia di campioni, deve anche gestire i salti indietro dell'orologio.
+
+Un messaggio con `stamp` diretto può passare quel campo alla stessa funzione. `Header` aggiunge il `frame_id` al timestamp, ma il controllo non usa il frame. Per messaggi senza timestamp, come `RecordingState`, il gateway controlla invece il tempo trascorso dalla ricezione.
+
+Quando aggiungi un utilizzatore, dichiara `sail_common` in `package.xml` e verifica almeno dato assente, vecchio, futuro e al limite ammesso. Da `/home/ros/ros2_ws`, esegui `bash scripts/test.sh sail_common`.

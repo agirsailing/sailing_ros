@@ -7,9 +7,80 @@ repository_validate_credentials() {
   if [[ "$GIT_USER" == INSERT_* ]]; then GIT_USER=""; fi
   if [[ "$GIT_TOKEN" == INSERT_* ]]; then GIT_TOKEN=""; fi
   if [[ ( -n "$GIT_USER" && -z "$GIT_TOKEN" ) || ( -z "$GIT_USER" && -n "$GIT_TOKEN" ) ]]; then
-    echo "Provide both GIT_USER and GIT_TOKEN to replace credentials, or leave both empty to reuse Git authentication."
+    repository_missing_credentials
     exit 1
   fi
+}
+
+repository_missing_credentials() {
+  echo "Credenziali Git mancanti o incomplete."
+  echo "Compila GIT_USER e GIT_TOKEN nella copia privata di repository.sh, oppure AGIR_GIT_USER e AGIR_GIT_TOKEN in DAY_BEFORE_REGATTA/config.local.sh."
+}
+
+repository_git() {
+  # Never prompt in the terminal, an askpass dialog or Git Credential Manager.
+  GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false SSH_ASKPASS=/bin/false \
+    GCM_INTERACTIVE=Never \
+    GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -oBatchMode=yes -oStrictHostKeyChecking=yes" \
+    git -c credential.interactive=false "$@"
+}
+
+repository_prepare_remote() {
+  local saved credentials line has_user=0 has_password=0
+  local -a context=()
+  REPO_URL="https://github.com/${REPO_SLUG}.git"
+  if [[ -d "$REPO_DIR/.git" ]]; then
+    context=(-C "$REPO_DIR")
+    if saved="$(git "${context[@]}" remote get-url origin 2>/dev/null)"; then
+      REPO_URL="$saved"
+    fi
+  fi
+  if [[ -n "$GIT_USER" ]]; then
+    REPO_URL="https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git"
+  elif [[ "$REPO_URL" == https://* || "$REPO_URL" == http://* ]]; then
+    # Git resolves embedded credentials and configured helpers; keep the result private.
+    credentials="$(printf 'url=%s\n\n' "$REPO_URL" |
+      repository_git "${context[@]}" credential fill 2>/dev/null)" || {
+        repository_missing_credentials
+        return 1
+      }
+    while IFS= read -r line; do
+      [[ "$line" != username=?* ]] || has_user=1
+      [[ "$line" != password=?* ]] || has_password=1
+    done <<< "$credentials"
+    if [[ "$has_user" != 1 || "$has_password" != 1 ]]; then
+      repository_missing_credentials
+      return 1
+    fi
+  fi
+  if [[ -d "$REPO_DIR/.git" ]]; then
+    if git -C "$REPO_DIR" remote get-url origin >/dev/null 2>&1; then
+      if [[ -n "$GIT_USER" ]]; then
+        git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
+      fi
+    else
+      git -C "$REPO_DIR" remote add origin "$REPO_URL"
+    fi
+  fi
+}
+
+repository_network_git() {
+  local error_file status
+  error_file="$(mktemp)" || return 1
+  # Git errors can contain the credential-bearing URL. Do not print raw stderr.
+  if LC_ALL=C repository_git "$@" 2>"$error_file"; then
+    rm -f -- "$error_file"
+    return 0
+  else
+    status=$?
+  fi
+  if grep -Eiq 'Authentication failed|Invalid username or (password|token)|Invalid credentials|returned error: (401|403)|Authentication (required|denied)|could not read (Username|Password)' "$error_file"; then
+    echo "Errore nel token."
+  else
+    echo "Operazione Git non riuscita. Controlla connessione, accesso al repository, branch e stato locale (git status)."
+  fi
+  rm -f -- "$error_file"
+  return "$status"
 }
 
 repository_full() {
@@ -21,12 +92,7 @@ repository_full() {
     sudo chown -R "$USER":"$USER" "$REPO_DIR"
   fi
 
-  # With no override, Git itself uses any configured credential helper (or prompts
-  # when needed). Existing origin URLs may also contain credentials or use SSH.
-  REPO_URL="https://github.com/${REPO_SLUG}.git"
-  if [[ -n "$GIT_USER" ]]; then
-    REPO_URL="https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git"
-  fi
+  repository_prepare_remote
 
   if [ -d "$REPO_DIR/.git" ]; then
     echo "🔄 Existing repo in $REPO_DIR, aligning to origin/$BRANCH..."
@@ -34,29 +100,12 @@ repository_full() {
     # Ignore executable-bit changes before updating an existing checkout.
     git -C "$REPO_DIR" config --local core.fileMode false
 
-    # Rebase/reset do not remove .git/config. Preserve saved origin credentials
-    # and SSH URLs unless the user explicitly supplies a replacement pair.
-    if git -C "$REPO_DIR" remote get-url origin >/dev/null 2>&1; then
-      if [[ -n "$GIT_USER" ]]; then
-        git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
-        echo "Updated origin with the supplied GitHub credentials."
-      else
-        echo "Reusing existing origin and Git authentication."
-      fi
-    else
-      git -C "$REPO_DIR" remote add origin "$REPO_URL"
-    fi
-
-    if ! git -C "$REPO_DIR" fetch origin --prune; then
-      echo "Fetch failed: check connectivity, repository access and whether saved credentials have expired."
-      echo "For an HTTPS token replacement, supply both GIT_USER and GIT_TOKEN and rerun setup."
-      exit 1
-    fi
+    repository_network_git -C "$REPO_DIR" fetch origin --prune
     git -C "$REPO_DIR" checkout -B "$BRANCH" "origin/$BRANCH" 2>/dev/null || true
     git -C "$REPO_DIR" reset --hard "origin/$BRANCH"
   else
     echo "📥 Cloning repo into $REPO_DIR..."
-    git clone -b "$BRANCH" "$REPO_URL" "$REPO_DIR"
+    repository_network_git clone -b "$BRANCH" "$REPO_URL" "$REPO_DIR"
   fi
 
   # Persist for both new clones and existing checkouts. The workspace chmod below
@@ -69,11 +118,12 @@ repository_update() {
   if [ -d "$REPO_DIR/.git" ]; then
     echo "🔄 Downloading updates from main (keeping local files)..."
 
+    repository_prepare_remote
     git -C "$REPO_DIR" config --local core.fileMode false
 
     # Use pull with rebase and autostash:
     # Saves local modifications automatically, updates, and reapplies them on top of the new code.
-    git -C "$REPO_DIR" pull origin "$BRANCH" --rebase --autostash
+    repository_network_git -C "$REPO_DIR" pull origin "$BRANCH" --rebase --autostash
 
     echo "Making the workspace writable by the container user..."
     sudo chmod -R 777 "$REPO_DIR/ros2_ws"
@@ -123,26 +173,16 @@ repository_configure() {
 }
 
 repository_bootstrap() {
-  REPO_URL="https://github.com/${REPO_SLUG}.git"
-  if [[ -n "$GIT_USER" ]]; then
-    REPO_URL="https://${GIT_USER}:${GIT_TOKEN}@github.com/${REPO_SLUG}.git"
-  fi
+  repository_prepare_remote
   mkdir -p "$(dirname "$REPO_DIR")"
   if [[ -d "$REPO_DIR/.git" ]]; then
     # A repeated bootstrap must not discard local work like full setup does.
-    if git -C "$REPO_DIR" remote get-url origin >/dev/null 2>&1; then
-      if [[ -n "$GIT_USER" ]]; then
-        git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
-      fi
-    else
-      git -C "$REPO_DIR" remote add origin "$REPO_URL"
-    fi
     git -C "$REPO_DIR" config --local core.fileMode false
-    git -C "$REPO_DIR" fetch origin
+    repository_network_git -C "$REPO_DIR" fetch origin
     git -C "$REPO_DIR" switch "$BRANCH"
-    git -C "$REPO_DIR" pull --ff-only origin "$BRANCH"
+    repository_network_git -C "$REPO_DIR" pull --ff-only origin "$BRANCH"
   else
-    git clone -b "$BRANCH" "$REPO_URL" "$REPO_DIR"
+    repository_network_git clone -b "$BRANCH" "$REPO_URL" "$REPO_DIR"
     git -C "$REPO_DIR" config --local core.fileMode false
   fi
 

@@ -51,9 +51,22 @@ docker() {
   esac
 }
 git() {
-  [[ "$1" != -C ]] || shift 2
+  while [[ "$1" == -C || "$1" == -c ]]; do shift 2; done
   record "git $*"
+  if [[ "$1" == fetch || "$1" == pull || "$1" == clone || "$1" == credential ]]; then
+    [[ "${GIT_TERMINAL_PROMPT:-}" == 0 && "${GIT_ASKPASS:-}" == /bin/false &&
+       "${GCM_INTERACTIVE:-}" == Never && "${GIT_SSH_COMMAND:-}" == *BatchMode=yes* ]] || return 96
+    if [[ "$1" != credential && "$TEST_FAIL" == auth ]]; then
+      echo 'fatal: Authentication failed for https://dummy:dummy_token@github.com/example.git' >&2
+      return 128
+    fi
+  fi
   case "$1 $2" in
+    'credential fill')
+      command cat >/dev/null
+      [[ "${TEST_NO_CREDENTIALS:-0}" != 1 ]] || return 1
+      printf 'username=saved_user\npassword=saved_token\n'
+      return 0 ;;
     'remote get-url') [[ -f "$TEST_ORIGIN" ]] && cat "$TEST_ORIGIN"; return $? ;;
     'remote set-url'|'remote add') printf '%s' "$4" > "$TEST_ORIGIN" ;;
     'fetch origin') [[ "$TEST_FAIL" != fetch ]] || return 10 ;;
@@ -202,7 +215,8 @@ class SetupTests(unittest.TestCase):
         rules = (self.root / '99-boat-serial.rules').read_text()
         for port, alias in [('1.4', 'ultrasonic_left'), ('1.3', 'ultrasonic_right'), ('1.2', 'gps')]:
             self.assertIn(f'KERNELS=="1-{port}:1.0", SYMLINK+="{alias}"', rules)
-        self.assertIn('dtparam=i2c_arm=on', (self.root / 'boot-config.txt').read_text())
+        self.assertIn('enable_uart=1', (self.root / 'boot-config.txt').read_text())
+        self.assertIn('dtoverlay=disable-bt', (self.root / 'boot-config.txt').read_text())
 
     def test_quick_keeps_rebase_incremental_and_service_stop_order(self):
         log = self.run_setup()
@@ -293,6 +307,47 @@ class SetupTests(unittest.TestCase):
         self.env.update(AGIR_GIT_USER='dummy', AGIR_GIT_TOKEN='dummy_token')
         self.run_setup(FULL)
         self.assertEqual(self.origin.read_text(), 'https://dummy:dummy_token@github.com/agirsailing/sailing_ros.git')
+
+    def test_missing_credentials_stop_all_repository_modes_without_network(self):
+        self.env['TEST_NO_CREDENTIALS'] = '1'
+        for args in ((), ('full',), ('update',)):
+            with self.subTest(args=args):
+                log = self.run_setup('steps/repository.sh', *args, success=False)
+                self.assertIn('config.local.sh', self.last_result.stdout)
+                self.assertFalse(any(line.startswith(('git fetch', 'git pull', 'git clone', 'git reset'))
+                                     for line in log))
+
+    def test_auth_failure_is_generic_and_does_not_expose_credentials(self):
+        self.env['TEST_FAIL'] = 'auth'
+        for args in ((), ('full',), ('update',)):
+            with self.subTest(args=args):
+                log = self.run_setup('steps/repository.sh', *args, success=False)
+                output = self.last_result.stdout + self.last_result.stderr
+                self.assertIn('Errore nel token.', output)
+                self.assertNotIn('dummy_token', output)
+                self.assertNotIn('scadut', output)
+                self.assertFalse(any('git reset' in line or 'chmod -R 777' in line for line in log))
+
+    def test_quick_accepts_replacement_credentials_from_local_file(self):
+        self.env['TEST_NO_CREDENTIALS'] = '1'
+        (self.scripts / 'config.local.sh').write_text(
+            'AGIR_GIT_USER=dummy\nAGIR_GIT_TOKEN=dummy_token\n')
+        log = self.run_setup()
+        self.assertEqual(self.origin.read_text(),
+                         'https://dummy:dummy_token@github.com/agirsailing/sailing_ros.git')
+        self.assertIn('git pull origin main --rebase --autostash', log)
+
+    def test_connection_failure_is_not_reported_as_token_failure(self):
+        self.env['TEST_FAIL'] = 'fetch'
+        self.run_setup('steps/repository.sh', 'full', success=False)
+        self.assertIn('Operazione Git non riuscita', self.last_result.stdout)
+        self.assertNotIn('Errore nel token', self.last_result.stdout)
+
+    def test_existing_ssh_origin_does_not_require_https_token(self):
+        self.env['TEST_NO_CREDENTIALS'] = '1'
+        self.origin.write_text('git@github.com:agirsailing/sailing_ros.git')
+        log = self.run_setup('steps/repository.sh', 'update')
+        self.assertNotIn('git credential fill', log)
 
     def test_missing_repo_and_invalid_quick_arguments_stop_before_operations(self):
         (self.repo / '.git').rmdir()
