@@ -6,3 +6,5 @@ bool fix_valid
 float64 latitude_deg
 float64 longitude_deg
 float64 sog_mps
+# Saved course marks remain available even when the current GPS fix is invalid.
+sail_msgs/Mark[] marks

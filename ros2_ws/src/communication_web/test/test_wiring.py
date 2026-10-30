@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT.parent / 'sail_common'))
 from communication_web.gateway.recording_rpc import RecordingRpc
+from communication_web.gateway.mark_rpc import MarkRpc
 from communication_web.gateway.telemetry import TelemetrySnapshot, json_safe
 from communication_web.generated.ros_endpoints import Services, Topics
 from sail_common.freshness import is_fresh
@@ -73,6 +74,8 @@ def message_type(name):
                 value = False
             elif kind == 'string':
                 value = ''
+            elif kind.endswith('[]'):
+                value = []
             else:
                 value = 0.0
             setattr(self, field, value)
@@ -125,6 +128,9 @@ class FakeNode:
         self.clients[service] = client
         return client
 
+    def create_service(self, kind, service, callback):
+        return callback
+
     def create_timer(self, *args, **kwargs):
         self.timers.append(args)
         return Mock()
@@ -149,14 +155,17 @@ class WiringTests(unittest.TestCase):
             json_safe=json_safe, message_to_ordereddict=lambda msg: {'test': float('nan')})
         self.messages = {name: message_type(name) for name in (
             'BatteryData', 'MapDataMsg', 'RecordingState',
-            'DashboardDataMsg')}
+            'DashboardDataMsg', 'Mark')}
+        self.messages['Mark'].COMMITTEE = 0
+        self.messages['Mark'].PIN = 1
+        self.messages['Mark'].WINDWARD = 2
 
     def telemetry_node(self, **rates):
         cls = load_class(
             ROOT / 'communication_web/telemetry_gateway_node.py', 'TelemetryGatewayNode',
             Node=FakeNode, math=math, Parameter=self.parameter,
             time=NS(monotonic=self.monotonic), is_fresh=is_fresh,
-            Topics=Topics, MqttClientWrapper=self.transport,
+            Topics=Topics, Services=Services, PingMark=NS, MqttClientWrapper=self.transport,
             TelemetrySnapshot=TelemetrySnapshot, GPSFix=NS, Float64Stamped=NS, Imu=NS, Range=NS, **self.messages)
         original = FakeNode.declare_parameter
 
@@ -175,7 +184,7 @@ class WiringTests(unittest.TestCase):
             Empty=Empty, Full=Full, Clock=Mock(), ClockType=NS(STEADY_TIME=3),
             Topics=Topics, Services=Services, MqttClientWrapper=self.transport,
             RecordingRpc=RecordingRpc, StartRecording=NS(Request=object),
-            StopRecording=NS(Request=object))
+            StopRecording=NS(Request=object), MarkRpc=MarkRpc, PingMark=NS(Request=NS))
         return cls()
 
     def test_telemetry_constructor_parameters_and_real_message_fields(self):
@@ -284,14 +293,15 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(node.mqtt.publish_ros_msg.call_count, 2)
         node.mqtt.publish_ros_msg.assert_called_with(rt.MQTT.PUB.RECORDING_STATE, recovered)
 
-    def test_command_constructor_only_recording_and_queue_handoff(self):
+    def test_command_constructor_recording_ping_and_queue_handoff(self):
         node = self.command_node()
         self.assertEqual(node.process_rate_hz, 20.0)
         self.assertEqual([(period, callback.__name__) for period, callback in node.timers],
                          [(0.05, '_process_commands')])
         self.assertEqual(set(node.config), node.declared)
         self.assertEqual(set(node.clients), {
-            Services.Shared.START_RECORDING, Services.Shared.STOP_RECORDING})
+            Services.Shared.START_RECORDING, Services.Shared.STOP_RECORDING,
+            Services.Shared.PING_MARK})
         mt = Topics.COMMAND_GATEWAY_NODE.MQTT
         node.mqtt.connected = True
         client = node.start_client
@@ -311,11 +321,11 @@ class WiringTests(unittest.TestCase):
         client.connect_async.assert_called_once_with('broker.example.invalid', 8883, 60)
         client.loop_start.assert_called_once()
         transport._on_connect(client, None, None, NS(is_failure=False), None)
-        self.assertEqual(client.subscribe.call_count, 2)
+        self.assertEqual(client.subscribe.call_count, 3)
         transport._on_disconnect(client, None, None, None, None)
         self.assertFalse(transport.connected)
         transport._on_connect(client, None, None, NS(is_failure=False), None)
-        self.assertEqual(client.subscribe.call_count, 4)
+        self.assertEqual(client.subscribe.call_count, 6)
 
     def test_transport_emits_strict_json_and_no_retained_output(self):
         node = self.telemetry_node()

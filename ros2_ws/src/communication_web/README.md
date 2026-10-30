@@ -5,8 +5,45 @@ for commands. The existing Agir package name remains `communication_web`.
 
 `telemetry_gateway_node` aggregates processed attitude/height and raw GPS, battery and range snapshots, publishes two custom ROS
 messages from `sail_msgs`, and forwards the same structures as MQTT JSON.
-`command_gateway_node` exposes only the existing rosbag start/stop services.
-There are no mark, actuator, update or shutdown commands in this gateway.
+`command_gateway_node` exposes rosbag start/stop and course-mark ping services.
+`telemetry_gateway_node` owns the course marks and the GPS capture service.
+
+## Buoy ping
+
+`agir_gui/cmd/ping_mark` accepts `{"requestId":"unique-id","type":0}`:
+Committee=0, Pin=1, Windward=2. The command gateway calls
+`/local_cmd/ping_mark` (`sail_msgs/srv/PingMark`) in the telemetry gateway.
+ROS takes the latest GPS position when the service runs, not browser coordinates
+or the exact browser click time. Position must be finite, in WGS84 bounds, have
+GPSStatus >= 0 and pass the shared source/receipt freshness check using
+`gps_timeout_s`. Speed is not required to capture a position. A failure leaves
+every existing mark unchanged.
+
+The non-retained reply on `agir_gui/rsp/ping_mark` contains `requestId`, `success`,
+`error_message`, and `mark` (null on failure). Successful marks contain `type`,
+`lat`, `lon`, and `header` preserving the original GPS sample timestamp/frame.
+Mark coordinates are float64; constants are COMMITTEE, PIN and WINDWARD.
+
+The telemetry gateway keeps one mark per type in memory; a new successful ping
+replaces only that type. The complete sorted `marks` array is included in every
+`/web/ros/map` and `agir_gui/data/map` publication, at `map_publish_rate_hz` (3 Hz).
+Marks survive GPS loss and browser reconnection, but reset on telemetry-node
+restart. They are course state, so their old capture timestamp does not expire
+them. Rosbag records the state through the existing map topic.
+
+MQTT handling retains bounded queues, size limits and retained-command rejection.
+Ping has a separate asynchronous request slot from recording. Duplicate request
+IDs return the original response while cached (`response_cache_size`); changing
+the type with the same ID is rejected. `service_timeout_s` also applies to ping:
+a timeout cannot cancel work already executing in ROS, so check the map before
+retrying with a new ID. This is not durable deduplication across node restarts or
+cache eviction. No commands are automatically retried by the browser.
+
+Allow the boat to subscribe to `agir_gui/cmd/ping_mark` and publish
+`agir_gui/rsp/ping_mark`; operators need the reverse permissions plus the map.
+Rebuild `sail_msgs` and consumers together (`bash scripts/build.sh --clean` from
+`ros2_ws` inside the container), then deploy the matching web app. Old Mark and
+MapDataMsg layouts are not wire-compatible; old bags retain their old schema.
 
 ## Telemetry contract
 
@@ -23,8 +60,7 @@ The MQTT names replace `agir_gui/data/telemetry` and `agir_gui/data/position`;
 deploy the gateway and web app together and update any broker topic ACLs.
 The ROS outputs are `/web/ros/dashboard` and `/web/ros/map`, with types
 DashboardDataMsg and MapDataMsg respectively. Rebuild consumers; old bags retain their original message types.
-MapDataMsg now uses the existing Agir position fields below, replacing the unused
-legacy definition with wind/marks fields. JSON payload fields are unchanged.
+MapDataMsg uses the Agir position fields below plus the saved `marks` array.
 
 Dashboard and map have independent timers, configured at startup in `config/params.yaml`:
 

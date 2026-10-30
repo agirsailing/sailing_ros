@@ -1,8 +1,10 @@
-# Mark.msg
-uint8 COMITATO=0
+# One saved course mark. Header stamp is the captured GPS sample time.
+uint8 COMMITTEE=0
 uint8 PIN=1
-uint8 BOLINA=2
+uint8 WINDWARD=2
 
+std_msgs/Header header
 uint8 type
-float32 lat
-float32 lon
+# WGS84 degrees; double precision preserves the original GPS coordinates.
+float64 lat
+float64 lon

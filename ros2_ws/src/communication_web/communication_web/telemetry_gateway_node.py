@@ -10,13 +10,14 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 from sail_common.freshness import is_fresh
 from sail_msgs.msg import (
-    BatteryData, MapDataMsg, RecordingState, DashboardDataMsg,
+    BatteryData, MapDataMsg, Mark, RecordingState, DashboardDataMsg,
 )
+from sail_msgs.srv import PingMark
 from sensor_msgs.msg import Imu, Range
 
 from communication_web.gateway.mqtt_client import MqttClientWrapper
 from communication_web.gateway.telemetry import TelemetrySnapshot
-from communication_web.generated.ros_endpoints import Topics
+from communication_web.generated.ros_endpoints import Services, Topics
 
 
 class TelemetryGatewayNode(Node):
@@ -40,6 +41,9 @@ class TelemetryGatewayNode(Node):
         self.qos_depth = self.declare_parameter('qos_depth', Parameter.Type.INTEGER).value
         self._validate_parameters()
         self.recording_sample = None
+        # Course state belongs to the boat, not to a browser session.
+        # One mark per type, retained until this node restarts or it is replaced.
+        self.marks = {}
         self.snapshot = TelemetrySnapshot(
             self.attitude_timeout_s, self.height_timeout_s,
             self.battery_timeout_s, self.gps_timeout_s, self.ultrasonic_timeout_s)
@@ -51,6 +55,8 @@ class TelemetryGatewayNode(Node):
             DashboardDataMsg, self.rt.PUB.TELEMETRY, self.qos_depth)
         self.position_pub = self.create_publisher(
             MapDataMsg, self.rt.PUB.POSITION, self.qos_depth)
+        self.ping_service = self.create_service(
+            PingMark, Services.TELEMETRY_GATEWAY_NODE.SRV.PING_MARK, self._ping_mark)
 
         # 3. Consume sensor snapshots and processed attitude/height directly.
         self.attitude_sub = self.create_subscription(
@@ -118,8 +124,31 @@ class TelemetryGatewayNode(Node):
             position.gps_stamp = gps_stamp
         for name, value in location.items():
             setattr(position, name, value)
+        position.marks = [self.marks[kind] for kind in sorted(self.marks)]
         self.position_pub.publish(position)
         self.mqtt.publish_ros_msg(self.rt.MQTT.PUB.POSITION, position)
+
+    def _ping_mark(self, request, response):
+        if request.type not in (Mark.COMMITTEE, Mark.PIN, Mark.WINDWARD):
+            response.success = False
+            response.error_message = 'Unknown mark type'
+            return response
+        now = self.get_clock().now().nanoseconds / 1e9
+        gps = self.snapshot.gps_position(now)
+        # SOG is not needed to capture a geographical position.
+        if gps is None:
+            response.success = False
+            response.error_message = 'No fresh valid GPS fix; mark unchanged'
+            return response
+        mark = Mark()
+        mark.header = gps.header
+        mark.type = request.type
+        mark.lat, mark.lon = gps.latitude, gps.longitude
+        self.marks[mark.type] = mark
+        response.success = True
+        response.error_message = ''
+        response.mark = mark
+        return response
 
     def _receive_recording_state(self, message):
         # Operational state has no source header; only receipt freshness is known.

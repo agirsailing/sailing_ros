@@ -1,7 +1,7 @@
 # sail_msgs
 
 ROS 2 interface package based on the Polimi Sailing Team definitions.
-It contains 10 messages and 3 recording services:
+It contains 6 messages, 3 recording services and the `PingMark` service:
 
 - BatteryData
 - SerialMsg
@@ -19,8 +19,9 @@ All measurement/telemetry messages use `std_msgs/Header header`, including raw
 `SerialMsg` packets. Header timestamps keep their documented acquisition or
 snapshot meaning. GPS source timestamps (`gps_stamp`, `direction_stamp`) remain
 additional fields: they identify the original inputs, not the aggregate's age.
-`Mark` describes a course landmark and `RecordingState` describes recorder state;
-neither is a sensor measurement, so their existing interfaces are unchanged.
+`Mark` describes a saved course landmark: its header preserves the GPS sample
+timestamp/frame captured by `PingMark`. `RecordingState` describes recorder state
+and has no header.
 
 `SerialMsg.stamp` has moved to `SerialMsg.header.stamp`. The test bag generator
 uses the new field and leaves `header.frame_id` empty for multiplexed packets.
@@ -31,7 +32,11 @@ dashboard/map MQTT payloads or any existing live measurement interface.
 
 DashboardDataMsg is the dashboard snapshot. MapDataMsg replaces the unused
 legacy map definition with the position snapshot actually consumed by Agir.
-The original COMITATO and BOLINA constants in Mark.msg are preserved.
+`Mark` uses English constants COMMITTEE=0, PIN=1 and WINDWARD=2, a source header,
+and float64 `lat`/`lon` in WGS84 degrees. `MapDataMsg.marks` carries up to one saved
+mark of each type. `PingMark` takes the type and returns success/error plus the
+captured mark. Rebuild all consumers; the former Mark/MapDataMsg layouts are not
+wire-compatible. Marks are held in memory by telemetry_gateway_node until restart.
 
 Raw receiver data now uses the existing `gps_msgs/msg/GPSFix` type on `/gps/data`.
 The former `GpsData.msg` has been removed; old raw GPS bags are not compatible

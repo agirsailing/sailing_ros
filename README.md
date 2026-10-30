@@ -63,6 +63,13 @@ conversion chain is not a feedback loop: the aero callback publishes only aero
 outputs. Height uses robotic orientation; the dashboard uses aerospace angles.
 `/tf_static` contains static transforms, not periodic measurements.
 
+The web app can ping **Committee**, **Pin** and **Windward** marks. The command
+gateway calls `/local_cmd/ping_mark`; the telemetry gateway captures a fresh GPS
+position and includes the three saved marks in the existing map stream at 3 Hz.
+Each type is replaced by its next successful ping. Course state survives browser
+reloads but resets when the telemetry node restarts. See the
+[ping contract and deployment notes](ros2_ws/src/communication_web/README.md#buoy-ping).
+
 The recorder subscribes to discovered ROS topics (summarized in one box to avoid
 an edge to every topic), including ROS dashboard/map copies; it does not capture
 MQTT directly. Service edges describe caller/server roles. The battery node also

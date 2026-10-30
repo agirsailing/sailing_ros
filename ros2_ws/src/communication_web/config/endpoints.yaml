@@ -21,13 +21,18 @@ topics:
   mqtt_stop_recording: "agir_gui/cmd/stop_recording"
   mqtt_start_response: "agir_gui/rsp/start_recording"
   mqtt_stop_response: "agir_gui/rsp/stop_recording"
+  mqtt_ping_mark: "agir_gui/cmd/ping_mark"
+  mqtt_ping_response: "agir_gui/rsp/ping_mark"
 
 services:
+  ping_mark: "/local_cmd/ping_mark"
   start_recording: "/local_cmd/start_recording"
   stop_recording: "/local_cmd/stop_recording"
 
 nodes:
   telemetry_gateway_node:
+    srv:
+      ping_mark: "@ping_mark"
     sub:
       attitude: "@attitude"
       height: "@height"
@@ -46,12 +51,15 @@ nodes:
         recording_state: "@mqtt_recording_state"
   command_gateway_node:
     srv:
+      ping_mark: "@ping_mark"
       start_recording: "@start_recording"
       stop_recording: "@stop_recording"
     mqtt:
       sub:
+        ping_mark: "@mqtt_ping_mark"
         start_recording: "@mqtt_start_recording"
         stop_recording: "@mqtt_stop_recording"
       rsp:
+        ping_mark: "@mqtt_ping_response"
         start_recording: "@mqtt_start_response"
         stop_recording: "@mqtt_stop_response"
