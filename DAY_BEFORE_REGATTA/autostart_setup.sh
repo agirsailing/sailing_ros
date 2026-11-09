@@ -38,7 +38,7 @@ Wants=docker.service
 Type=simple
 User=$DEPLOY_USER
 Environment="HOME=$USER_HOME"
-WorkingDirectory="$REPO_DIR/DAY_BEFORE_REGATTA"
+WorkingDirectory=$REPO_DIR/DAY_BEFORE_REGATTA
 ExecStart=/bin/bash "$REPO_DIR/DAY_BEFORE_REGATTA/run.sh"
 Restart=always
 RestartSec=5

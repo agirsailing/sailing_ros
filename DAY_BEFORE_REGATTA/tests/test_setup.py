@@ -377,6 +377,7 @@ class SetupTests(unittest.TestCase):
         unit = (self.root / 'systemd/agir_regatta.service').read_text()
         self.assertIn('User=boat', unit)
         self.assertIn(f'Environment="HOME={self.home.as_posix()}"', unit)
+        self.assertIn(f'WorkingDirectory={self.scripts.as_posix()}', unit.splitlines())
         self.assertIn(f'ExecStart=/bin/bash "{self.scripts.as_posix()}/run.sh"', unit)
         self.assertNotIn('agir_regatta_start.sh', unit)
 
