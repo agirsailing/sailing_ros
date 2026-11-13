@@ -1,16 +1,16 @@
-# data_elaboration — orientamento e altezza della barca
+# data_elaboration — boat attitude and height
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Workspace](../../README.md)
+[Workspace](../../README.md)
 
-## Introduzione
+## Introduction
 
-Una misura corretta del sensore non è ancora necessariamente la misura che ci serve sulla barca. L'IMU può essere montata ruotata o lontano dal centro di massa; gli ultrasuoni possono essere inclinati e spostati rispetto al punto di cui vogliamo conoscere l'altezza.
+A correct sensor measurement is not necessarily the quantity needed at the boat's reference point. The IMU may be rotated or mounted away from the centre of mass; ultrasonic sensors may be tilted and displaced from the point whose height we want.
 
-Questo pacchetto tiene conto di questi montaggi. Riceve messaggi da ROS, corregge l'orientamento e l'accelerazione dell'IMU e combina assetto e distanze per stimare l'altezza della linea di galleggiamento. Non apre porte hardware: quelle appartengono a [sensors](../sensors/README.md).
+This package accounts for that mounting geometry. It receives ROS messages, corrects IMU attitude and acceleration, and combines attitude with ranges to estimate waterline height. It does not open hardware ports; [sensors](../sensors/README.md) owns those.
 
-## Struttura del pacchetto
+## Package structure
 
 ```text
 data_elaboration/
@@ -26,11 +26,11 @@ data_elaboration/
 └── setup.py
 ```
 
-[params.yaml](config/params.yaml) raccoglie montaggi, frequenze e soglie. I nomi degli output sono in [endpoints.yaml](config/endpoints.yaml), mentre quelli degli input grezzi vengono dalle costanti generate di `sensors`. Le formule e le conversioni sono in `processing/`, separate dai nodi che ricevono e pubblicano messaggi.
+[params.yaml](config/params.yaml) contains mounting geometry, rates and thresholds. Output names live in [endpoints.yaml](config/endpoints.yaml); raw input names come from generated `sensors` constants. Formulae and conversions live in `processing/`, separately from the nodes receiving and publishing messages.
 
-## Nodi, topic e trasformazioni
+## Nodes, topics and transforms
 
-Gli ovali sono nodi. Una freccia continua `pub` va dal nodo al topic pubblicato; una freccia tratteggiata `sub` va dal nodo al topic che ascolta. Le frecce di sottoscrizione indicano quindi la dipendenza, non il verso del dato.
+Ovals are nodes. Solid `pub` arrows point from a node to its published topic; dashed `sub` arrows point from a node to the topic it subscribes to. Subscription arrows therefore show dependencies rather than data direction.
 
 ```mermaid
 flowchart LR
@@ -62,72 +62,72 @@ flowchart LR
     aero -.->|TF lookup| tf
 ```
 
-Il percorso principale dell'IMU è: misura grezza, correzione del montaggio, elaborazione, conversione aeronautica. I due transformer sono istanze del pacchetto ROS esterno `imu_transformer`; `imu_node` pubblica le trasformazioni statiche che servono loro.
+The main IMU path is raw measurement, mounting correction, processing, then aeronautical conversion. The two transformers are instances of the external ROS `imu_transformer` package; `imu_node` publishes their required static transforms.
 
-Il ritorno da `/internal/imu/aero_body` entra in una callback dedicata di `imu_node`. Non ripassa nel percorso robotico: il collegamento di ritorno nel diagramma non è un ciclo che rielabora indefinitamente la stessa misura.
+The return from `/internal/imu/aero_body` enters a dedicated `imu_node` callback. It does not re-enter the robotic processing path: the return edge is not an endless measurement-processing loop.
 
-| Interfacce | Tipo | Utilizzo |
+| Interfaces | Type | Use |
 |---|---|---|
-| Tutti i topic IMU del diagramma | `sensor_msgs/msg/Imu` | Orientamento, velocità angolare, accelerazione e covarianze. |
-| `/ultrasonic/left`, `/ultrasonic/right` | `sensor_msgs/msg/Range` | Distanze grezze dai due sensori. |
-| `/processed/boat_height` | `marti_common_msgs/msg/Float64Stamped` | Altezza in metri nel campo `value`. |
-| `/tf_static` | `tf2_msgs/msg/TFMessage` | Trasformazioni statiche usate dai transformer. |
+| All IMU topics shown | `sensor_msgs/msg/Imu` | Orientation, angular velocity, acceleration and covariances. |
+| `/ultrasonic/left`, `/ultrasonic/right` | `sensor_msgs/msg/Range` | Raw sensor distances. |
+| `/processed/boat_height` | `marti_common_msgs/msg/Float64Stamped` | Height in metres in `value`. |
+| `/tf_static` | `tf2_msgs/msg/TFMessage` | Static transforms used by the transformers. |
 
-## Come viene elaborata l'IMU
+## IMU processing
 
-[imu_node.py](data_elaboration/imu_node.py) usa il quaternione già calcolato dal BNO085 quando il messaggio dichiara un orientamento disponibile (`orientation_covariance[0] != -1`). Lo controlla e lo normalizza, senza rifare la fusione dei sensori o una calibrazione statica.
+[imu_node.py](data_elaboration/imu_node.py) uses the BNO085 quaternion when the message declares an available orientation (`orientation_covariance[0] != -1`). It validates and normalizes it without repeating sensor fusion or static calibration.
 
-Per input più vecchi, privi di orientamento, rimane un filtro complementare in [imu_filter.py](data_elaboration/processing/imu_filter.py). I parametri `calibration_samples` e `complementary_alpha` riguardano questo percorso, non il normale quaternione BNO085.
+A complementary filter remains in [imu_filter.py](data_elaboration/processing/imu_filter.py) for older inputs without orientation. `calibration_samples` and `complementary_alpha` apply to that path, not the normal BNO085 quaternion.
 
-### Montaggio e convenzioni degli assi
+### Mounting and axis conventions
 
-`tf_offset=[x,y,z,roll,pitch,yaw]` descrive posizione e rotazione del sensore: metri per XYZ, gradi per gli angoli. Il riferimento della barca usa **FLU**: X verso prua, Y verso sinistra, Z verso l'alto.
+`tf_offset=[x,y,z,roll,pitch,yaw]` describes sensor position and rotation: metres for XYZ and degrees for angles. Boat axes use **FLU**: X forward, Y left, Z up.
 
-L'output robotico combina assi barca FLU e riferimento mondo ENU. L'output aeronautico usa assi barca FRD e riferimento mondo NED. Sono due conversioni diverse: `tf_offset_aero=[0,0,0,180,0,0]` cambia gli assi della barca, mentre `world_rotation_rpy_deg=[180,0,90]` cambia il riferimento del mondo.
+Robotic output combines FLU body axes with ENU world axes. Aeronautical output uses FRD body axes and NED world axes. These are separate conversions: `tf_offset_aero=[0,0,0,180,0,0]` changes the body axes, while `world_rotation_rpy_deg=[180,0,90]` changes the world reference.
 
-Con `rotation_vector` il riferimento al nord è magnetico. Qui non si corregge la declinazione e non si pubblicano messaggi roll/pitch/yaw separati: il [gateway](../communication_web/README.md) ricava quegli angoli dal quaternione aeronautico, portando lo yaw nell'intervallo [0,360).
+With `rotation_vector`, north is magnetic. This package does not correct declination or publish a separate roll/pitch/yaw message. The [gateway](../communication_web/README.md) derives those angles from the aeronautical quaternion and wraps yaw into [0,360).
 
-### Compensazione del braccio
+### Lever-arm compensation
 
-`base_link` identifica il centro di massa. I primi tre valori di `tf_offset` sono il vettore **dal centro di massa al sensore**, espresso negli assi FLU. Se il sensore è lontano dal centro, misura anche accelerazioni dovute alla rotazione della barca.
+`base_link` identifies the centre of mass. The first three `tf_offset` values are the vector **from the centre of mass to the sensor**, expressed in FLU. A displaced sensor also measures acceleration caused by boat rotation.
 
-Dopo che il transformer ha ruotato i vettori, [lever_arm.py](data_elaboration/processing/lever_arm.py) sottrae questi contributi una sola volta:
+After the transformer rotates vectors, [lever_arm.py](data_elaboration/processing/lever_arm.py) subtracts these contributions once:
 
 ```text
-a_COM = a_sensore - alpha × r - omega × (omega × r)
-alpha = (omega_attuale - omega_precedente) / dt
+a_COM = a_sensor - alpha × r - omega × (omega × r)
+alpha = (omega_current - omega_previous) / dt
 ```
 
-`omega` viene dal giroscopio e `dt` dai timestamp originali delle misure. Il timer di pubblicazione non viene usato per stimare questa derivata. La correzione conserva la gravità e non cambia il quaternione; con XYZ a zero non modifica l'accelerazione.
+`omega` comes from the gyro and `dt` from original measurement timestamps, not the publication timer. The correction retains gravity and leaves the quaternion unchanged; zero XYZ leaves acceleration unchanged.
 
-Con un braccio non nullo servono due campioni. Al primo campione, o dopo un intervallo superiore a `max_sample_dt_s`, il nodo aspetta il successivo prima di pubblicare l'accelerazione corretta. La derivata può amplificare il rumore del gyro, quindi la taratura va verificata con misure reali.
+A nonzero lever arm requires two samples. At the first sample, or after a gap exceeding `max_sample_dt_s`, the node waits for the next one before publishing corrected acceleration. Differentiation can amplify gyro noise, so tuning needs real measurements.
 
-I frame di output hanno origine al centro di massa; la trasformazione del sensore conserva invece il montaggio fisico. La conversione aeronautica successiva cambia solo gli assi e non applica di nuovo la compensazione.
+Output frames originate at the centre of mass; the sensor transform retains the physical mounting. Subsequent aeronautical conversion only changes axes and does not apply compensation again.
 
-### Frequenza e freschezza
+### Rate and freshness
 
-Ogni campione nuovo e utilizzabile viene elaborato appena arriva. Il timer pubblica l'ultimo risultato robotico a **50 Hz**, secondo `publish_rate_hz`; impostando zero si pubblica appena il risultato è pronto. Valori negativi o non finiti vengono rifiutati.
+Each new usable sample is processed on arrival. The timer publishes the latest robotic result at **50 Hz**, controlled by `publish_rate_hz`; zero publishes as soon as a result is ready. Negative or nonfinite rates are rejected.
 
-Le ripetizioni conservano il timestamp e smettono quando il risultato supera 0,5 s. Si controlla anche il tempo monotono per non mantenere valido un dato se l'orologio ROS si ferma. L'uscita aeronautica segue i nuovi campioni trasformati, senza un secondo timer; duplicati e timestamp fuori ordine vengono ignorati. Un salto indietro del clock svuota lo stato temporale.
+Repeated publication retains the timestamp and stops after the result exceeds 0.5 s. Monotonic time is also checked so a paused ROS clock cannot keep data fresh indefinitely. Aeronautical output follows new transformed samples without a second timer; duplicates and out-of-order timestamps are ignored. A backward clock jump clears temporal state.
 
-Le covarianze originali sono mantenute salvo override positivo configurato. Per l'accelerazione compensata si usa `cov_acc` se positivo, altrimenti l'incertezza resta sconosciuta. Zero non significa errore nullo.
+Original covariances are retained unless a positive override is configured. Corrected acceleration uses positive `cov_acc`, otherwise uncertainty is unknown. Zero does not mean zero error.
 
-## Come viene stimata l'altezza
+## Height estimation
 
-[ultrasonic_filter_node.py](data_elaboration/ultrasonic_filter_node.py) unisce le distanze con l'assetto della barca. Il punto di riferimento O è fissato sulla linea di galleggiamento di progetto, sotto il centro di massa. L'altezza indica la distanza verticale di O dal piano dell'acqua: positiva sopra, negativa sotto.
+[ultrasonic_filter_node.py](data_elaboration/ultrasonic_filter_node.py) combines distances with boat attitude. Reference point O is fixed on the design waterline below the centre of mass. Height is O's vertical distance from the water plane: positive above it and negative below.
 
-### Posizione e inclinazione degli ultrasuoni
+### Ultrasonic position and tilt
 
-Per ogni sensore si configura un unico array. Per esempio:
+Each sensor has one mounting array, for example:
 
 ```yaml
 left:
   mounting: [2.0, 0.2, 0.6, 15.0, 0.0]
 ```
 
-I cinque elementi sono `[x_m,y_m,z_m,lateral_tilt_deg,forward_tilt_deg]`. Nell'esempio, il sensore si trova 2 m a prua, 20 cm a sinistra e 60 cm sopra O, con il fascio inclinato di 15° verso sinistra rispetto alla verticale verso il basso. Un'inclinazione avanti positiva punta a prua. Questi angoli descrivono il montaggio, non il campo visivo del sensore.
+The entries are `[x_m,y_m,z_m,lateral_tilt_deg,forward_tilt_deg]`. This example places the sensor 2 m forward, 20 cm left and 60 cm above O, with its beam tilted 15° left from downward vertical. Positive forward tilt points towards the bow. These angles describe mounting, not sensor field of view.
 
-In [boat_height.py](data_elaboration/processing/boat_height.py), con R rotazione dagli assi della barca al mondo, r posizione del sensore, d distanza misurata, a inclinazione laterale e b inclinazione avanti:
+In [boat_height.py](data_elaboration/processing/boat_height.py), R rotates body into world axes, r is sensor position, d measured distance, a lateral tilt and b forward tilt:
 
 ```text
 u = [sin(b), cos(b) sin(a), -cos(b) cos(a)]
@@ -137,26 +137,26 @@ w_i = c_i ** incidence_weight_power
 h = sum(w_i h_i) / sum(w_i)
 ```
 
-Seni e coseni proiettano verticalmente il fascio e la posizione del sensore. Per questo non basta sommare un offset costante alla distanza. Un fascio troppo orizzontale, oltre il limite predefinito di 60°, non produce una stima.
+Sines and cosines project the beam and sensor position vertically. Adding a constant offset to measured distance is therefore insufficient. A beam beyond the default 60° incidence limit does not produce an estimate.
 
-### Scelta dei campioni e pubblicazione
+### Sample selection and publication
 
-Il nodo conserva una breve storia dell'IMU. Per ogni nuova distanza usa l'assetto più recente **precedente** alla misura, entro `max_attitude_age_s=0.1`. Non interpola né suppone la barca piatta se l'assetto manca. Controlla anche il frame `imu_link_flu`: non cerca automaticamente una trasformazione da un altro frame.
+The node keeps a short IMU history. Each new range uses the latest **preceding** attitude within `max_attitude_age_s=0.1`. It does not interpolate or assume a level boat if attitude is missing. It also checks the `imu_link_flu` frame rather than automatically transforming other frames.
 
-Le distanze devono avere meno di 0,5 s; i due lati vengono combinati solo entro `max_pair_dt_s=0.15`. Ogni lato conserva la propria correzione geometrica. Quando entrambi sono utilizzabili, il peso favorisce il fascio più verticale (potenza predefinita 8). Se le stime differiscono di oltre 0,25 m, viene scelta quella più verticale; a pari incidenza il conflitto impedisce la pubblicazione. È possibile produrre una stima anche con un solo lato valido.
+Ranges must be younger than 0.5 s; the two sides are combined only within `max_pair_dt_s=0.15`. Each side retains its own geometric correction. When both are usable, weighting favours the more vertical beam (default power 8). If estimates differ by more than 0.25 m, the more vertical one wins; equal-incidence conflict suppresses publication. One valid side can also produce an estimate.
 
-Il calcolo segue l'arrivo delle distanze; l'IMU aggiorna soltanto la storia. Il timer pubblica a **20 Hz**, oppure subito al risultato con `publish_rate_hz: 0.0`. L'header conserva il timestamp della distanza che ha prodotto la stima. Prima di ripubblicare, il nodo ricontrolla la freschezza dei campioni coinvolti.
+Computation follows range arrivals; IMU messages only update history. The timer publishes at **20 Hz**, or immediately on a result with `publish_rate_hz: 0.0`. The header retains the timestamp of the triggering range. Before republishing, the node rechecks freshness of the samples used.
 
-Il frame di output è `boat_waterline`, ma il nodo non crea automaticamente una TF per quel punto. Questa è una correzione geometrica: non è una media mobile e non elimina da sola onde, interferenze tra sensori o riflessioni.
+Output frame `boat_waterline` identifies the reference point, but the node does not create its TF automatically. This is geometric correction, not a moving average; it does not by itself eliminate waves, sensor interference or reflections.
 
-## Avvio e verifica
+## Startup and verification
 
-Con ambiente ROS e workspace caricati nel container:
+With ROS and the workspace sourced inside the container:
 
 ```bash
 ros2 launch data_elaboration live_data_elaboration.launch.py
 ```
 
-I launch live e replay avviano quattro processi: i due transformer, `imu_node` e `ultrasonic_filter_node`. Il replay imposta il tempo simulato. Per un altro file di configurazione usa `data_elaboration_params_file:=/percorso/params.yaml`.
+Live and replay launch four processes: two transformers, `imu_node` and `ultrasonic_filter_node`. Replay enables simulated time. Override configuration with `data_elaboration_params_file:=/path/to/params.yaml`.
 
-Da `/home/ros/ros2_ws`, esegui `bash scripts/test.sh data_elaboration`. I test verificano frame, quaternioni, geometria, braccio e dati scaduti. Sulla barca confronta anche l'altezza con una misura indipendente a diversi roll e pitch: è il modo per verificare montaggio e soglie.
+From `/home/ros/ros2_ws`, run `bash scripts/test.sh data_elaboration`. Tests cover frames, quaternions, geometry, lever arms and stale data. On the boat, also compare height against an independent measurement at different roll and pitch angles to check mounting and thresholds.

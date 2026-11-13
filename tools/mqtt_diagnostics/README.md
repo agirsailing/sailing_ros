@@ -1,45 +1,45 @@
-# Diagnostica MQTT senza sensori
+# MQTT diagnostics without sensors
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Indice repository](../../README.md)
+[Repository index](../../README.md)
 
-[probe.py](probe.py) crea un publisher sintetico e due osservatori, TCP e
-WebSocket, con identificativi client distinti. Serve a isolare trasporto/broker
-dal runtime ROS. Non legge sensori e non implementa servizi di registrazione o
-ping boe. Il test con browser aperto aggiunge la verifica visiva della webapp.
+[probe.py](probe.py) creates a synthetic publisher and two observers, TCP and
+WebSocket, with distinct client IDs. It isolates transport/broker from ROS.
+It does not read sensors or implement recording/mark-ping services. An open
+browser adds visual verification of the webapp.
 
-## Raspberry via SSH: un comando
+## Raspberry over SSH: one command
 
-Prerequisiti: repository aggiornata, runtime reale fermo, file privato
-`ros2_ws/src/communication_web/config/mqtt_config.yaml` compilato. Dall'host Pi:
+Prerequisites: updated repository, real runtime stopped, configured private
+`ros2_ws/src/communication_web/config/mqtt_config.yaml`. On the Pi host:
 
 ```bash
 cd /home/boat/2025_SOFTWARE/sailing_ros/tools/mqtt_diagnostics
 bash run.sh webapp --dashboard-hz 3 --map-hz 3 --state-hz 0.5
 ```
 
-Il wrapper prepara Python/venv e dipendenze (può chiedere sudo per apt su Debian),
-crea `config.local.json` da `config.ros.example.json` se manca e riutilizza broker,
-porta TCP, TLS e credenziali dello YAML ROS. Non occorre Docker per questo test.
-I parametri WebSocket vengono dal JSON: default porta **8084**, path **/mqtt**;
-verificare che corrispondano al proprio endpoint. Un JSON già presente non viene
-sovrascritto, quindi controllarne eventuali override.
+The wrapper prepares Python/venv and dependencies (may request sudo for Debian
+apt), creates `config.local.json` from `config.ros.example.json` if missing, and
+reuses broker, TCP port, TLS and credentials from ROS YAML. Docker is unnecessary
+for this test. WebSocket settings come from JSON: default port **8084**, path
+**/mqtt**; check them against your endpoint. Existing JSON is not overwritten,
+so inspect any overrides.
 
-Aprire una webapp senza Demo, fare login e osservare ULTRASONIC LEFT/RIGHT per
-tutta la prova. I valori cambiano a ogni messaggio dashboard. La durata è 900 s.
-Annotare orari UTC di ritardi/disconnessioni, rete/hotspot usato, numero di tab e
-client attivi; non cambiare più variabili nello stesso confronto.
+Open one webapp without Demo, log in and watch ULTRASONIC LEFT/RIGHT throughout
+the test. Values change with every dashboard message. Duration is 900 s. Note
+UTC times of delays/disconnections, network/hotspot, number of tabs and connected
+clients; change one variable at a time between comparisons.
 
-**Frequenze:** il comando sopra riproduce le attuali frequenze nominali ROS→MQTT,
-3+3+0.5 = 6.5 pubblicazioni/s. `bash run.sh` senza opzioni usa invece dashboard
-5 Hz, mappa 2 Hz, stato 0.5 Hz (7.5/s). Questo non riproduce l'acquisizione ROS
-né garantisce payload/carico identici. Il pattern ramp cambia di 2 cm per messaggio;
-il suo periodo cambia aumentando gli hertz.
+**Rates:** the command above matches current nominal ROS→MQTT frequencies,
+3+3+0.5 = 6.5 publishes/s. Plain `bash run.sh` instead uses dashboard 5 Hz, map
+2 Hz, state 0.5 Hz (7.5/s). It does not reproduce ROS acquisition or guarantee
+identical payload/load. The ramp changes by 2 cm per message; its period changes
+when the rate increases.
 
-## Windows: cmd, senza container ROS
+## Windows cmd, without a ROS container
 
-Installare Python 3.10+ con il launcher `py` se assente. Aprire cmd:
+Install Python 3.10+ with the `py` launcher if missing. Open cmd:
 
 ```bat
 cd /d C:\Users\ettor\Desktop\Agir_Sailing_Team\sailing_ros\tools\mqtt_diagnostics
@@ -47,67 +47,66 @@ py -3 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Solo se non esiste ancora `config.local.json`:
+Only if `config.local.json` does not exist:
 
 ```bat
 copy config.ros.example.json config.local.json
 ```
 
-Con MQTT YAML ROS configurato e publisher reali fermi:
+With configured ROS MQTT YAML and real publishers stopped:
 
 ```bat
 .venv\Scripts\python.exe probe.py --config config.local.json --ros-config ..\..\ros2_ws\src\communication_web\config\mqtt_config.yaml --duration 900 --dashboard-hz 3 --map-hz 3 --state-hz 0.5 --ultrasonic-pattern ramp --webapp
 ```
 
-Nel JSON basato su ROS `publisher` può rimanere `{}`. Gli osservatori ereditano
-le credenziali del publisher, salvo override espliciti. Senza YAML usare
-[config.example.json](config.example.json), compilare host/porte/TLS e fornire
-`MQTT_USER`/`MQTT_PASSWORD` tramite ambiente o prompt. Non committare segreti.
+For ROS-based JSON `publisher` can remain `{}`. Observers inherit publisher
+credentials unless explicitly overridden. Without YAML use
+[config.example.json](config.example.json), fill host/ports/TLS and provide
+`MQTT_USER`/`MQTT_PASSWORD` via environment or prompts. Never commit secrets.
 
-## Modi e isolamento
+## Modes and isolation
 
-| Comando Bash | Comportamento |
+| Bash command | Behaviour |
 |---|---|
-| `bash run.sh setup` | Prepara solo ambiente Python |
-| `bash run.sh webapp ...` | Prepara ambiente e pubblica su topic reali `agir_gui/data/...` |
-| `bash run.sh cloud --ros-config ../../ros2_ws/src/communication_web/config/mqtt_config.yaml` | Usa config.local.json, topic isolati; fare setup prima |
-| `bash run.sh local --duration 900` | Avvia Mosquitto Docker e usa local.json; fare setup prima |
-| `bash run.sh local-logs` | Log del broker locale |
-| `bash run.sh local-down` | Ferma il broker locale |
-| `bash run.sh analyze runs/NOME_RUN` | Rigenera analisi da file salvati |
+| `bash run.sh setup` | Prepare Python environment only |
+| `bash run.sh webapp ...` | Prepare environment and publish to real `agir_gui/data/...` topics |
+| `bash run.sh cloud --ros-config ../../ros2_ws/src/communication_web/config/mqtt_config.yaml` | Use config.local.json with isolated topics; run setup first |
+| `bash run.sh local --duration 900` | Start Docker Mosquitto and use local.json; run setup first |
+| `bash run.sh local-logs` | Local broker logs |
+| `bash run.sh local-down` | Stop local broker |
+| `bash run.sh analyze runs/RUN_NAME` | Regenerate analysis from saved files |
 
-Per cloud isolato creare prima il JSON locale come sopra. Senza `--webapp`, i
-topic sono `agir_diag/<run_id>/...`; il browser di produzione non li vede.
-Il probe diretto ha default 2/2/0.5 Hz e pattern step ogni 5 s: specificare ramp
-per variazioni a ogni messaggio. `--qos 0|1`, `--protocol 311|5`, `--decimals N`
-permettono confronti controllati; decimals non arrotonda coordinate/timestamp.
-Le ACL devono consentire i topic del test. Non avviare simulatori e barca reale
-sugli stessi topic contemporaneamente.
+For isolated cloud testing first create local JSON as above. Without `--webapp`,
+topics are `agir_diag/<run_id>/...`; the production browser does not see them.
+Direct probe defaults are 2/2/0.5 Hz and a step every 5 s: specify ramp for changes
+on every message. `--qos 0|1`, `--protocol 311|5`, `--decimals N` support controlled
+comparisons; decimals does not round coordinates/timestamps. ACLs must allow test
+topics. Never run simulator and real boat publishers on the same topics together.
 
-Mosquitto locale espone TCP `127.0.0.1:18883`, WS `127.0.0.1:19001`, senza TLS.
-Una webapp HTTPS configurata per WSS cloud non usa automaticamente quel broker.
-Un successo locale non certifica EMQX, hotspot o rendering browser.
+Local Mosquitto exposes TCP `127.0.0.1:18883`, WS `127.0.0.1:19001`, without TLS.
+An HTTPS webapp configured for cloud WSS does not automatically use that broker.
+Local success does not certify EMQX, the hotspot or browser rendering.
 
-## Risultati e interpretazione
+## Results and interpretation
 
-Ogni prova crea `runs/<data-id>/`:
+Each test creates `runs/<date-id>/`:
 
-| File | Contenuto |
+| File | Contents |
 |---|---|
-| `run.json` | Metadati e parametri della prova, senza credenziali |
-| `events.jsonl` | Connessioni, disconnessioni, invii ed errori con orari UTC |
-| `samples.csv` | Campioni ricevuti, sequenze, dimensioni, latenze |
-| `summary.json` | Metriche strutturate per osservatore/stream |
-| `report.md` | Riepilogo leggibile |
+| `run.json` | Run metadata/settings, without credentials |
+| `events.jsonl` | Connections, disconnections, publishes and errors with UTC times |
+| `samples.csv` | Received samples, sequences, sizes and latencies |
+| `summary.json` | Structured metrics per observer/stream |
+| `report.md` | Readable report |
 
-Confrontare durata effettiva, Hz osservati, sequenze uniche/duplicati, gap massimo,
-p50/p95/max e mediana primo/ultimo minuto. La latenza è dal publish sintetico
-al callback Python, sullo stesso clock monotono: **non misura il rendering del
-browser**. Un invio accettato dal client non prova consegna, soprattutto con QoS 0.
-Controllare anche stream mancanti e disconnessioni; assenza di campioni non è successo.
+Compare actual duration, observed Hz, unique/duplicate sequences, maximum gap,
+p50/p95/max and first/last-minute medians. Latency is from synthetic publish to
+Python callback, on one monotonic clock: it **does not measure browser rendering**.
+Client acceptance does not prove delivery, especially at QoS 0. Check missing
+streams and disconnects too; no samples is not success.
 
-Se la prova si interrompe, conservare tutta la cartella e usare analyze. Copiare
-dal Pi al PC la cartella della run, non la `.venv`. Per correlare con EMQX usare
-UTC/client ID/reason code; un errore di trasporto generico non prova un limite del
-piano. [VALIDATION.md](VALIDATION.md) conserva una verifica storica del tool,
-non certifica l'attuale configurazione della barca.
+If interrupted, preserve the whole run directory and use analyze. Copy the run
+directory from Pi to PC, not `.venv`. Correlate EMQX using UTC/client ID/reason
+codes; a generic transport error does not prove a plan limit.
+[VALIDATION.md](VALIDATION.md) preserves a historical tool check, not certification
+of the current boat configuration.

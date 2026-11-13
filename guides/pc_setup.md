@@ -2,12 +2,10 @@
 
 _Updated on: 30/10/2026_
 
-[Italiano](../italiano/settaggio_pc.md)
-
 This guide explains how to start Docker, open the repository,
 create a container and attach VS Code. Install the [required software](software_necessary.md),
 including extensions, and clone `sailing_ros` as described in the
-[guide index](../README_ENG.md) first.
+[guide index](README.md) first.
 
 ## 1. Start Docker Desktop and open the repository
 
@@ -57,8 +55,8 @@ X11 connections over TCP from the container. Then run:
 bash Docker/pc_container/build.sh --gui
 ```
 
-This adds [compose.gui.yaml](../../Docker/pc_container/compose.gui.yaml) to the
-[base Compose](../../Docker/pc_container/compose.yaml), using software rendering
+This adds [compose.gui.yaml](../Docker/pc_container/compose.gui.yaml) to the
+[base Compose](../Docker/pc_container/compose.yaml), using software rendering
 without mounting a GPU. It does not install or configure the X server. The default
 display is `host.docker.internal:0`; if your server uses another display, set it
 for the command, for example `AGIR_DISPLAY=host.docker.internal:1 bash Docker/pc_container/build.sh --gui`.
@@ -105,7 +103,7 @@ source install/setup.bash
 For communication launches first prepare `src/communication_web/config/mqtt_config.yaml`
 from the template in that directory and configure both gateways. Tests with mocked
 MQTT require no real credentials. Build, testing and arguments are explained in
-the [scripts README](../../ros2_ws/scripts/README_ENG.md).
+the [scripts README](../ros2_ws/scripts/README.md).
 
 Both modes share `src`, `scripts`, `tools` and `rosbags` with the PC.
 `build`, `install` and `log` stay inside the container: rebuild the workspace

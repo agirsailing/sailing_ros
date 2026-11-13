@@ -1,16 +1,16 @@
-# rosbag_manager — registrare le prove
+# rosbag_manager — recording tests
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Workspace](../../README.md)
+[Workspace](../../README.md)
 
-## Introduzione
+## Introduction
 
-Una rosbag conserva i messaggi ROS di una sessione, così possiamo analizzarli dopo una prova o riprodurli senza collegare i sensori. Questo pacchetto permette di avviare e fermare la registrazione dalla web app o da un comando ROS.
+A rosbag preserves a session's ROS messages for later analysis or replay without sensors. This package lets the web app or a ROS command start and stop recording.
 
-Il nodo `rosbag_manager_node` controlla un processo `ros2 bag record -a -s mcap`. È importante distinguere i due ruoli: il manager riceve i comandi e pubblica lo stato; il processo recorder si sottoscrive ai topic e scrive i file. Avviare il manager non avvia automaticamente una registrazione.
+`rosbag_manager_node` controls a `ros2 bag record -a -s mcap` process. Their roles differ: the manager accepts commands and publishes state; the recorder subscribes to topics and writes files. Starting the manager does not automatically start recording.
 
-## Struttura del pacchetto
+## Package structure
 
 ```text
 rosbag_manager/
@@ -25,11 +25,11 @@ rosbag_manager/
 └── setup.py
 ```
 
-[rosbag_manager_node.py](rosbag_manager/rosbag_manager_node.py) contiene il comportamento attuale. [params.yaml](config/params.yaml) configura destinazione, frequenze e timeout; [endpoints.yaml](config/endpoints.yaml) definisce servizi e topic. `config_rosbag_manager.py` è un file legacy e non configura il nodo attuale.
+[rosbag_manager_node.py](rosbag_manager/rosbag_manager_node.py) implements current behaviour. [params.yaml](config/params.yaml) configures destination, rates and timeouts; [endpoints.yaml](config/endpoints.yaml) defines services and topics. `config_rosbag_manager.py` is legacy and does not configure the current node.
 
-## Nodo, servizi e topic
+## Node, services and topics
 
-Gli ovali indicano il nodo e il processo che avvia; gli esagoni sono i servizi offerti. La freccia `pub` va dal manager al suo topic; la freccia tratteggiata `sub` va dal recorder ai topic registrati.
+Ovals represent the node and its child process; hexagons are provided services. The `pub` arrow points from the manager to its topic; the dashed `sub` arrow points from the recorder to recorded topics.
 
 ```mermaid
 flowchart LR
@@ -38,7 +38,7 @@ flowchart LR
     node(["rosbag_manager_node"])
     state["/local_state/recording_state<br/>RecordingState"]
     recorder(["ros2 bag record -a -s mcap"])
-    topics["Topic ROS scoperti<br/>sensori, elaborazione, dashboard, mappa, stato"]
+    topics["Discovered ROS topics<br/>sensors, processing, dashboard, map, state"]
     files["rosbags/raw_recordings<br/>MCAP + metadata.yaml"]
     node -->|server| start
     node -->|server| stop
@@ -48,44 +48,44 @@ flowchart LR
     recorder -->|write| files
 ```
 
-| Interfaccia | Tipo in sail_msgs | Risultato |
+| Interface | Type in sail_msgs | Result |
 |---|---|---|
-| `/local_cmd/start_recording` | `srv/StartRecording` | Avvia la registrazione e restituisce successo, errore e nome effettivo della bag. |
-| `/local_cmd/stop_recording` | `srv/StopRecording` | Ferma il recorder e restituisce successo, errore e nome dell'ultima bag. |
-| `/local_state/recording_state` | `msg/RecordingState` | Indica se si sta registrando, il nome della bag e l'ultimo errore. |
+| `/local_cmd/start_recording` | `srv/StartRecording` | Starts recording and returns success, error and effective bag name. |
+| `/local_cmd/stop_recording` | `srv/StopRecording` | Stops the recorder and returns success, error and last bag name. |
+| `/local_state/recording_state` | `msg/RecordingState` | Reports whether recording, the bag name and the last error. |
 
-Entrambi i servizi hanno richiesta vuota. `RecordingState` non ha header: chi lo riceve deve controllare da quanto tempo non arriva un aggiornamento.
+Both services have empty requests. `RecordingState` has no header, so consumers must check elapsed time since the last update.
 
-## Cosa viene registrato
+## What gets recorded
 
-L'opzione `-a` registra tutti i topic ROS normali scoperti dal recorder, compresi quelli che compaiono dopo l'avvio. I topic nascosti non vengono inclusi automaticamente. MQTT non viene registrato direttamente, ma le copie ROS di dashboard e mappa permettono di conservare anche quei dati, comprese le boe.
+`-a` records all normal ROS topics discovered by the recorder, including topics appearing after startup. Hidden topics are not included automatically. MQTT is not recorded directly, but ROS dashboard and map copies preserve that information, including marks.
 
-La destinazione predefinita è `/home/ros/ros2_ws/rosbags/raw_recordings`, con prefisso `rosbag2_`. Il parametro `record_dir` permette di scegliere un'altra cartella. Nei Compose del progetto la cartella delle bag è condivisa con l'host, quindi le registrazioni rimangono disponibili anche ricreando il container.
+The default destination is `/home/ros/ros2_ws/rosbags/raw_recordings`, with prefix `rosbag2_`. Set `record_dir` to choose another directory. Project Compose configurations share the bag directory with the host, so recordings survive container recreation.
 
-Il manager non esporta CSV: per quello usa [allbags_to_csv.py](../../tools/README.md). Non è previsto un caricamento automatico delle registrazioni su un servizio cloud.
+The manager does not export CSV; use [allbags_to_csv.py](../../tools/README.md) for that. Automatic cloud upload is not implemented.
 
-## Frequenze e chiusura della registrazione
+## Rates and recording shutdown
 
-Il nodo controlla il processo a **2 Hz**, tramite `process_check_rate_hz`, e pubblica lo stato a **2 Hz**, tramite `publish_rate_hz`. Start, stop e uscite inattese del recorder producono anche un aggiornamento immediato. Queste frequenze non cambiano la frequenza di misura dei sensori.
+The node checks the process at **2 Hz** through `process_check_rate_hz` and publishes state at **2 Hz** through `publish_rate_hz`. Start, stop and unexpected recorder exits also publish immediate updates. These rates do not change sensor measurement rates.
 
-Quando riceve stop, il manager chiede al recorder di chiudere e attende, con `sigint_timeout: 5.0`. Durante questa attesa i timer del nodo possono essere ritardati. Per questo lo stato ricevuto dalla web app e la risposta allo stop sono due informazioni distinte: il [gateway](../communication_web/README.md) inoltra periodicamente lo stato a 0,5 Hz, mentre invia la risposta appena disponibile.
+On stop, the manager asks the recorder to close and waits, with `sigint_timeout: 5.0`. Its timers can be delayed during that wait. Web app state and the stop response are therefore distinct: the [gateway](../communication_web/README.md) forwards state periodically at 0.5 Hz and sends the response as soon as available.
 
-## Avvio e prova manuale
+## Startup and manual checks
 
-Il launch live del sistema avvia già il manager; il replay lo esclude. Per provarlo da solo, nel container con ROS e workspace caricati:
+System live launch already starts the manager; replay excludes it. To run it alone, inside the container with ROS and the workspace sourced:
 
 ```bash
 ros2 launch rosbag_manager live_rosbag_manager.launch.py
 ```
 
-Con il sistema live avviato, da un altro terminale del container:
+With the live system running, use another container terminal:
 
 ```bash
 ros2 service call /local_cmd/start_recording sail_msgs/srv/StartRecording '{}'
 ros2 topic echo /local_state/recording_state
 ```
 
-`Ctrl+C` interrompe soltanto l'echo. Per terminare la registrazione e verificarla:
+`Ctrl+C` only stops echo. To finish recording and inspect the bag:
 
 ```bash
 ros2 service call /local_cmd/stop_recording sail_msgs/srv/StopRecording '{}'
@@ -93,6 +93,6 @@ ls /home/ros/ros2_ws/rosbags/raw_recordings
 ros2 bag info /home/ros/ros2_ws/rosbags/raw_recordings/BAG_DIRECTORY
 ```
 
-Sostituisci `BAG_DIRECTORY` con il nome restituito dal servizio. Una risposta start positiva indica che il recorder è stato avviato, ma non dimostra che abbia già scoperto tutti i topic: controlla il contenuto dopo lo stop. Prima di prove lunghe verifica lo spazio con `df -h` e recupera la cartella completa della bag seguendo la [guida SSH](../../../guides/italiano/connessione_raspberry.md).
+Replace `BAG_DIRECTORY` with the returned name. A successful start response means the recorder started, not that every topic has already been discovered; inspect content after stopping. Before long tests, check space with `df -h` and retrieve the entire bag directory using the [SSH guide](../../../guides/raspberry_connection.md).
 
-Da `/home/ros/ros2_ws`, i test si eseguono con `bash scripts/test.sh rosbag_manager`.
+From `/home/ros/ros2_ws`, run tests with `bash scripts/test.sh rosbag_manager`.

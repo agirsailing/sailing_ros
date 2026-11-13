@@ -1,63 +1,62 @@
-# Strumenti del workspace
+# Workspace tools
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Indice repository](../../README.md)
+[Repository index](../../README.md)
 
-## Generazione degli endpoint
+## Endpoint generation
 
-[gen_endpoints.py](gen_endpoints.py) legge `src/**/config/endpoints.yaml`, risolve
-i riferimenti `@...` e genera i moduli Python/header C++ richiesti da
-`meta.generate`. È richiamato dagli script di build/test. Esecuzione manuale nel
-container, dalla root del workspace:
+[gen_endpoints.py](gen_endpoints.py) reads `src/**/config/endpoints.yaml`, resolves
+`@...` references and generates Python modules/C++ headers requested by
+`meta.generate`. Build/test scripts invoke it. Manual execution in the container,
+from the workspace root:
 
 ```bash
 python3 tools/gen_endpoints.py
 ```
 
-Modificare gli YAML sorgenti, non correggere a mano i file generati. Dopo un
-cambio topic aggiornare anche consumer, documentazione, test e contratti MQTT se
-coinvolti. Il generatore non crea automaticamente subscriber/publisher nel codice.
+Edit source YAML files rather than patching generated output. After topic changes
+update consumers, documentation, tests and MQTT contracts if affected. The
+generator does not automatically create code subscribers/publishers.
 
-## Esportazione di tutte le rosbag in CSV
+## Export all rosbag topics to CSV
 
-[allbags_to_csv.py](allbags_to_csv.py) esporta **tutti i topic presenti nelle bag**,
-senza preset, filtri o nomi fissati nel codice. Converte registrazioni già esistenti;
-non avvia la registrazione e non richiede il replay o i nodi live.
+[allbags_to_csv.py](allbags_to_csv.py) exports **every topic present in each bag**,
+without presets, filters or hardcoded topic names. It converts existing recordings;
+it does not record new data and does not require replay or live nodes.
 
-Nel container ROS, dalla root del workspace compilato:
+Inside the ROS container, from the built workspace root:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-python3 tools/allbags_to_csv.py /percorso/registrazioni --output-dir /percorso/csv
+python3 tools/allbags_to_csv.py /path/to/recordings --output-dir /path/to/csv
 ```
 
-Sostituire i percorsi con quelli accessibili nel container. Il primo argomento può
-essere una singola bag con `metadata.yaml` oppure la cartella che contiene le bag
-(ricerca nel primo livello). Sono riconosciute anche le cartelle `rosbag2_*`.
-Senza `--output-dir` l'output va nella directory corrente. Per ogni bag crea una
-sottocartella con lo stesso nome, senza l'eventuale prefisso `rosbag2_`.
+Replace paths with locations accessible inside the container. The first argument
+can be one bag containing `metadata.yaml`, or its parent directory (one level of
+discovery). Directories named `rosbag2_*` are also recognized. Without `--output-dir`,
+output goes into the current directory. Each bag gets its own subdirectory, named
+after the bag with the optional `rosbag2_` prefix removed.
 
-- Un CSV per topic, anche se non contiene campioni; topic con nomi simili ricevono
-  suffissi diversi per evitare collisioni tra file.
-- `timestamp_ns` è il timestamp della registrazione nella bag, in nanosecondi.
-  L'eventuale timestamp del messaggio rimane in `header.stamp.sec` e
-  `header.stamp.nanosec`. Un campo custom chiamato `timestamp_ns` diventa
-  `message.timestamp_ns` per non sovrascrivere quello della bag.
-- Campi annidati in colonne come `orientation.x`; array e sequenze di messaggi
-  conservati in celle JSON, anche quando cambiano lunghezza.
-- Usa i tipi ROS disponibili nell'ambiente, compresi quelli custom del workspace;
-  non serve pandas. Supporta gli storage ROS installati, inclusi MCAP e SQLite3.
-- Una nuova esportazione sovrascrive i CSV omonimi: usare una cartella di output
-  distinta per ogni analisi. Gli errori producono un codice di uscita diverso da zero;
-  eventuali file parziali di una bag fallita non vanno considerati completi.
+- One CSV per topic, including topics without samples; similar topic filenames
+  receive distinct suffixes to avoid collisions.
+- `timestamp_ns` is the bag recording timestamp in nanoseconds. A message timestamp
+  remains in `header.stamp.sec` and `header.stamp.nanosec`. A custom field named
+  `timestamp_ns` becomes `message.timestamp_ns` to preserve the bag timestamp.
+- Nested fields become columns such as `orientation.x`; arrays and message sequences
+  remain in JSON cells, including variable-length sequences.
+- Uses installed ROS message types, including workspace custom types; no pandas
+  dependency. Supports installed ROS storage plugins, including MCAP and SQLite3.
+- Re-exporting overwrites CSVs with the same names: use a separate output directory
+  for each analysis. Errors produce a nonzero exit code; partial files from a failed
+  bag must not be treated as complete exports.
 
-Test su bag temporanee MCAP/SQLite3: `python3 -m pytest tools/tests/test_allbags_to_csv.py`.
+Temporary MCAP/SQLite3 bag tests: `python3 -m pytest tools/tests/test_allbags_to_csv.py`.
 
-## Utilità legacy
+## Legacy utilities
 
-[gen_bag_test.py](gen_bag_test.py) simula vecchi topic `/serial/raw_rx`, `/gps_data`
-e `/gps_vel_data`: non è adattato agli attuali messaggi Agir.
-Per registrare e ispezionare le bag usare il [README rosbag_manager](../src/rosbag_manager/README.md).
-La diagnostica MQTT indipendente da ROS è in [tools/mqtt_diagnostics](../../tools/mqtt_diagnostics/README.md).
+[gen_bag_test.py](gen_bag_test.py) simulates old `/serial/raw_rx`, `/gps_data` and
+`/gps_vel_data` topics and is not adapted to current Agir messages.
+For recording and inspecting bags, see the [rosbag_manager README](../src/rosbag_manager/README.md).
+ROS-independent MQTT diagnostics are in [tools/mqtt_diagnostics](../../tools/mqtt_diagnostics/README.md).

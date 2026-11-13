@@ -1,16 +1,16 @@
-# sensors — acquisizione dei sensori
+# sensors — sensor acquisition
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Workspace](../../README.md)
+[Workspace](../../README.md)
 
-## Introduzione
+## Introduction
 
-Questo pacchetto è il punto di contatto tra ROS e l'hardware della barca. Legge ultrasuoni, GPS, IMU, bussola e batteria, interpreta i dati ricevuti e pubblica messaggi che gli altri pacchetti possono usare senza conoscere il protocollo del sensore.
+This package connects ROS to the boat's hardware. It reads ultrasound, GPS, IMU, compass and battery data, interprets the incoming measurements and publishes messages that other packages can use without knowing each sensor protocol.
 
-Ogni collegamento ha il proprio nodo. Per esempio, i due ultrasuoni usano lo stesso codice ma due istanze diverse, ciascuna con la propria porta. Non c'è un nodo centrale che legge tutti i sensori da una seriale condivisa.
+Each connection has its own node. The ultrasonic sensors, for example, use two instances of the same code, each with its own port. There is no central node reading all sensors from a shared serial stream.
 
-## Struttura del pacchetto
+## Package structure
 
 ```text
 sensors/
@@ -26,11 +26,11 @@ sensors/
 └── setup.py
 ```
 
-I file `*_node.py` gestiscono ROS, timer e messaggi; i [driver](sensors/drivers/) gestiscono i protocolli hardware. [params.yaml](config/params.yaml) contiene porte, frequenze e soglie. [endpoints.yaml](config/endpoints.yaml) contiene i nomi dei topic, da cui la build genera le costanti in `generated/`. Per cambiare un nome modifica lo YAML e ricompila.
+The `*_node.py` files handle ROS, timers and messages; [drivers](sensors/drivers/) handle hardware protocols. [params.yaml](config/params.yaml) contains ports, rates and thresholds. [endpoints.yaml](config/endpoints.yaml) defines topic names, from which the build generates constants in `generated/`. Edit that YAML and rebuild to change a name.
 
-## Nodi e topic
+## Nodes and topics
 
-Nel diagramma gli ovali sono nodi, i rettangoli indicano hardware o topic. Le frecce `pub` vanno dal nodo al topic pubblicato. Questi nodi acquisiscono dall'hardware: non si sottoscrivono ai topic di altri pacchetti.
+Ovals are nodes; rectangles represent hardware or topics. Arrows labelled `pub` point from a node to its published topic. These nodes acquire hardware data and do not subscribe to topics from other packages.
 
 ```mermaid
 flowchart LR
@@ -49,91 +49,91 @@ flowchart LR
     battery -->|pub BatteryData| bt["/battery/data"]
 ```
 
-| Nodo | Collegamento predefinito | Lettura | Pubblicazione | Età massima |
+| Node | Default connection | Reading | Publication | Maximum age |
 |---|---|---|---|---|
-| `ultrasonic_left_node` | USB, 9600 baud | All'arrivo dei dati | 20 Hz | 0,5 s |
-| `ultrasonic_right_node` | USB, 9600 baud | All'arrivo dei dati | 20 Hz | 0,5 s |
-| `gps_node` | USB, 230400 baud | All'arrivo dei dati | 10 Hz | 1 s |
-| `imu_sensor_node` | UART, 3000000 baud | All'arrivo dei dati | 50 Hz | 0,5 s |
-| `i2c_sensors_node` | Bus 1, mux 0x70, canale 0, bussola 0x0E | 10 Hz | 10 Hz | 0,5 s |
-| `battery_node` | gpiochip0, linee 6 e 13 | Allarme a 10 Hz; tensione su eventi | 10 Hz | Allarme 0,5 s; tensione 5 s |
+| `ultrasonic_left_node` | USB, 9600 baud | On incoming data | 20 Hz | 0.5 s |
+| `ultrasonic_right_node` | USB, 9600 baud | On incoming data | 20 Hz | 0.5 s |
+| `gps_node` | USB, 230400 baud | On incoming data | 10 Hz | 1 s |
+| `imu_sensor_node` | UART, 3000000 baud | On incoming data | 50 Hz | 0.5 s |
+| `i2c_sensors_node` | Bus 1, mux 0x70, channel 0, compass 0x0E | 10 Hz | 10 Hz | 0.5 s |
+| `battery_node` | gpiochip0, lines 6 and 13 | Alarm at 10 Hz; voltage from events | 10 Hz | Alarm 0.5 s; voltage 5 s |
 
-I numeri GPIO indicano le linee usate dal driver, non i numeri dei pin sul connettore. I valori della tabella sono i default dello YAML, da confrontare con il cablaggio effettivo.
+GPIO numbers identify driver lines, not physical connector pins. These are YAML defaults and must match the actual wiring.
 
-## Lettura, pubblicazione e freschezza
+## Reading, publishing and freshness
 
-La **lettura** acquisisce una misura dal dispositivo; la **pubblicazione** la rende disponibile su ROS. Sono due operazioni distinte. Con `publish_rate_hz: 20.0`, per esempio, il nodo degli ultrasuoni pubblica ogni 50 ms l'ultima misura disponibile, anche se nel frattempo non ne è arrivata una nuova.
+**Reading** acquires a measurement from the device; **publishing** exposes it through ROS. With `publish_rate_hz: 20.0`, for example, an ultrasonic node publishes the latest available measurement every 50 ms, even if no new one has arrived.
 
-Per questo una ripetizione conserva il timestamp originale: ripubblicare un numero non lo rende una nuova misura. Il controllo di [sail_common](../sail_common/README.md) impedisce di continuare a pubblicarlo oltre l'età ammessa. Quando non arrivano più campioni utilizzabili, il nodo smette di pubblicare; i consumatori devono a loro volta controllare l'età dell'ultimo dato ricevuto.
+A repeated measurement therefore retains its original timestamp. The [sail_common](../sail_common/README.md) check prevents publishing it beyond its allowed age. When usable samples stop arriving, publication stops; consumers must also check the age of their last received sample.
 
-Nei nodi seriali `read_rate_hz: 0.0` significa attendere i dati in un thread dedicato. Un valore positivo regola quanto spesso il software controlla la porta, ma non cambia la frequenza fisica del sensore. Per bussola e allarme batteria il valore di lettura deve invece essere positivo.
+For serial nodes, `read_rate_hz: 0.0` waits for data in a dedicated thread. A positive value controls how often software checks the port, without changing the sensor's physical measurement rate. Compass reading and battery alarm polling require a positive rate.
 
-## Cosa fa ciascun nodo
+## What each node does
 
-### Ultrasuoni
+### Ultrasound
 
-[ultrasonic_node.py](sensors/ultrasonic_node.py) usa il [driver A02YYUW](sensors/drivers/ultrasonic_driver.py) per riconoscere frame di quattro byte, verificarne il checksum e convertire i millimetri in metri. I frame incompleti vengono conservati fino alla lettura successiva.
+[ultrasonic_node.py](sensors/ultrasonic_node.py) uses the [A02YYUW driver](sensors/drivers/ultrasonic_driver.py) to recognize four-byte frames, check their checksum and convert millimetres to metres. Partial frames are retained for the next read.
 
-Il messaggio è `sensor_msgs/msg/Range`: `range` contiene la distanza grezza, con limiti predefiniti 0,03–4,5 m e campo visivo 0,1 rad. Non è ancora l'altezza della barca: quella viene calcolata in [data_elaboration](../data_elaboration/README.md).
+The output is `sensor_msgs/msg/Range`: `range` is the raw distance, with default limits of 0.03–4.5 m and a 0.1 rad field of view. It is not boat height, which is calculated by [data_elaboration](../data_elaboration/README.md).
 
-Il timestamp viene assegnato sul Raspberry alla lettura. Il sensore non lo trasmette. `timeout_s: 0.1` limita l'attesa della seriale quando non ci sono dati; non imposta una misura ogni 0,1 s.
+The Raspberry assigns the timestamp when reading; the sensor does not transmit one. `timeout_s: 0.1` bounds idle serial waits rather than setting the sensor measurement interval.
 
 ### GPS
 
-[gps_node.py](sensors/gps_node.py) legge i messaggi UBX NAV-PVT attraverso pyubx2 e li converte in `gps_msgs/msg/GPSFix`. Soltanto un nuovo NAV-PVT aggiorna la misura: altri messaggi NMEA o UBX non rendono recente un vecchio fix.
+[gps_node.py](sensors/gps_node.py) reads UBX NAV-PVT using pyubx2 and converts it to `gps_msgs/msg/GPSFix`. Only a new NAV-PVT updates the measurement; other NMEA or UBX messages cannot make an old fix fresh.
 
-| Campo | Come viene usato |
+| Field | Current use |
 |---|---|
-| `header`, `status.header` | Istante di ricezione ROS e frame `gps`, conservati nelle ripetizioni. |
-| `status.status` | FIX = 0 oppure NO_FIX = -1. |
-| `latitude`, `longitude` | Coordinate WGS84 in gradi; NaN se il fix non è valido. |
+| `header`, `status.header` | ROS receipt time and `gps` frame, retained on repeat publication. |
+| `status.status` | FIX = 0 or NO_FIX = -1. |
+| `latitude`, `longitude` | WGS84 degrees; NaN for an invalid fix. |
 | `speed` | Speed over ground, in m/s. |
-| `track` | Course over ground, in gradi: indica il movimento, non la prua da fermo. |
-| `altitude` | Quota NAV-PVT hMSL in metri, quando utilizzabile; altrimenti NaN. |
-| `pdop`, `status.satellites_used` | Diluizione geometrica e numero di satelliti usati. |
-| `err`, `err_horz`, `err_vert`, covarianza | Errori lasciati a NaN e covarianza sconosciuta: il driver non converte le accuratezze in intervalli al 95%. |
-| `time`, altri DOP | Tempo GPS non ricostruito (NaN); DOP non disponibili a -1. |
+| `track` | Course over ground in degrees: movement direction, not stationary heading. |
+| `altitude` | NAV-PVT hMSL in metres when usable; otherwise NaN. |
+| `pdop`, `status.satellites_used` | Geometric dilution and number of satellites used. |
+| `err`, `err_horz`, `err_vert`, covariance | Errors remain NaN and covariance unknown; accuracy estimates are not converted into 95% intervals. |
+| `time`, other DOPs | GPS time is not reconstructed (NaN); unavailable DOPs are -1. |
 
-Un NAV-PVT recente senza fix viene pubblicato come NO_FIX. Se invece non arriva più NAV-PVT, il nodo smette di pubblicare dopo il timeout. Freschezza e validità del fix sono quindi due controlli diversi. La frequenza di pubblicazione non riprogramma il ricevitore; dopo una disconnessione USB può essere necessario riavviare il nodo, perché qui non è prevista la riapertura automatica.
+A recent NAV-PVT without a fix is published as NO_FIX. If NAV-PVT stops arriving, publication stops after the timeout. Freshness and fix validity are separate checks. Publication rates do not reprogram the receiver; USB disconnection may require restarting this node because automatic reopening is not implemented here.
 
-### IMU BNO085
+### BNO085 IMU
 
-[imu_sensor_node.py](sensors/imu_sensor_node.py) usa il [driver UART](sensors/drivers/imu_driver.py) SH-2/SHTP, non UART-RVC. Il collegamento previsto usa PL011 su GPIO14/15, con P1 alto e P0 basso sul sensore.
+[imu_sensor_node.py](sensors/imu_sensor_node.py) uses the SH-2/SHTP [UART driver](sensors/drivers/imu_driver.py), not UART-RVC. Expected wiring uses PL011 on GPIO14/15, with sensor P1 high and P0 low.
 
-Con `rotation_vector` il BNO085 esegue già la fusione di accelerometro, giroscopio e magnetometro. Il nodo pubblica quaternione, accelerazione con gravità in m/s² e velocità angolare in rad/s nel messaggio `Imu`; il campo magnetico è pubblicato separatamente in tesla.
+With `rotation_vector`, the BNO085 already fuses accelerometer, gyroscope and magnetometer data. The node publishes a quaternion, acceleration including gravity in m/s² and angular velocity in rad/s in `Imu`; magnetic field is published separately in tesla.
 
-Il driver richiede orientamento, accelerazione e gyro a 100 Hz e magnetometro a 50 Hz; il timer ROS pubblica a 50 Hz. Queste frequenze non sono equivalenti e i report non sono necessariamente simultanei. Un nuovo orientamento viene combinato con le altre componenti solo se sono recenti; la componente più vecchia limita la freschezza del risultato.
+The driver requests orientation, acceleration and gyro reports at 100 Hz and magnetometer reports at 50 Hz; the ROS publication timer runs at 50 Hz. These rates differ, and reports are not necessarily simultaneous. A new orientation is combined with other components only while they are recent; the oldest component limits the result's freshness.
 
-Il tempo interno SH-2 non è convertito in tempo ROS: l'header viene assegnato dall'host durante la composizione del campione. Errori seriali svuotano i dati memorizzati; il driver ritenta dopo 2 s e riconnette dopo 1 s di silenzio UART. Il magnetometro ha una scadenza separata.
+Internal SH-2 time is not mapped to ROS time: the host assigns the header while assembling the sample. Serial errors clear cached data; retries wait 2 s and 1 s of UART silence triggers reconnection. Magnetometer data expires independently.
 
-`game_rotation_vector` non usa il riferimento magnetico: cambiarlo modifica il significato dello yaw. La correzione del montaggio e del braccio avviene nel pacchetto di elaborazione. Il livello di accuratezza 0–3 viene scritto nei log; covarianze a zero non significano precisione perfetta.
+`game_rotation_vector` does not use the magnetic reference, so selecting it changes yaw semantics. Mounting and lever-arm correction happen in the processing package. Accuracy level 0–3 is logged; zero covariances do not mean perfect accuracy.
 
-### Bussola separata
+### Separate compass
 
-[i2c_sensors_node.py](sensors/i2c_sensors_node.py) legge la bussola attraverso il multiplexer. La selezione del canale, il comando di misura, l'attesa e la lettura sono protetti dallo stesso lock, così non si cambia canale a metà operazione.
+[i2c_sensors_node.py](sensors/i2c_sensors_node.py) reads the compass through the multiplexer. One lock covers channel selection, measurement command, waiting and reading, preventing channel changes during a transaction.
 
-`conversion_delay_s: 0.02` è l'attesa prevista dal driver dopo il comando di misura. Non sostituisce il controllo di freschezza e non garantisce da sola la validità del dato.
+`conversion_delay_s: 0.02` is the driver's wait after requesting a measurement. It neither replaces freshness checking nor guarantees valid data on its own.
 
-Il messaggio `Vector3Stamped` contiene conteggi grezzi con segno, non tesla. Attualmente questa bussola viene acquisita per diagnostica e registrazione: non entra nella fusione del BNO085 né nello yaw della dashboard.
+The `Vector3Stamped` message contains signed raw counts, not tesla. This compass is currently acquired for diagnostics and recording; it is not part of BNO085 fusion or dashboard yaw.
 
-### Batteria
+### Battery
 
-[battery_node.py](sensors/battery_node.py) legge l'allarme low dal GPIO e riceve dal [driver](sensors/drivers/battery_driver.py) la tensione trasmessa dall'ESP32 tramite eventi GPIO. Pubblica `BatteryData`, con header, tensione e allarme.
+[battery_node.py](sensors/battery_node.py) reads the low alarm GPIO and obtains voltage from the [driver](sensors/drivers/battery_driver.py), which decodes ESP32 GPIO events. It publishes `BatteryData`, containing a header, voltage and alarm.
 
-L'header indica quando è stato letto l'allarme. Se la tensione manca o ha più di 5 s, viene pubblicata come NaN, mentre un allarme recente può continuare a essere inviato. Gli errori GPIO impediscono di creare un nuovo campione.
+The header timestamps the alarm read. Missing voltage or voltage older than 5 s becomes NaN, while a fresh alarm can still be published. GPIO errors prevent creating new samples.
 
-Il nodo conta le letture consecutive con allarme attivo. Con i default `low_samples_required: 1` e `shutdown_enabled: true`, richiede lo spegnimento una sola volta al raggiungimento della soglia. Il comando viene eseguito nel container: lo spegnimento effettivo dell'host deve essere verificato sulla configurazione di bordo.
+The node counts consecutive active-alarm reads. With defaults `low_samples_required: 1` and `shutdown_enabled: true`, it requests shutdown once when the threshold is reached. That command executes inside the container; actual host shutdown must be verified on the onboard configuration.
 
-## Avvio e test
+## Startup and tests
 
-Il [launch live](launch/live_sensors.launch.py) avvia le sei istanze descritte sopra. Dal container, con ROS e workspace caricati:
+The [live launch](launch/live_sensors.launch.py) starts the six instances above. Inside the container, with ROS and the workspace sourced:
 
 ```bash
 ros2 launch sensors live_sensors.launch.py
 ```
 
-Puoi usare un altro file di parametri con `sensors_params_file:=/percorso/params.yaml`. I parametri vengono applicati all'avvio: dopo aver aggiornato quelli del repository, ricompila e riavvia i nodi. Non avviare due istanze che leggono la stessa porta.
+Override parameters with `sensors_params_file:=/path/to/params.yaml`. Parameters are applied at startup: after editing repository YAML, rebuild and restart nodes. Do not start two instances owning the same port.
 
-Nel replay non si avviano i sensori: la bag fornisce direttamente le misure ai pacchetti successivi.
+Replay does not start acquisition nodes; the bag supplies measurements directly to downstream packages.
 
-Da `/home/ros/ros2_ws`, esegui `bash scripts/test.sh sensors`. I test simulano l'hardware; sulla barca verifica anche cablaggio, permessi, frequenze osservate e comportamento quando un sensore smette di inviare dati.
+From `/home/ros/ros2_ws`, run `bash scripts/test.sh sensors`. Tests simulate hardware; on the boat also check wiring, permissions, observed rates and behaviour when a sensor stops sending data.

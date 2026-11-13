@@ -2,8 +2,6 @@
 
 _Updated on: 30/10/2026_
 
-[Italiano](../italiano/software_necessari.md)
-
 This guide lists the software to install on your computer to work on the repository. The instructions cover **Windows** and **macOS**.
 
 All members must have **terminal SSH access, Git, GitHub Desktop, Docker Desktop and Visual Studio Code with the extensions listed below**. X servers and additional remote connection applications are optional.
@@ -109,7 +107,7 @@ An X server displays windows from graphical applications running inside the cont
 | Windows | VcXsrv | [Official project releases](https://github.com/marchaesen/vcxsrv/releases) |
 | macOS | XQuartz | [Official website](https://www.xquartz.org/) |
 
-Graphical applications also require the container-to-X-server connection to be configured. For the graphics connections defined by the project, see the [Docker README](../../Docker/README_ENG.md).
+Graphical applications also require the container-to-X-server connection to be configured. For the graphics connections defined by the project, see the [Docker README](../Docker/README.md).
 
 ### Remote connection tools
 
@@ -122,4 +120,4 @@ These applications provide an interface for saving and managing SSH connections.
 
 While the onboard software is running, use a regular terminal SSH session and close VS Code Remote - SSH sessions connected to the Raspberry to leave the device's resources available to the ROS system.
 
-[Back to guides](../README_ENG.md)
+[Back to guides](README.md)

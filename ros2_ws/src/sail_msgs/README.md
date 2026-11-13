@@ -1,16 +1,16 @@
-# sail_msgs — messaggi e servizi di Agir
+# sail_msgs — Agir messages and services
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Workspace](../../README.md)
+[Workspace](../../README.md)
 
-## Introduzione
+## Introduction
 
-Per scambiare dati, due nodi devono conoscere la stessa struttura del messaggio. Questo pacchetto definisce le strutture specifiche di Agir, come i dati della dashboard, le boe e le richieste di registrazione.
+To exchange data, two nodes must agree on a message structure. This package defines Agir-specific structures such as dashboard data, marks and recording requests.
 
-Non contiene nodi e non pubblica topic. Durante la build, ROS genera dai file `.msg` e `.srv` i tipi che gli altri pacchetti importano e usano.
+It contains no nodes and publishes no topics. During the build, ROS generates types from `.msg` and `.srv` files for other packages to import and use.
 
-## Struttura del pacchetto
+## Package structure
 
 ```text
 sail_msgs/
@@ -21,11 +21,11 @@ sail_msgs/
 └── package.xml
 ```
 
-I messaggi sono in [msg/](msg/) e i servizi in [srv/](srv/). [CMakeLists.txt](CMakeLists.txt) elenca le interfacce da generare: attualmente sei messaggi e quattro servizi.
+Messages live in [msg/](msg/) and services in [srv/](srv/). [CMakeLists.txt](CMakeLists.txt) lists generated interfaces: currently six messages and four services.
 
-## Dove vengono usate le interfacce
+## Where interfaces are used
 
-Le frecce associano le definizioni ai topic e servizi che le usano. Non indicano pubblicazioni da parte di `sail_msgs`: i publisher e i server appartengono agli altri pacchetti.
+Arrows associate definitions with the topics and services using them. They do not represent publications by `sail_msgs`; publishers and servers belong to other packages.
 
 ```mermaid
 flowchart LR
@@ -43,30 +43,30 @@ flowchart LR
     srv -->|StartRecording / StopRecording| rec
 ```
 
-| Interfaccia | A cosa serve |
+| Interface | Purpose |
 |---|---|
-| `BatteryData` | Riunisce tensione e allarme low; l'header riguarda la lettura dell'allarme. |
-| `DashboardDataMsg` | Riunisce i valori mostrati in dashboard e i flag che indicano quali sono utilizzabili. |
-| `MapDataMsg` | Porta posizione, timestamp originale del GPS e lista delle boe. |
-| `Mark` | Descrive una boa: Committee, Pin o Windward, con posizione GPS e header. È contenuto nella mappa e nella risposta al ping. |
-| `RecordingState` | Descrive lo stato della registrazione, senza header. |
-| `StartRecording`, `StopRecording` | Chiedono al manager di iniziare o terminare una registrazione. |
-| `PingMark` | Chiede al telemetry gateway di memorizzare una boa; la risposta `mark` va usata solo se `success` è vero. |
-| `SerialMsg`, `ManageRecording` | Interfacce legacy ancora generate, ma non usate nel percorso live attuale. |
+| `BatteryData` | Combines voltage and low alarm; its header timestamps the alarm reading. |
+| `DashboardDataMsg` | Combines dashboard values with flags indicating which are usable. |
+| `MapDataMsg` | Carries position, original GPS timestamp and marks. |
+| `Mark` | Describes a Committee, Pin or Windward mark with GPS position and header. Included in map data and ping responses. |
+| `RecordingState` | Describes recording state without a header. |
+| `StartRecording`, `StopRecording` | Ask the manager to start or finish recording. |
+| `PingMark` | Asks the telemetry gateway to save a mark; use response `mark` only when `success` is true. |
+| `SerialMsg`, `ManageRecording` | Legacy interfaces still generated but unused in the current live path. |
 
-Per le misure che hanno già un tipo adatto usiamo pacchetti ROS esistenti: `gps_msgs/GPSFix` per GPS, `sensor_msgs/Imu` per IMU, `sensor_msgs/Range` per ultrasuoni e `marti_common_msgs/Float64Stamped` per altezza. Non occorre ricrearle qui.
+Measurements with suitable existing types use ROS packages: `gps_msgs/GPSFix` for GPS, `sensor_msgs/Imu` for IMU, `sensor_msgs/Range` for ultrasound and `marti_common_msgs/Float64Stamped` for height. These do not need to be recreated here.
 
-`Header` contiene timestamp e nome del frame. Non rende automaticamente valida o fresca una misura: i nodi controllano questi aspetti prima di usarla. Le unità e il riferimento dei campi vengono spiegati nei README dei pacchetti che producono i dati.
+`Header` carries a timestamp and frame name. It does not automatically make a measurement valid or fresh; nodes check those properties before use. Producer package READMEs explain field units and reference frames.
 
-## Come modificare un'interfaccia
+## Changing an interface
 
-Quando aggiungi un campo o ne cambi il tipo, aggiorna i nodi che scrivono e leggono il messaggio. Se il dato arriva alla web app, aggiorna anche la conversione MQTT e il relativo consumer. Poi esegui una build pulita del workspace e i test dei pacchetti coinvolti.
+When adding a field or changing its type, update both writers and readers. If the data reaches the web app, also update MQTT conversion and its consumer. Then perform a clean workspace build and run affected package tests.
 
-Una bag o un programma compilato prima della modifica può contenere ancora lo schema precedente: non considerarlo automaticamente compatibile.
+A bag or program built before the change may retain the previous schema; do not assume automatic compatibility.
 
-## Definizioni dei messaggi e dei servizi
+## Message and service definitions
 
-Le definizioni riportate sotto permettono di leggere i campi senza aprire ogni file. I sorgenti collegati rimangono il riferimento da modificare; aggiorna anche questa sezione quando cambia uno schema.
+The definitions below let you inspect fields without opening each file. Linked sources remain the files to edit; update this section whenever a schema changes.
 ### [BatteryData.msg](msg/BatteryData.msg)
 
 ```text

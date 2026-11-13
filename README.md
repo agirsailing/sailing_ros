@@ -1,34 +1,32 @@
-# Sistema di bordo Agir — ROS 2
+# Agir onboard system — ROS 2
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md)
+This repository contains the ROS 2 onboard software developed by the **KTH Agir Sailing Team**.
 
-Questa repository raccoglie il software ROS 2 del sistema di bordo del **KTH Agir Sailing Team**.
+**Maintainer:** Ettore Cirillo — [ettore.cirillo.dev@gmail.com](mailto:ettore.cirillo.dev@gmail.com).
 
-**Responsabile della manutenzione:** Ettore Cirillo — [ettore.cirillo.dev@gmail.com](mailto:ettore.cirillo.dev@gmail.com).
+## Introduction
 
-## Introduzione
+The system acquires sensor data, processes attitude and estimates the height of the boat's design waterline above the water. It also manages MQTT telemetry to the webapp, buoy ping and ROS session recording in MCAP format. The webapp lives in the separate `agir_boat_monitoring` repository.
 
-Il sistema acquisisce i dati dei sensori, elabora l'orientamento e stima l'altezza della linea di galleggiamento della barca rispetto all'acqua. Gestisce inoltre la telemetria MQTT verso la webapp, il ping delle boe e la registrazione delle sessioni ROS in formato MCAP. La webapp si trova nella repository separata `agir_boat_monitoring`.
+The software runs on the onboard Raspberry Pi 4 with ROS 2 Jazzy in Docker and is managed over SSH without a screen or desktop session. Docker also supports development and testing on a PC. This README provides an overview and points to guides and package documentation for details.
 
-Il software gira sul Raspberry Pi 4 con ROS 2 Jazzy in Docker e si gestisce via SSH, senza schermo o sessione desktop. L'ambiente Docker permette anche di sviluppare e provare il codice sul PC. Questo README offre una panoramica e rimanda alle guide e ai pacchetti per i dettagli.
+## Repository structure
 
-## Struttura della repository
-
-| Cartella | Percorso | Scopo | README dettagliato |
+| Directory | Path | Purpose | Detailed README |
 |---|---|---|---|
-| `DAY_BEFORE_REGATTA` | [`DAY_BEFORE_REGATTA/`](DAY_BEFORE_REGATTA/) | Configurazione, aggiornamento, avvio e autostart del Raspberry Pi. | [Italiano](DAY_BEFORE_REGATTA/README.md) |
-| `Docker` | [`Docker/`](Docker/) | Ambienti containerizzati per PC e Raspberry Pi. | [Italiano](Docker/README.md) |
-| `guides` | [`guides/`](guides/) | Procedure di installazione, utilizzo, verifica e manutenzione. | [Italiano](guides/README.md) |
-| `ros2_ws` | [`ros2_ws/`](ros2_ws/) | Workspace ROS 2 con pacchetti e strumenti di build/test. | [Italiano](ros2_ws/README.md) |
-| `tools` | [`tools/`](tools/) | Diagnostica MQTT indipendente dai sensori e dal runtime ROS. | [Italiano](tools/README.md) |
+| `DAY_BEFORE_REGATTA` | [`DAY_BEFORE_REGATTA/`](DAY_BEFORE_REGATTA/) | Raspberry configuration, updates, startup and autostart. | [README](DAY_BEFORE_REGATTA/README.md) |
+| `Docker` | [`Docker/`](Docker/) | Container environments for PC and Raspberry Pi. | [README](Docker/README.md) |
+| `guides` | [`guides/`](guides/) | Installation, operation, verification and maintenance procedures. | [README](guides/README.md) |
+| `ros2_ws` | [`ros2_ws/`](ros2_ws/) | ROS 2 workspace with packages and build/test tools. | [README](ros2_ws/README.md) |
+| `tools` | [`tools/`](tools/) | MQTT diagnostics independent of sensors and the ROS runtime. | [README](tools/README.md) |
 
-Per approfondire il contenuto di una cartella, apri il relativo README dettagliato.
+Open each directory's detailed README to learn more about its contents.
 
-## Primi passi
+## First steps
 
-1. Parti dal [README delle guide](guides/README.md): raccoglie i prerequisiti, la configurazione del PC e le istruzioni per collegarti al Raspberry via SSH.
-2. Consulta la [panoramica del workspace](ros2_ws/README.md), con il diagramma dei collegamenti tra pacchetti, poi apri il README del componente su cui lavorerai per i dettagli dei nodi e dei topic.
-3. Per preparare la barca segui la [prima installazione del Raspberry](guides/italiano/settaggio_raspberry.md), quindi [avvio e prove manuali](guides/italiano/avvio_sistema_ros.md). Abilita l'autostart dopo queste prove.
-4. Per compilare e verificare una modifica consulta gli [script del workspace](ros2_ws/scripts/README.md).
+1. Start with the [guide index](guides/README.md): it covers prerequisites, PC setup and connecting to the Raspberry over SSH.
+2. Read the [workspace overview](ros2_ws/README.md), including the package relationship diagram, then open the relevant package README for node and topic details.
+3. To prepare the boat follow [Raspberry first installation](guides/raspberry_setup.md), then [manual startup and checks](guides/ros_system_startup.md). Enable autostart after these checks.
+4. For build and test commands, see the [workspace scripts](ros2_ws/scripts/README.md).

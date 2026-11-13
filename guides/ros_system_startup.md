@@ -2,8 +2,6 @@
 
 _Updated on: 30/10/2026_
 
-[Italiano](../italiano/avvio_sistema_ros.md)
-
 This guide explains how to start the ROS system on the Raspberry Pi and use a few commands to check its operation.
 
 It assumes that the code is already on the Raspberry and that configuration has been completed following the [Raspberry setup guide](raspberry_setup.md).
@@ -42,7 +40,7 @@ If the service is already `active`, proceed to the debugging commands without st
 
 ## Case 1 — Autostart disabled
 
-To start the system manually, in the **Raspberry SSH terminal**, enter the `DAY_BEFORE_REGATTA` folder, make [`run.sh`](../../DAY_BEFORE_REGATTA/run.sh) executable and run it:
+To start the system manually, in the **Raspberry SSH terminal**, enter the `DAY_BEFORE_REGATTA` folder, make [`run.sh`](../DAY_BEFORE_REGATTA/run.sh) executable and run it:
 
 ```bash
 cd /home/boat/2025_SOFTWARE/sailing_ros/DAY_BEFORE_REGATTA

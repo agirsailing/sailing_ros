@@ -1,17 +1,17 @@
-# Controllo opzionale del profilo Wi-Fi
+# Optional Wi-Fi profile check
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Indice repository](../../README.md)
+[Repository index](../../README.md)
 
-[agir_wifi_check.sh](agir_wifi_check.sh) usa NetworkManager: se manca il profilo
-lo crea con SSID/password configurati, altrimenti abilita autoconnect. È un
-controllo **oneshot al boot**, non un monitor che ripristina ogni disconnessione.
-Non verifica broker, latenza o accesso a Internet.
+[agir_wifi_check.sh](agir_wifi_check.sh) uses NetworkManager: it creates a missing
+profile with configured SSID/password, or enables autoconnect on an existing
+profile. This is a **boot oneshot**, not a continuous disconnection recovery
+monitor. It does not check the broker, latency or Internet connectivity.
 
-Compilare `WIFI_SSID`, `WIFI_PASS`, `WIFI_PROFILE` in una copia privata dello script;
-tenere accanto [install_wifi_guardian.sh](install_wifi_guardian.sh). L'installer
-copia lo script in `/usr/local/bin` e abilita/avvia subito il servizio:
+Fill `WIFI_SSID`, `WIFI_PASS`, `WIFI_PROFILE` in a private script copy; keep
+[install_wifi_guardian.sh](install_wifi_guardian.sh) alongside it. The installer
+copies the script to `/usr/local/bin` and immediately enables/starts the service:
 
 ```bash
 sudo bash install_wifi_guardian.sh
@@ -19,7 +19,7 @@ systemctl status agir_wifi_guardian.service
 journalctl -u agir_wifi_guardian.service -b
 ```
 
-Non è richiamato da complete/quick. Non committare password: i placeholder nel
-file tracciato devono rimanere tali. Per disattivarlo:
+Complete/quick do not call it. Never commit passwords: tracked placeholders must
+remain placeholders. Disable with:
 `sudo systemctl disable --now agir_wifi_guardian.service`.
-Un profilo esistente con credenziali errate non viene riscritto dal controllo.
+The check does not rewrite an existing profile with incorrect credentials.

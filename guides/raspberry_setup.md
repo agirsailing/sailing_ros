@@ -2,7 +2,7 @@
 
 _Updated on: 30/10/2026_
 
-[Italiano](../italiano/settaggio_raspberry.md) · [Guides](../README_ENG.md)
+[Guides](README.md)
 
 This guide covers two cases:
 
@@ -13,7 +13,7 @@ This guide covers two cases:
 
 ## Before you start
 
-Install the [required software](software_necessary.md) on your PC and clone the repository as described in the [guide index](../README_ENG.md).
+Install the [required software](software_necessary.md) on your PC and clone the repository as described in the [guide index](README.md).
 
 The commands use the `boat` account, hostname `boat.local`, and repository path `/home/boat/2025_SOFTWARE/sailing_ros` on the Raspberry. Scripts download code from the `main` branch on GitHub: make sure the changes you want to install are already on that branch.
 
@@ -29,7 +29,7 @@ During preparation, configure user `boat`, hostname `boat`, the password provide
 
 ### 2. Prepare a private copy of repository.sh on the PC
 
-Copy [`DAY_BEFORE_REGATTA/steps/repository.sh`](../../DAY_BEFORE_REGATTA/steps/repository.sh) into a PC directory **outside the repository**. For example, from the `sailing_ros` root:
+Copy [`DAY_BEFORE_REGATTA/steps/repository.sh`](../DAY_BEFORE_REGATTA/steps/repository.sh) into a PC directory **outside the repository**. For example, from the `sailing_ros` root:
 
 **Windows — CMD:**
 
@@ -110,7 +110,7 @@ After downloading the repository, copy the web app communication configuration f
 |---|---|---|
 | `mqtt_config.yaml` | Broker address and MQTT credentials for the ROS gateways. | `/home/boat/2025_SOFTWARE/sailing_ros/ros2_ws/src/communication_web/config/mqtt_config.yaml` |
 
-Ask your team for the completed file. If you need to prepare it, start from [`mqtt_config.example.yaml`](../../ros2_ws/src/communication_web/config/mqtt_config.example.yaml) and fill in both gateway sections. Use the broker's TCP/TLS hostname and port; do not put the browser's `wss://` URL in the host field. MQTT credentials are different from the GitHub token.
+Ask your team for the completed file. If you need to prepare it, start from [`mqtt_config.example.yaml`](../ros2_ws/src/communication_web/config/mqtt_config.example.yaml) and fill in both gateway sections. Use the broker's TCP/TLS hostname and port; do not put the browser's `wss://` URL in the host field. MQTT credentials are different from the GitHub token.
 
 Open **a second terminal on the PC**, at the `sailing_ros` root, keeping the SSH session open. With the file in the local `ros2_ws/src/communication_web/config/` directory, run the same command on Windows and macOS:
 
@@ -120,7 +120,7 @@ scp ros2_ws/src/communication_web/config/mqtt_config.yaml boat@boat.local:/home/
 
 ### 5. Run the complete setup
 
-Return to the **Raspberry SSH terminal** and run [`complete_setup.sh`](../../DAY_BEFORE_REGATTA/complete_setup.sh):
+Return to the **Raspberry SSH terminal** and run [`complete_setup.sh`](../DAY_BEFORE_REGATTA/complete_setup.sh):
 
 ```bash
 cd /home/boat/2025_SOFTWARE/sailing_ros
@@ -169,7 +169,7 @@ Connect **from the PC**:
 ssh boat@boat.local
 ```
 
-In the **Raspberry SSH terminal**, run [`quick_setup.sh`](../../DAY_BEFORE_REGATTA/quick_setup.sh):
+In the **Raspberry SSH terminal**, run [`quick_setup.sh`](../DAY_BEFORE_REGATTA/quick_setup.sh):
 
 ```bash
 cd /home/boat/2025_SOFTWARE/sailing_ros
@@ -184,7 +184,7 @@ ROS remains stopped when the script finishes. Follow the [startup guide](ros_sys
 
 ## Enabling autostart
 
-After successful manual testing, interrupt the run with `Ctrl+C`. In the **Raspberry SSH terminal**, run [`autostart_setup.sh`](../../DAY_BEFORE_REGATTA/autostart_setup.sh):
+After successful manual testing, interrupt the run with `Ctrl+C`. In the **Raspberry SSH terminal**, run [`autostart_setup.sh`](../DAY_BEFORE_REGATTA/autostart_setup.sh):
 
 ```bash
 cd /home/boat/2025_SOFTWARE/sailing_ros
@@ -200,4 +200,4 @@ sudo systemctl disable --now agir_regatta.service
 docker stop agir-ros-raspi
 ```
 
-For more detail about each script, see the [DAY_BEFORE_REGATTA README](../../DAY_BEFORE_REGATTA/README_ENG.md).
+For more detail about each script, see the [DAY_BEFORE_REGATTA README](../DAY_BEFORE_REGATTA/README.md).

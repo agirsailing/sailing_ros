@@ -2,8 +2,6 @@
 
 _Updated on: 30/10/2026_
 
-[Italiano](../italiano/connessione_raspberry.md)
-
 This guide explains how to access the Raspberry Pi over SSH and copy files between your computer and the device. To configure the Raspberry, start ROS or check the system, see [Raspberry Pi setup](raspberry_setup.md). A freshly flashed Raspberry contains the operating system, but not yet the repository or onboard software.
 
 ## Before connecting

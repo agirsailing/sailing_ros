@@ -1,13 +1,13 @@
-# Strumenti esterni al runtime ROS
+# Tools outside the ROS runtime
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Indice repository](../README.md)
+[Repository index](../README.md)
 
-[mqtt_diagnostics](mqtt_diagnostics/README.md) simula dashboard, mappa e stato
-registrazione e confronta ricezione MQTT TCP/WebSocket. Può girare sul PC o sul
-Raspberry senza container ROS. Per un broker Mosquitto locale usa Docker.
+[mqtt_diagnostics](mqtt_diagnostics/README.md) simulates dashboard, map and
+recording state and compares MQTT TCP/WebSocket reception. It runs on a PC or
+Raspberry without a ROS container. A local Mosquitto broker uses Docker.
 
-Il generatore degli endpoint e l'esportatore delle rosbag in CSV sono nei
-[tools del workspace](../ros2_ws/tools/README.md). Non copiare una `.venv`
-Windows sul Raspberry e non committare configurazioni private o risultati voluminosi.
+The endpoint generator and rosbag-to-CSV exporter live in
+[workspace tools](../ros2_ws/tools/README.md). Never copy a Windows `.venv`
+to the Raspberry or commit private configuration and large result folders.

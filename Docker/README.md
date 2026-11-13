@@ -1,26 +1,26 @@
-# Ambiente Docker
+# Docker environment
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Indice repository](../README.md)
+[Repository index](../README.md)
 
-Questa cartella contiene ciò che serve per preparare gli ambienti ROS 2 Jazzy del progetto: uno per sviluppare sul PC e uno per eseguire il sistema sulla barca. I sorgenti dei nodi rimangono nel [workspace ros2_ws](../ros2_ws/README.md); qui definiamo l'ambiente in cui vengono compilati ed eseguiti.
+This directory contains the configuration for the project's ROS 2 Jazzy environments: one for PC development and one for running the system on the boat. Node source code stays in the [ros2_ws workspace](../ros2_ws/README.md); this directory defines the environment in which that code is built and run.
 
-## Perché usiamo Docker
+## Why we use Docker
 
-Nel team sviluppiamo sul PC e poi trasferiamo il codice sul Raspberry tramite Git. Il programma, però, non dipende soltanto dai file che scriviamo: servono anche ROS, il compilatore, i pacchetti dei messaggi e le librerie per sensori e MQTT. Installare tutto a mano su ogni computer rende più difficile capire se un problema dipende dal codice o da un ambiente configurato diversamente.
+The team develops on a PC and then transfers code to the Raspberry through Git. However, the program depends on more than the files we write: it also needs ROS, a compiler, message packages, and libraries for sensors and MQTT. Installing everything manually on each computer makes it harder to tell whether a problem comes from the code or a differently configured environment.
 
-Docker ci permette di descrivere queste installazioni nei file della repository. Chi entra nel team può costruire l'ambiente a partire da quelle istruzioni, senza installare ROS direttamente su Windows o macOS. Anche sul Raspberry le dipendenze dell'applicazione vengono installate nel container; il sistema operativo del Raspberry continua a gestire rete, dispositivi e servizi di avvio.
+Docker lets us describe those installations in repository files. A new team member can build the environment from those instructions without installing ROS directly on Windows or macOS. On the Raspberry, application dependencies are also installed inside the container; the Raspberry operating system still manages networking, devices and startup services.
 
-PC e Raspberry hanno due configurazioni distinte perché svolgono lavori diversi. Sul PC servono strumenti di sviluppo, analisi e, quando necessario, finestre grafiche. Sulla barca servono soprattutto l'accesso ai sensori e l'esecuzione senza schermo. Usiamo la stessa distribuzione ROS e manteniamo le dipendenze necessarie in entrambi gli ambienti, ma compiliamo il codice su ciascuna macchina: i risultati della compilazione del PC non vanno copiati sul Raspberry.
+The PC and Raspberry have separate configurations because they serve different purposes. The PC needs development and analysis tools, including graphical windows when needed. The boat primarily needs sensor access and operation without a screen. We use the same ROS distribution and maintain the required dependencies in both environments, but build the code on each machine: PC build outputs must not be copied to the Raspberry.
 
-## Immagine, container e file condivisi
+## Images, containers and shared files
 
-L'**immagine** è l'ambiente preparato da Docker: contiene ROS e le dipendenze installate seguendo il `Dockerfile`. Il **container** è l'ambiente in esecuzione ricavato da quell'immagine. Quando VS Code si collega al container, il suo terminale esegue i comandi al suo interno, anche se la finestra di VS Code è sul PC Windows o macOS.
+An **image** is the environment prepared by Docker: it contains ROS and the dependencies installed according to the `Dockerfile`. A **container** is a running environment created from that image. When VS Code attaches to the container, its terminal runs commands inside it, even though the VS Code window is on a Windows or macOS PC.
 
-I file del progetto vengono condivisi con il container tramite i **montaggi**, indicati in `compose.yaml`. Per esempio, modificando un nodo in `ros2_ws/src` dal PC, la modifica è subito visibile nella cartella corrispondente del container. Non occorre ricostruire l'immagine Docker a ogni modifica del codice: occorre invece ricompilare il workspace ROS quando richiesto.
+Project files are shared with the container through **mounts**, defined in `compose.yaml`. For example, editing a node in `ros2_ws/src` on the PC immediately makes the change visible in the corresponding container directory. You do not need to rebuild the Docker image for every code change; instead, rebuild the ROS workspace when required.
 
-## Struttura della cartella
+## Directory structure
 
 ```text
 Docker/
@@ -36,79 +36,78 @@ Docker/
 │   ├── compose.yaml
 │   ├── Dockerfile
 │   └── entrypoint.sh
-├── README.md
-└── README_ENG.md
+└── README.md
 ```
 
-I file hanno ruoli diversi e si usano insieme:
+These files have different roles and work together:
 
-| File | A cosa serve |
+| File | Purpose |
 |---|---|
-| `Dockerfile` | Definisce l'immagine di partenza, installa le dipendenze e prepara l'utente e le cartelle del container. |
-| `compose.yaml` | Definisce come avviare il container: nome, immagine, file condivisi, rete e, sul Raspberry, accesso ai dispositivi. |
-| `entrypoint.sh` | All'avvio del container carica ROS e il workspace, poi esegue il comando ricevuto. |
-| `build.sh` | Sul PC riunisce in un solo comando la costruzione dell'immagine e l'avvio del container. |
-| `compose.gui.yaml` | Aggiunge la configurazione grafica del PC quando si usa `build.sh --gui`. |
-| `.dockerignore` | Esclude file non necessari dall'insieme inviato a Docker durante la costruzione dell'immagine. |
+| `Dockerfile` | Defines the base image, installs dependencies and prepares the container user and directories. |
+| `compose.yaml` | Defines how to start the container: its name, image, shared files, network and, on the Raspberry, device access. |
+| `entrypoint.sh` | Loads ROS and the workspace when the container starts, then executes the supplied command. |
+| `build.sh` | On the PC, combines image building and container startup into one command. |
+| `compose.gui.yaml` | Adds PC graphics configuration when running `build.sh --gui`. |
+| `.dockerignore` | Excludes unnecessary files from the build context sent to Docker. |
 
-## I due ambienti
+## The two environments
 
-| Caratteristica | PC | Raspberry Pi |
+| Feature | PC | Raspberry Pi |
 |---|---|---|
-| Cartella | [pc_container](pc_container/) | [raspi_container](raspi_container/) |
-| Utilizzo | Sviluppare, compilare, fare test e analizzare registrazioni. | Leggere i sensori ed eseguire il sistema di bordo. |
-| Immagine di partenza | `osrf/ros:jazzy-desktop-full` | `ros:jazzy-ros-core-noble` |
-| Immagine del progetto | `agirsailing:jazzy-desktop` | `agirsailing:jazzy-raspi` |
-| Nome del container | `agir-ros-pc` | `agir-ros-raspi` |
-| Cartelle condivise dall'host | `ros2_ws/src`, `scripts`, `tools`, `rosbags` | Tutta `ros2_ws` |
+| Directory | [pc_container](pc_container/) | [raspi_container](raspi_container/) |
+| Purpose | Development, compilation, testing and recording analysis. | Reading sensors and running the onboard system. |
+| Base image | `osrf/ros:jazzy-desktop-full` | `ros:jazzy-ros-core-noble` |
+| Project image | `agirsailing:jazzy-desktop` | `agirsailing:jazzy-raspi` |
+| Container name | `agir-ros-pc` | `agir-ros-raspi` |
+| Directories shared from the host | `ros2_ws/src`, `scripts`, `tools`, `rosbags` | Entire `ros2_ws` |
 
-In entrambi i container l'utente è `ros` e il workspace si trova in `/home/ros/ros2_ws`. Questo percorso è interno al container: sull'host Raspberry la repository si trova invece in `/home/boat/2025_SOFTWARE/sailing_ros`.
+Both containers use the `ros` account and workspace `/home/ros/ros2_ws`. This is a path inside the container: on the Raspberry host, the repository instead lives at `/home/boat/2025_SOFTWARE/sailing_ros`.
 
-### PC — Sviluppo e prove
+### PC — Development and testing
 
-Il [Dockerfile PC](pc_container/Dockerfile) parte dalla versione desktop di ROS Jazzy e aggiunge le librerie del progetto e gli strumenti di sviluppo. Contiene anche strumenti di visualizzazione e analisi, come RViz e PlotJuggler, utilizzabili quando è configurata la grafica.
+The [PC Dockerfile](pc_container/Dockerfile) starts from ROS Jazzy Desktop and adds the project libraries and development tools. It also includes visualization and analysis tools such as RViz and PlotJuggler, available when graphics are configured.
 
-Per costruire e avviare l'ambiente, dalla radice `sailing_ros`, esegui in **Git Bash su Windows** o nel **Terminale su macOS**:
+To build and start the environment, run from the `sailing_ros` root in **Git Bash on Windows** or **Terminal on macOS**:
 
 ```bash
 bash Docker/pc_container/build.sh
 ```
 
-Lo script usa il [Compose PC](pc_container/compose.yaml). L'avvio normale non richiede un server grafico né una GPU condivisa. La rete permette al container di collegarsi al broker MQTT e ai nodi ROS di comunicare al suo interno; per comunicare direttamente via ROS con altre macchine occorre configurare anche quel collegamento di rete.
+The script uses [PC Compose](pc_container/compose.yaml). Normal startup requires neither a graphics server nor a shared GPU. Networking lets the container connect to the MQTT broker and lets ROS nodes communicate within it; direct ROS communication with other machines requires configuring that network connection as well.
 
-Se vuoi aprire le finestre di RViz o di altri strumenti, prepara prima il server X sul PC e usa `bash Docker/pc_container/build.sh --gui`. Questa opzione aggiunge [compose.gui.yaml](pc_container/compose.gui.yaml) e usa il rendering software. I passaggi per collegare VS Code e compilare il codice sono nella [guida al settaggio PC](../guides/italiano/settaggio_pc.md).
+To open RViz or other graphical tools, prepare a host X server first, then run `bash Docker/pc_container/build.sh --gui`. This adds [compose.gui.yaml](pc_container/compose.gui.yaml) and uses software rendering. The [PC setup guide](../guides/pc_setup.md) explains how to attach VS Code and build the code.
 
-### Raspberry — Esecuzione sulla barca
+### Raspberry — Running on the boat
 
-Il [Dockerfile Raspberry](raspi_container/Dockerfile) parte da ROS Core e aggiunge i pacchetti necessari al sistema: lettura seriale, I2C e GPIO, GPS, elaborazione, comunicazione MQTT e registrazione delle rosbag.
+The [Raspberry Dockerfile](raspi_container/Dockerfile) starts from ROS Core and adds packages needed by the system: serial, I2C and GPIO access, GPS, processing, MQTT communication and rosbag recording.
 
-Il [Compose Raspberry](raspi_container/compose.yaml) condivide l'intero workspace e la cartella dei dispositivi `/dev`, rendendo disponibili al container anche le porte USB, la UART dell'IMU e il bus I2C. Usa la rete e lo spazio IPC dell'host, con esecuzione privilegiata per l'accesso hardware previsto dal progetto. La configurazione delle porte e dei permessi sull'host viene preparata dagli script di setup.
+[Raspberry Compose](raspi_container/compose.yaml) shares the whole workspace and the `/dev` device directory, exposing USB ports, the IMU UART and the I2C bus to the container. It uses host networking and IPC, with privileged execution for the hardware access configured by the project. Setup scripts prepare the host device names and permissions.
 
-Per la prima installazione si usa `DAY_BEFORE_REGATTA/complete_setup.sh`; per gli aggiornamenti si usa `DAY_BEFORE_REGATTA/quick_setup.sh`. Questi script coordinano Docker e la compilazione ROS. Non serve avviare a mano i singoli passaggi Docker: la [guida al settaggio Raspberry](../guides/italiano/settaggio_raspberry.md) spiega la sequenza completa.
+Use `DAY_BEFORE_REGATTA/complete_setup.sh` for initial installation and `DAY_BEFORE_REGATTA/quick_setup.sh` for updates. These scripts coordinate Docker and the ROS build. There is no need to run each Docker step manually: the [Raspberry setup guide](../guides/raspberry_setup.md) explains the full sequence.
 
-Il sistema può funzionare interamente tramite SSH, senza Wayland, X11 o una sessione desktop. L'avvio manuale passa da [`DAY_BEFORE_REGATTA/run.sh`](../DAY_BEFORE_REGATTA/run.sh); l'autostart si abilita separatamente dopo le prove.
+The system can operate entirely over SSH, without Wayland, X11 or a desktop session. Manual startup uses [`DAY_BEFORE_REGATTA/run.sh`](../DAY_BEFORE_REGATTA/run.sh); autostart is enabled separately after testing.
 
-## Cosa succede quando avvii il container
+## What happens when you start the container
 
-Gli script [entrypoint del PC](pc_container/entrypoint.sh) e [del Raspberry](raspi_container/entrypoint.sh) caricano ROS Jazzy, entrano nel workspace e caricano `install/setup.bash` se il codice è già stato compilato. Poi eseguono il comando ricevuto, oppure aprono Bash.
+The [PC entrypoint](pc_container/entrypoint.sh) and [Raspberry entrypoint](raspi_container/entrypoint.sh) load ROS Jazzy, enter the workspace and load `install/setup.bash` if the code has already been built. They then execute the supplied command, or open Bash.
 
-Avere il container acceso significa quindi avere l'ambiente disponibile, ma non significa che tutti i nodi della barca siano già in esecuzione. Sono tre passaggi distinti:
+A running container therefore means the environment is available, but does not mean all boat nodes are already running. There are three separate steps:
 
-| Passaggio | Risultato |
+| Step | Result |
 |---|---|
-| Costruire l'immagine e avviare il container | Prepara l'ambiente con ROS e le dipendenze. Sul PC lo fa `Docker/pc_container/build.sh`. |
-| Compilare il workspace | Prepara pacchetti e messaggi del progetto. Nel container si esegue `bash scripts/build.sh` da `/home/ros/ros2_ws`. Sul Raspberry lo fanno già complete e quick. |
-| Avviare il sistema ROS | Lancia i nodi. Sul Raspberry lo fa `DAY_BEFORE_REGATTA/run.sh`, eseguito sull'host. |
+| Build the image and start the container | Prepares the environment with ROS and dependencies. On the PC, `Docker/pc_container/build.sh` does this. |
+| Build the workspace | Prepares project packages and messages. Inside the container, run `bash scripts/build.sh` from `/home/ros/ros2_ws`. On the Raspberry, complete and quick already handle this. |
+| Start the ROS system | Launches the nodes. On the Raspberry, `DAY_BEFORE_REGATTA/run.sh` runs this from the host. |
 
-## Cosa rimane salvato e quando ricompilare
+## What is saved and when to rebuild
 
-Sul PC, sorgenti, script, strumenti e rosbag rimangono nelle cartelle condivise dell'host. `build`, `install` e `log` restano invece nel container: fermarlo e riavviarlo li conserva, mentre ricrearlo li elimina e richiede una nuova compilazione. Sul Raspberry l'intero workspace è condiviso, quindi anche queste cartelle rimangono sull'host.
+On the PC, source files, scripts, tools and rosbags remain in the shared host directories. `build`, `install` and `log` instead stay inside the container: stopping and restarting it preserves them, whereas recreating it removes them and requires rebuilding the workspace. On the Raspberry, the entire workspace is shared, so these directories also remain on the host.
 
-Se modifichi i sorgenti, usa gli [script del workspace](../ros2_ws/scripts/README.md) per ricompilare. Se aggiungi una libreria di sistema, aggiorna il Dockerfile dell'ambiente che la deve usare e ricostruisci l'immagine; se la libreria serve sia sul PC sia a bordo, aggiorna entrambi i Dockerfile. Una libreria installata manualmente solo in un container non entrerà automaticamente nella prossima immagine.
+After source changes, use the [workspace scripts](../ros2_ws/scripts/README.md) to rebuild. When adding a system library, update the Dockerfile for the environment that needs it and rebuild the image; if both the PC and boat need it, update both Dockerfiles. A library installed manually in one container will not automatically be included in the next image.
 
-## Guide collegate
+## Related guides
 
-- [Configurazione del PC](../guides/italiano/settaggio_pc.md): avvio dell'ambiente, collegamento di VS Code e prima compilazione.
-- [Configurazione del Raspberry](../guides/italiano/settaggio_raspberry.md): prima installazione, aggiornamenti e abilitazione dell'autostart.
-- [Avvio del sistema ROS](../guides/italiano/avvio_sistema_ros.md): prove manuali e controlli del sistema sulla barca.
-- [Script di bordo](../DAY_BEFORE_REGATTA/README.md): ruolo e configurazione di complete, quick, run e autostart.
+- [PC setup](../guides/pc_setup.md): starting the environment, attaching VS Code and the first build.
+- [Raspberry setup](../guides/raspberry_setup.md): initial installation, updates and enabling autostart.
+- [ROS system startup](../guides/ros_system_startup.md): manual operation and checks on the boat.
+- [Boat scripts](../DAY_BEFORE_REGATTA/README.md): roles and configuration of complete, quick, run and autostart.

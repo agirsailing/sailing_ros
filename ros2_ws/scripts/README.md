@@ -1,48 +1,47 @@
-# Script del workspace
+# Workspace scripts
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Indice repository](../../README.md)
+[Repository index](../../README.md)
 
-Eseguire nel container ROS, dalla directory `/home/ros/ros2_ws`. Questi script
-non installano Docker, non aggiornano Git e non configurano l'hardware dell'host.
+Run inside the ROS container from `/home/ros/ros2_ws`. These scripts do not
+install Docker, update Git or configure host hardware.
 
-| Script | Uso | Comportamento |
+| Script | Usage | Behaviour |
 |---|---|---|
-| [build.sh](build.sh) | `bash scripts/build.sh --clean` | Default pulito: rimuove build/install/log, genera endpoint, compila interfacce e workspace |
-| [build.sh](build.sh) | `bash scripts/build.sh --incremental` | Riutilizza build/install; adatto a modifiche ordinarie dei sorgenti |
-| [run.sh](run.sh) | `bash scripts/run.sh live` | Carica gli ambienti e lancia orchestrator; richiede una build esistente |
-| [run.sh](run.sh) | `bash scripts/run.sh replay` | Avvia elaborazione e telemetria con tempo simulato; sorgenti fornite da ros2 bag play |
-| [test.sh](test.sh) | `bash scripts/test.sh` | Build incrementale e tutti i test |
-| [test.sh](test.sh) | `bash scripts/test.sh --no-build sensors sail_common` | Test dei soli pacchetti indicati, senza build |
-| [test.sh](test.sh) | `bash scripts/test.sh --clean-build --summary` | Build pulita e riepilogo compatto |
+| [build.sh](build.sh) | `bash scripts/build.sh --clean` | Clean by default: removes build/install/log, generates endpoints, builds interfaces and workspace |
+| [build.sh](build.sh) | `bash scripts/build.sh --incremental` | Reuses build/install for ordinary source changes |
+| [run.sh](run.sh) | `bash scripts/run.sh live` | Sources environments and starts orchestrator; requires an existing build |
+| [run.sh](run.sh) | `bash scripts/run.sh replay` | Starts processing and telemetry with simulated time; ros2 bag play supplies sources |
+| [test.sh](test.sh) | `bash scripts/test.sh` | Incremental build and all tests |
+| [test.sh](test.sh) | `bash scripts/test.sh --no-build sensors sail_common` | Only selected package tests, without building |
+| [test.sh](test.sh) | `bash scripts/test.sh --clean-build --summary` | Clean build and compact summary |
 
-`PARALLEL_WORKERS` ha default 2. Esempio:
+`PARALLEL_WORKERS` defaults to 2. Example:
 
 ```bash
 PARALLEL_WORKERS=2 bash scripts/build.sh --incremental
 bash scripts/test.sh --no-build data_elaboration communication_web
 ```
 
-Con pacchetti indicati, la build incrementale di test.sh compila quei pacchetti
-e le loro dipendenze; `--clean-build` ricompila invece tutto il workspace.
-In entrambi i casi esegue i test solo dei pacchetti selezionati.
-Con `--no-build` assicurarsi che i sorgenti corrispondano alla build.
-Controllare i risultati XML: uno skip non prova un comportamento. I test di
-parser/freschezza/geometria non certificano sensori, rete o calibrazione reali.
-Le sezioni seguenti descrivono le prove sul sistema.
+With package arguments, test.sh's incremental build includes the selected packages
+and their dependencies; `--clean-build` instead rebuilds the entire workspace.
+Both modes test only the selected packages.
+With `--no-build`, ensure sources match the build. Inspect
+XML results: a skip does not prove behaviour. Parser/freshness/geometry tests
+do not certify real sensors, networking or calibration. See the following sections for system checks.
 
-Per aggiungere test, seguire i test già presenti nel pacchetto: pytest per Python,
-ament/GTest dove previsto. Dichiarare dipendenze di test in package.xml e registrare
-i test nel sistema di build. Isolare driver/broker con fake nei test unitari;
-provare separatamente integrazione ROS e hardware. Coprire soprattutto dati
-scaduti, mancanti, clock che torna indietro, input malformati e confini geometrici.
+To add tests, follow existing package tests: pytest for Python, ament/GTest where
+configured. Declare test dependencies in package.xml and register tests with the
+build system. Isolate drivers/brokers with fakes in unit tests; test ROS integration
+and hardware separately. Cover expired/missing data, backwards clock jumps,
+malformed input and geometric boundaries.
 
-Gli argomenti dopo `live`/`replay` sono inoltrati a ros2 launch. Il modo
-`bag_full_topic` è un placeholder non configurato. Non confondere questo run.sh
-con quello host in DAY_BEFORE_REGATTA o quello della diagnostica MQTT.
+Arguments following `live`/`replay` are forwarded to ros2 launch. `bag_full_topic`
+is an unconfigured placeholder. Do not confuse this run.sh with the host script
+in DAY_BEFORE_REGATTA or the MQTT diagnostics launcher.
 
-## 1. Controlli sul PC, nel container ROS
+## 1. PC checks inside the ROS container
 
 ```bash
 cd /home/ros/ros2_ws
@@ -51,39 +50,39 @@ bash scripts/test.sh --no-build communication_web sail_common
 colcon test-result --verbose
 ```
 
-La prima riga di test ricompila da zero ed esegue tutti i test; la seconda è
-l'alternativa mirata dopo una build già valida. Non occorre eseguirle entrambe
-per ogni modifica. Errori di lint sono distinti dai test funzionali; leggi il
-riepilogo e gli XML, non soltanto l'ultima riga del terminale. Uno skip non è un
-pass e va motivato. `--no-build` non rigenera interfacce mancanti.
+The first test invocation clean-builds and tests all packages; the second is a
+targeted alternative after a valid build. You need not run both for every edit.
+Lint errors differ from functional failures: read summaries/XML, not just the
+last terminal line. A skip is not a pass and needs explanation. `--no-build`
+does not generate missing interfaces.
 
-I test coprono decoder, geometria, cache/freschezza, lifecycle rosbag e gateway.
-Le prove `test_*pipeline_ros.py` usano ROS/DDS reali nel container ma mockano
-hardware o MQTT: non sono una prova di EMQX o del cablaggio. I test shell di
-deployment usano copie temporanee e comandi amministrativi simulati.
+Tests cover decoders, geometry, freshness/caches, rosbag lifecycle and gateways.
+`test_*pipeline_ros.py` uses real ROS/DDS in the container with mocked hardware
+or MQTT; it does not validate EMQX or wiring. Deployment shell tests use temporary
+copies and simulated administrative commands.
 
-## 2. Solo webapp — PC, terminale nella repository web
+## 2. Web app only — PC terminal in the web repository
 
 ```powershell
 node --test test/*.test.js
 ```
 
-Quando cambi un contratto MQTT verifica entrambe le repo: nomi, campi, unità,
-null/NaN, frequenze, timeout, ruoli e comportamento dopo disconnessione.
+For MQTT contract changes check both repositories: names, fields, units, null/NaN,
+rates, timeouts, roles and reconnection behavior.
 
-## 3. Raspberry e barca
+## 3. Raspberry and boat
 
-Segui le [prove manuali](../../guides/italiano/avvio_sistema_ros.md), annota commit, YAML installati,
-cablaggio, rete e risultato. Verifica frequenze con `ros2 topic hz`, ma anche
-timestamp unici: ricevere 50 messaggi/s non prova 50 misure nuove.
-Prova la perdita di una sorgente e il recupero senza inventare dati freschi.
+Follow [manual checks](../../guides/ros_system_startup.md) and record commit, installed YAML,
+wiring, network and outcomes. Measure rates with `ros2 topic hz`, but also check
+unique timestamps: 50 messages/s does not establish 50 new measurements/s.
+Test source loss/recovery without manufacturing fresh data.
 
-## Criteri per una PR
+## PR criteria
 
-- Comportamento e parametri spiegati nel README del pacchetto.
-- Test pertinenti superati e limiti hardware dichiarati.
-- Nuove interfacce registrate in CMake, dipendenze nei package.xml/Dockerfile.
-- Endpoint rigenerati e consumer aggiornati, compresa la webapp se necessario.
-- Nessun token/config privato, `.venv`, build/install/log o bag nel commit.
-- Per un bug registra il prima/dopo e la prova che lo riproduce, non solo test
-  che ripetono i dettagli dell'implementazione.
+- Document behavior and parameters in the package README.
+- Pass relevant tests and state hardware limitations.
+- Register new interfaces in CMake and dependencies in package.xml/Dockerfiles.
+- Regenerate endpoints and update consumers, including the web app when required.
+- Exclude private configs/tokens, `.venv`, build/install/log and recordings.
+- For a bug, record before/after behavior and a reproducer, not just tests that
+  mirror implementation details.

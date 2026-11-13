@@ -1,71 +1,71 @@
-# Workspace ROS 2
+# ROS 2 workspace
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Repository principale](../README.md)
+[Main repository](../README.md)
 
-## Introduzione
+## Introduction
 
-Il workspace contiene il software che legge i sensori della barca, ricava orientamento e altezza, comunica con la web app e registra le prove. Qui trovi una panoramica di come questi compiti sono distribuiti; i README dei singoli pacchetti spiegano poi nodi, topic e parametri.
+The workspace contains the software that reads the boat's sensors, computes attitude and height, communicates with the web app and records tests. This page explains how those responsibilities are divided; individual package READMEs then describe nodes, topics and parameters.
 
-Durante lo sviluppo e a bordo, il workspace viene usato nel container Docker, dove si trova in `/home/ros/ros2_ws`.
+During development and on the boat, the workspace runs inside Docker at `/home/ros/ros2_ws`.
 
-## Struttura e pacchetti
+## Structure and packages
 
-I sorgenti sono in `src/`. La tabella segue l'ordine delle cartelle e rimanda alla documentazione di ciascun componente.
+Source code lives in `src/`. The table follows directory order and links to each component's documentation.
 
-| Percorso | Scopo | README dettagliato |
+| Path | Purpose | Detailed README |
 |---|---|---|
-| `rosbags/` | Registrazioni da conservare, analizzare o riprodurre. | [Strumenti per le bag](tools/README.md) |
-| `scripts/` | Comandi per compilare, avviare e verificare il workspace. | [Script](scripts/README.md) |
-| `src/communication_web/` | Prepara dashboard e mappa, scambia dati e comandi MQTT con la web app. | [communication_web](src/communication_web/README.md) |
-| `src/data_elaboration/` | Corregge il montaggio IMU e stima l'altezza della barca. | [data_elaboration](src/data_elaboration/README.md) |
-| `src/orchestrator/` | Avvia insieme i componenti per il funzionamento live o il replay. | [orchestrator](src/orchestrator/README.md) |
-| `src/rosbag_manager/` | Avvia e ferma le registrazioni e ne pubblica lo stato. | [rosbag_manager](src/rosbag_manager/README.md) |
-| `src/sail_common/` | Raccoglie la funzione condivisa per controllare la freschezza delle misure. | [sail_common](src/sail_common/README.md) |
-| `src/sail_msgs/` | Definisce i messaggi e i servizi specifici di Agir. | [sail_msgs](src/sail_msgs/README.md) |
-| `src/sensors/` | Legge seriali, I2C e GPIO e pubblica le misure dei sensori. | [sensors](src/sensors/README.md) |
-| `tools/` | Genera gli endpoint ed esporta le rosbag in CSV. | [Strumenti](tools/README.md) |
+| `rosbags/` | Recordings to keep, analyse or replay. | [Bag tools](tools/README.md) |
+| `scripts/` | Commands for building, running and checking the workspace. | [Scripts](scripts/README.md) |
+| `src/communication_web/` | Prepares dashboard and map data; exchanges MQTT data and commands with the web app. | [communication_web](src/communication_web/README.md) |
+| `src/data_elaboration/` | Corrects IMU mounting and estimates boat height. | [data_elaboration](src/data_elaboration/README.md) |
+| `src/orchestrator/` | Starts the components for live operation or replay. | [orchestrator](src/orchestrator/README.md) |
+| `src/rosbag_manager/` | Starts and stops recordings and publishes their state. | [rosbag_manager](src/rosbag_manager/README.md) |
+| `src/sail_common/` | Provides the shared measurement freshness check. | [sail_common](src/sail_common/README.md) |
+| `src/sail_msgs/` | Defines Agir-specific messages and services. | [sail_msgs](src/sail_msgs/README.md) |
+| `src/sensors/` | Reads serial, I2C and GPIO interfaces and publishes sensor measurements. | [sensors](src/sensors/README.md) |
+| `tools/` | Generates endpoints and exports rosbags to CSV. | [Tools](tools/README.md) |
 
-Le cartelle `build/`, `install/` e `log/` vengono create durante la compilazione: non contengono i sorgenti da modificare.
+The `build/`, `install/` and `log/` directories are generated during compilation; they do not contain the source files to edit.
 
-## Come interagiscono i pacchetti
+## How the packages interact
 
-Il diagramma mostra il percorso delle misure e dei comandi da sinistra a destra. Le frecce rappresentano scambi logici tra componenti, non l'elenco completo dei topic ROS.
+The diagram shows the path of measurements and commands from left to right. Arrows represent logical exchanges between components, rather than every ROS topic.
 
 ```mermaid
 flowchart LR
-    hw["Sensori della barca"] -->|Misure| sensors["sensors<br/>Acquisizione"]
-    sensors -->|IMU e ultrasuoni| processing["data_elaboration<br/>Orientamento e altezza"]
-    sensors -->|GPS, batteria e distanze| gateway["communication_web<br/>Dashboard, mappa e comandi"]
-    processing -->|Misure elaborate| gateway
-    gateway <-->|MQTT: dati e comandi| web["Web app"]
-    gateway <-->|Start-stop e stato| bags["rosbag_manager<br/>Gestione registrazione"]
-    bags --> files["Rosbag MCAP"]
+    hw["Boat sensors"] -->|Measurements| sensors["sensors<br/>Acquisition"]
+    sensors -->|IMU and ultrasound| processing["data_elaboration<br/>Attitude and height"]
+    sensors -->|GPS, battery and ranges| gateway["communication_web<br/>Dashboard, map and commands"]
+    processing -->|Processed measurements| gateway
+    gateway <-->|MQTT: data and commands| web["Web app"]
+    gateway <-->|Start-stop and state| bags["rosbag_manager<br/>Recording management"]
+    bags --> files["MCAP rosbags"]
 ```
 
-`sensors` rende disponibili le misure. `data_elaboration` usa IMU e ultrasuoni per correggere l'orientamento e stimare l'altezza; GPS e batteria arrivano invece direttamente a `communication_web`. Quest'ultimo prepara ciò che serve alla dashboard e alla mappa e lo invia alla web app attraverso il broker MQTT.
+`sensors` makes measurements available. `data_elaboration` uses IMU and ultrasound to correct attitude and estimate height; GPS and battery instead go directly to `communication_web`. That package prepares dashboard and map data and sends it to the web app through the MQTT broker.
 
-Il percorso dei comandi va nella direzione opposta. Le richieste di registrazione vengono inoltrate a `rosbag_manager`; il ping di una boa viene gestito dentro `communication_web`, salvando la posizione GPS attuale per il tipo scelto.
+Commands travel in the other direction. Recording requests go to `rosbag_manager`; buoy ping is handled inside `communication_web`, saving the current GPS position for the selected buoy type.
 
-Il manager avvia un processo `ros2 bag record`, che si sottoscrive ai topic dei sensori, dell'elaborazione e dei gateway. Questi collegamenti di registrazione sono approfonditi nel suo README. La registrazione parte su richiesta, non appena si avvia il sistema.
+The manager starts a `ros2 bag record` process that subscribes to sensor, processing and gateway topics. Its README details those recording connections. Recording starts on request, not automatically with the system.
 
-Tre pacchetti completano questa organizzazione:
+Three packages complete this arrangement:
 
-- **`orchestrator`** sceglie quali componenti avviare; non trasporta le misure.
-- **`sail_msgs`** definisce le strutture dei messaggi e dei servizi condivisi.
-- **`sail_common`** fornisce il controllo di freschezza richiamato dai nodi.
+- **`orchestrator`** selects the components to start; it does not carry measurements.
+- **`sail_msgs`** defines shared message and service structures.
+- **`sail_common`** provides the freshness check called by nodes.
 
-## Sistema dal vivo e replay
+## Live operation and replay
 
-In modalità **live**, i nodi di acquisizione leggono l'hardware e il sistema può ricevere comandi dalla web app e registrare.
+In **live** mode, acquisition nodes read the hardware, and the system can receive web app commands and record.
 
-Nel **replay**, una bag fornisce le misure già registrate. Si avviano solo elaborazione e telemetria, usando l'orologio della bag; i nodi dei sensori, il command gateway e il manager di registrazione restano esclusi. Il replay serve quindi a ricalcolare e osservare i risultati senza collegare i sensori.
+During **replay**, a bag supplies previously recorded measurements. Only processing and telemetry run, using the bag clock; sensor nodes, the command gateway and recording manager are excluded. Replay therefore lets you recalculate and inspect results without connecting sensors.
 
-Per i comandi consulta [orchestrator](src/orchestrator/README.md) e gli [script del workspace](scripts/README.md).
+For commands, see [orchestrator](src/orchestrator/README.md) and the [workspace scripts](scripts/README.md).
 
-## Dove modificare il sistema
+## Where to make changes
 
-Le frequenze, i montaggi e le soglie stanno nei file `config/params.yaml` dei pacchetti interessati. I nomi dei topic e dei servizi stanno in `config/endpoints.yaml`: la build genera da questi file le costanti usate dal codice. Modifica gli YAML, non i file generati.
+Rates, mounting geometry and thresholds live in the relevant packages' `config/params.yaml` files. Topic and service names live in `config/endpoints.yaml`; the build generates the constants used by code from these files. Edit the YAML files, not the generated files.
 
-Quando aggiungi o cambi una misura, parti dal README del pacchetto che la produce e segui i collegamenti verso chi la usa. I diagrammi locali mostrano quei topic e servizi senza ripetere tutto il sistema.
+When adding or changing a measurement, start with the producer package's README and follow its links to the consumers. Local diagrams show those topics and services without repeating the entire system.

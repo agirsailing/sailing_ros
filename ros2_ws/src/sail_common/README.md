@@ -1,16 +1,16 @@
-# sail_common — funzioni usate da più pacchetti
+# sail_common — functions used by multiple packages
 
-_Aggiornato al giorno: 30/10/2026_
+_Updated on: 30/10/2026_
 
-[English](README_ENG.md) · [Workspace](../../README.md)
+[Workspace](../../README.md)
 
-## Introduzione
+## Introduction
 
-Un nodo può aver ricevuto una misura corretta che, dopo qualche secondo senza aggiornamenti, non descrive più la situazione attuale. `sail_common` raccoglie il controllo condiviso per riconoscere questo caso, evitando che ogni nodo calcoli l'età dei dati in modo diverso.
+A node may receive a correct measurement that no longer describes the current situation after several seconds without updates. `sail_common` provides a shared check for that condition, avoiding different age calculations in every node.
 
-È una libreria Python, non un nodo ROS: non ha topic, servizi o frequenze di pubblicazione. Attualmente contiene la funzione `is_fresh`; le soglie restano nei file YAML dei pacchetti che la usano.
+This is a Python library, not a ROS node: it has no topics, services or publication rates. It currently provides `is_fresh`; thresholds stay in the calling packages' YAML files.
 
-## Struttura del pacchetto
+## Package structure
 
 ```text
 sail_common/
@@ -22,11 +22,11 @@ sail_common/
 └── setup.py
 ```
 
-La logica si trova in [freshness.py](sail_common/freshness.py). I test verificano tempi ROS, valori numerici e casi limite.
+Implementation lives in [freshness.py](sail_common/freshness.py). Tests cover ROS times, numeric values and boundary cases.
 
-## Come viene usato
+## How it is used
 
-Le frecce mostrano l'importazione della funzione, non uno scambio di topic. Il controllo viene eseguito nello stesso processo del nodo chiamante.
+Arrows show function imports, not topic exchanges. The check runs within the calling node's process.
 
 ```mermaid
 flowchart LR
@@ -36,7 +36,7 @@ flowchart LR
     helper --> result["True / False"]
 ```
 
-Esempio in una callback o prima di ripubblicare un dato:
+Example in a callback or before republishing cached data:
 
 ```python
 from sail_common.freshness import is_fresh
@@ -48,28 +48,28 @@ usable = is_fresh(
 )
 ```
 
-Il risultato indica soltanto se la misura è abbastanza recente. Un fix GPS senza posizione o una distanza fuori campo possono essere recenti ma inutilizzabili: quei controlli rimangono nel nodo.
+The result only indicates whether a measurement is recent enough. A GPS fix without a position or an out-of-range distance can be recent but unusable; those checks remain in the node.
 
-## Quale controllo viene fatto
+## What gets checked
 
-La funzione restituisce vero quando:
+The function returns true when:
 
 ```text
-0 <= tempo_attuale - timestamp_misura <= max_age_s
+0 <= current_time - measurement_timestamp <= max_age_s
 ```
 
-Il limite è incluso. Timestamp mancanti, malformati, futuri o non finiti danno falso. Una soglia non positiva o non finita genera invece `ValueError`, perché indica una configurazione errata.
+The upper boundary is included. Missing, malformed, future or nonfinite timestamps return false. Nonpositive or nonfinite thresholds raise `ValueError`, because they indicate invalid configuration.
 
-Sono accettati `builtin_interfaces/msg/Time`, `rclpy.time.Time` e valori numerici in **secondi**. Gli interi in nanosecondi non vanno passati come numeri di secondi. Per i tempi ROS si mantiene la precisione intera in nanosecondi.
+Accepted inputs are `builtin_interfaces/msg/Time`, `rclpy.time.Time` and numeric **seconds**. Do not pass integer nanoseconds as numeric seconds. ROS times retain integer nanosecond precision.
 
-I due istanti devono appartenere allo stesso orologio e alla stessa epoca. Non confrontare direttamente `time.monotonic()` con un header ROS: per rilevare anche un clock ROS fermo, il nodo deve effettuare due controlli distinti, ciascuno nel proprio dominio. Se due oggetti `rclpy.time.Time` dichiarano clock diversi, il controllo restituisce falso.
+Both timestamps must use the same clock and epoch. Do not compare `time.monotonic()` directly with a ROS header; checking a paused ROS clock requires two separate comparisons, each within its own clock domain. Two `rclpy.time.Time` inputs declaring different clock types return false.
 
-Lo zero è un tempo valido, per esempio all'inizio di una simulazione. Per rappresentare una misura mai ricevuta usa `None` o una cache vuota.
+Zero is a valid time, for example at simulation startup. Represent a measurement that has never arrived with `None` or an empty cache.
 
-## Cosa deve fare il nodo chiamante
+## Responsibilities of the calling node
 
-La funzione non imposta un timer, non cancella la misura e non programma la sua scadenza. Il nodo deve richiamarla quando usa o ripubblica il dato, e decidere cosa fare se non è più fresco. Se mantiene una storia di campioni, deve anche gestire i salti indietro dell'orologio.
+The function does not create a timer, delete data or schedule expiry. The caller checks again whenever it uses or republishes data and decides what to do when stale. A node maintaining sample history must also handle backward clock jumps.
 
-Un messaggio con `stamp` diretto può passare quel campo alla stessa funzione. `Header` aggiunge il `frame_id` al timestamp, ma il controllo non usa il frame. Per messaggi senza timestamp, come `RecordingState`, il gateway controlla invece il tempo trascorso dalla ricezione.
+A message with a direct `stamp` can pass that field to the same function. `Header` adds `frame_id` to the timestamp, but the freshness check does not use the frame. For messages without timestamps, such as `RecordingState`, the gateway instead checks elapsed time since receipt.
 
-Quando aggiungi un utilizzatore, dichiara `sail_common` in `package.xml` e verifica almeno dato assente, vecchio, futuro e al limite ammesso. Da `/home/ros/ros2_ws`, esegui `bash scripts/test.sh sail_common`.
+When adding a consumer, declare `sail_common` in `package.xml` and test at least missing, old, future and boundary timestamps. From `/home/ros/ros2_ws`, run `bash scripts/test.sh sail_common`.
