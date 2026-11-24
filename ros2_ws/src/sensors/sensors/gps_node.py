@@ -24,6 +24,7 @@ class GPSNode(Node):
         self.port = self.declare_parameter('port', Parameter.Type.STRING).value
         self.baudrate = self.declare_parameter('baudrate', Parameter.Type.INTEGER).value
         self.timeout_s = self.declare_parameter('timeout_s', Parameter.Type.DOUBLE).value
+        self.retry_interval_s = self.declare_parameter('retry_interval_s', 2.0).value
         self.read_rate_hz = self.declare_parameter('read_rate_hz', Parameter.Type.DOUBLE).value
         self.publish_rate_hz = self.declare_parameter('publish_rate_hz', Parameter.Type.DOUBLE).value
         self.max_sample_age_s = self.declare_parameter('max_sample_age_s', Parameter.Type.DOUBLE).value
@@ -41,14 +42,13 @@ class GPSNode(Node):
         )
 
         self.stream = None
+        self.reader = None
         self._reader_thread = None
         self._stop = threading.Event()
         self._sample_lock = threading.Lock()
         self._latest_sample = None
         # Read outside the ROS executor. Partial packets survive idle timeouts.
         try:
-            self.stream = Serial(self.port, self.baudrate, timeout=self.timeout_s)
-            self.reader = UBXReader(InterruptibleSerialStream(self.stream, self._stop))
             self.gps_timer = self.create_timer(
                 1.0 / self.publish_rate_hz,
                 self.publish_gps
@@ -74,7 +74,7 @@ class GPSNode(Node):
         # Reject missing YAML values before accessing hardware.
         self.get_parameters(self.list_parameters([], depth=0).names)
 
-        for name in ('timeout_s', 'publish_rate_hz', 'max_sample_age_s'):
+        for name in ('timeout_s', 'publish_rate_hz', 'max_sample_age_s', 'retry_interval_s'):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f'{name} must be finite and positive')
@@ -91,6 +91,8 @@ class GPSNode(Node):
         while not self._stop.is_set():
             started = time.monotonic()
             try:
+                if self.stream is None:
+                    self._open_serial()
                 if period == 0:
                     self._read_packet()
                 else:
@@ -100,12 +102,33 @@ class GPSNode(Node):
             except Exception as error:
                 with self._sample_lock:
                     self._latest_sample = None
+                self._close_serial()
                 if not self._stop.is_set():
                     self.get_logger().warning(
-                        f'GPS read failed: {error}', throttle_duration_sec=5.0
+                        f'GPS unavailable: {error}; retrying in {self.retry_interval_s}s',
+                        throttle_duration_sec=5.0
                     )
-                self._stop.wait(self.timeout_s)
+                self._stop.wait(self.retry_interval_s)
+                continue
             self._stop.wait(max(0.0, period - (time.monotonic() - started)))
+
+    def _open_serial(self):
+        try:
+            self.stream = Serial(self.port, self.baudrate, timeout=self.timeout_s)
+            self.reader = UBXReader(InterruptibleSerialStream(self.stream, self._stop))
+        except Exception:
+            self._close_serial()
+            raise
+        self.get_logger().info(f'GPS serial port opened: {self.port}')
+
+    def _close_serial(self):
+        stream, self.stream = self.stream, None
+        self.reader = None
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError as error:
+                self.get_logger().warning(f'GPS serial close failed: {error}')
 
     def _read_packet(self):
         _, packet = self.reader.read()
@@ -182,9 +205,7 @@ class GPSNode(Node):
         self._stop.set()
         if self._reader_thread is not None and self._reader_thread.is_alive():
             self._reader_thread.join()
-        if self.stream is not None:
-            self.stream.close()
-            self.stream = None
+        self._close_serial()
         return super().destroy_node()
 
 

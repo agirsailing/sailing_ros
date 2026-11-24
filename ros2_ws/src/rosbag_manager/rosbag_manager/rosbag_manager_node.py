@@ -34,7 +34,7 @@ class RosbagManagerNode(Node):
         self.sigint_timeout = self.get_parameter('sigint_timeout').value
         self.process_check_rate_hz = self.get_parameter('process_check_rate_hz').value
         self.publish_rate_hz = self.get_parameter('publish_rate_hz').value
-        for name in ('process_check_rate_hz', 'publish_rate_hz'):
+        for name in ('process_check_rate_hz', 'publish_rate_hz', 'sigint_timeout'):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f'{name} must be finite and positive')
@@ -163,31 +163,18 @@ class RosbagManagerNode(Node):
     #   Service: Stop
     # -----------------------
     def handle_stop_recording(self, request, response):
-        response.last_bag_name = ''
+        self._refresh_recorder_state()
+        response.last_bag_name = self.current_bag_name
         if not self.recording:
             response.success = False
-            response.error_message = 'Not currently recording'
+            response.error_message = self.last_error or 'Not currently recording'
+            self.publish_state()
             return response
 
         try:
-            if self.rosbag_proc is not None:
-                self.get_logger().info('Stopping recording (Sending SIGINT)...')
-                self.rosbag_proc.send_signal(signal.SIGINT)
-                
-                try:
-                    self.rosbag_proc.wait(timeout=self.sigint_timeout)
-                except subprocess.TimeoutExpired:
-                    self.get_logger().warn('Rosbag process hung, forcing KILL...')
-                    self.rosbag_proc.kill()
-                    self.rosbag_proc.wait()
-                
-                self.rosbag_proc = None
-            
-            self.recording = False
-            self.last_error = ''
+            self._stop_recorder()
             response.success = True
             response.error_message = ''
-            response.last_bag_name = self.current_bag_name
             
             self.get_logger().info(f'Recording saved: {self.current_bag_name}')
             self.current_bag_name = '' 
@@ -202,16 +189,35 @@ class RosbagManagerNode(Node):
         self.publish_state()
         return response
 
+    def _stop_recorder(self):
+        """Stop and reap the child; success requires a clean recorder exit."""
+        if self.rosbag_proc is None:
+            raise RuntimeError('Recorder process is missing; check the bag files')
+        self.get_logger().info('Stopping recording (sending SIGINT)...')
+        self.rosbag_proc.send_signal(signal.SIGINT)
+        forced = False
+        try:
+            return_code = self.rosbag_proc.wait(timeout=self.sigint_timeout)
+        except subprocess.TimeoutExpired:
+            forced = True
+            self.get_logger().warning('Recorder timed out; forcing KILL...')
+            self.rosbag_proc.kill()
+            return_code = self.rosbag_proc.wait()
+        self.rosbag_proc = None
+        self.recording = False
+        if forced:
+            raise RuntimeError('Recorder was forcibly killed; bag may be incomplete. Check the bag files')
+        if return_code != 0:
+            raise RuntimeError(f'Recorder exited with code {return_code}; check the bag files')
+        self.last_error = ''
+
     def destroy_node(self):
         if self.rosbag_proc is not None:
             self.get_logger().info('Node shutdown: stopping rosbag process...')
-            self.rosbag_proc.send_signal(signal.SIGINT)
             try:
-                self.rosbag_proc.wait(timeout=2.0)
-            except subprocess.TimeoutExpired:
-                self.get_logger().warn('Rosbag process hung during shutdown, forcing KILL...')
-                self.rosbag_proc.kill()
-                self.rosbag_proc.wait()
+                self._stop_recorder()
+            except Exception as error:
+                self.get_logger().error(f'Recorder shutdown failed: {error}')
         super().destroy_node()
 
 def main():

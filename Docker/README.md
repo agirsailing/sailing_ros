@@ -1,6 +1,6 @@
 # Docker environment
 
-_Updated on: 30/10/2026_
+_Updated on: 24/11/2026_
 
 [Repository index](../README.md)
 
@@ -33,6 +33,7 @@ Docker/
 │   └── entrypoint.sh
 ├── raspi_container/
 │   ├── .dockerignore
+│   ├── compose.run.yaml
 │   ├── compose.yaml
 │   ├── Dockerfile
 │   └── entrypoint.sh
@@ -86,6 +87,13 @@ The [Raspberry Dockerfile](raspi_container/Dockerfile) starts from ROS Core and 
 Use `DAY_BEFORE_REGATTA/complete_setup.sh` for initial installation and `DAY_BEFORE_REGATTA/quick_setup.sh` for updates. These scripts coordinate Docker and the ROS build. There is no need to run each Docker step manually: the [Raspberry setup guide](../guides/raspberry_setup.md) explains the full sequence.
 
 The system can operate entirely over SSH, without Wayland, X11 or a desktop session. Manual startup uses [`DAY_BEFORE_REGATTA/run.sh`](../DAY_BEFORE_REGATTA/run.sh); autostart is enabled separately after testing.
+
+For a live run, that script adds [compose.run.yaml](raspi_container/compose.run.yaml).
+ROS becomes the container's main command instead of a separate `docker exec`
+process. Docker's init forwards SIGINT to the launch process when stopped, with
+30 seconds for cleanup. The foreground Compose command lets the startup service
+observe container exit. The base Compose configuration still provides the shell
+used by setup and compilation; the live override does not change the image.
 
 ## What happens when you start the container
 

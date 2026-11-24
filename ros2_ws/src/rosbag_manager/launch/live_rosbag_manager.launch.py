@@ -19,9 +19,12 @@ def generate_launch_description():
         executable='rosbag_manager_node',
         name='rosbag_manager_node',
         output='screen',
+        # Leave time for the manager's 5 s recorder shutdown before escalation.
+        sigterm_timeout='15',
+        sigkill_timeout='5',
         parameters=[config]
     )
-    
+
     return LaunchDescription([
         rosbag_manager_node
     ])

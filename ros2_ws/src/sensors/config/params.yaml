@@ -8,6 +8,8 @@ ultrasonic_left_node:
     port: /dev/ultrasonic_left
     baudrate: 9600
     timeout_s: 0.1
+    # Reopen a missing/disconnected port at this interval, including at startup.
+    retry_interval_s: 2.0
     # 0.0: wait for incoming serial data; positive: poll at this rate in Hz.
     # This does not change the sensor's physical measurement frequency.
     read_rate_hz: 0.0
@@ -30,6 +32,7 @@ ultrasonic_right_node:
     port: /dev/ultrasonic_right
     baudrate: 9600
     timeout_s: 0.1
+    retry_interval_s: 2.0
     # 0.0: wait for incoming serial data; positive: poll at this rate in Hz.
     # This does not change the sensor's physical measurement frequency.
     read_rate_hz: 0.0
@@ -49,6 +52,7 @@ gps_node:
     port: /dev/gps
     baudrate: 230400
     timeout_s: 0.1
+    retry_interval_s: 2.0
     # 0.0: decode serial packets as they arrive; positive: drain on each poll.
     # This does not configure the receiver's NAV-PVT measurement/output rate.
     read_rate_hz: 0.0

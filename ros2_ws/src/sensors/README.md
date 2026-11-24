@@ -1,6 +1,6 @@
 # sensors — sensor acquisition
 
-_Updated on: 30/10/2026_
+_Updated on: 24/11/2026_
 
 [Workspace](../../README.md)
 
@@ -68,6 +68,12 @@ A repeated measurement therefore retains its original timestamp. The [sail_commo
 
 For serial nodes, `read_rate_hz: 0.0` waits for data in a dedicated thread. A positive value controls how often software checks the port, without changing the sensor's physical measurement rate. Compass reading and battery alarm polling require a positive rate.
 
+GPS and ultrasonic nodes also use `retry_interval_s: 2.0`. A missing port at
+startup or a serial error keeps the node alive: it clears the cached sample,
+closes the connection and retries in the reader thread. Reopening alone does not
+resume publication; a new valid packet must arrive. Ordinary idle timeouts keep
+partial frames and let existing samples expire normally.
+
 ## What each node does
 
 ### Ultrasound
@@ -121,6 +127,12 @@ The `Vector3Stamped` message contains signed raw counts, not tesla. This compass
 [battery_node.py](sensors/battery_node.py) reads the low alarm GPIO and obtains voltage from the [driver](sensors/drivers/battery_driver.py), which decodes ESP32 GPIO events. It publishes `BatteryData`, containing a header, voltage and alarm.
 
 The header timestamps the alarm read. Missing voltage or voltage older than 5 s becomes NaN, while a fresh alarm can still be published. GPIO errors prevent creating new samples.
+
+The voltage link sends two 8N1 bytes at 100 baud. An lgpio idle watchdog finishes
+decoding after 110 ms without an edge, including when no following packet arrives.
+Freshness uses the packet end derived from Linux GPIO v2 monotonic timestamps,
+not the later decoding callback time. Bad or incomplete frames never renew the
+previous voltage's age.
 
 The node counts consecutive active-alarm reads. With defaults `low_samples_required: 1` and `shutdown_enabled: true`, it requests shutdown once when the threshold is reached. That command executes inside the container; actual host shutdown must be verified on the onboard configuration.
 

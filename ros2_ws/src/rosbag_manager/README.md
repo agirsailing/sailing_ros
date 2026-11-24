@@ -1,6 +1,6 @@
 # rosbag_manager — recording tests
 
-_Updated on: 30/10/2026_
+_Updated on: 24/11/2026_
 
 [Workspace](../../README.md)
 
@@ -69,6 +69,13 @@ The manager does not export CSV; use [allbags_to_csv.py](../../tools/README.md) 
 The node checks the process at **2 Hz** through `process_check_rate_hz` and publishes state at **2 Hz** through `publish_rate_hz`. Start, stop and unexpected recorder exits also publish immediate updates. These rates do not change sensor measurement rates.
 
 On stop, the manager asks the recorder to close and waits, with `sigint_timeout: 5.0`. Its timers can be delayed during that wait. Web app state and the stop response are therefore distinct: the [gateway](../communication_web/README.md) forwards state periodically at 0.5 Hz and sends the response as soon as available.
+
+Stop succeeds only after the recorder exits with code 0. A timeout forces the
+recorder to stop and returns failure: the bag may be incomplete. A nonzero exit
+also returns failure. In both cases the bag name and error remain in the state
+and stop response, so the files can be inspected instead of reporting a saved bag.
+Node shutdown uses the same close procedure. The launch file allows 15 seconds
+before escalating to SIGTERM; keep `sigint_timeout` below that allowance.
 
 ## Startup and manual checks
 

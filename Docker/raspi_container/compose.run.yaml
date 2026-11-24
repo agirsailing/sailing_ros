@@ -1,0 +1,7 @@
+# Live deployment only. The base Compose file remains an interactive dev shell.
+services:
+  jazzy:
+    init: true
+    command: ["/bin/bash", "/home/ros/ros2_ws/scripts/run.sh", "live"]
+    stop_signal: SIGINT
+    stop_grace_period: 30s

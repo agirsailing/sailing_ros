@@ -9,6 +9,8 @@ User=boat
 Environment="HOME=/home/boat"
 WorkingDirectory=/home/boat/2025_SOFTWARE/sailing_ros/DAY_BEFORE_REGATTA
 ExecStart=/bin/bash /home/boat/2025_SOFTWARE/sailing_ros/DAY_BEFORE_REGATTA/run.sh
+ExecStop=-/usr/bin/docker stop --time 30 agir-ros-raspi
+TimeoutStopSec=45
 Restart=always
 RestartSec=5
 

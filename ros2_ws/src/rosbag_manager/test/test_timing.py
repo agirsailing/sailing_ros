@@ -17,6 +17,7 @@ class RecordingTimingTests(unittest.TestCase):
         self.params = {'process_check_rate_hz': 2.0, 'publish_rate_hz': 0.5}
         self.process = Mock()
         self.process.poll.return_value = None
+        self.process.wait.return_value = 0
         self.popen = Mock(return_value=self.process)
         self.makedirs = Mock()
         owner = self
@@ -149,12 +150,44 @@ class RecordingTimingTests(unittest.TestCase):
         self.assertEqual(state.bag_name, '')
 
     def test_stop_timeout_still_kills_and_reaps_recorder(self):
-        self.start()
+        bag = self.start().effective_bag_name
         self.process.wait.side_effect = [subprocess.TimeoutExpired('recorder', 5.0), 0]
         response = self.node.handle_stop_recording(None, NS())
-        self.assertTrue(response.success)
+        self.assertFalse(response.success)
+        self.assertIn('forcibly killed', response.error_message)
+        self.assertEqual(response.last_bag_name, bag)
+        self.assertEqual(self.node.current_bag_name, bag)
+        self.assertEqual(self.node.last_error, response.error_message)
+        self.assertFalse(self.node.recording)
         self.process.kill.assert_called_once_with()
         self.assertEqual(self.process.wait.call_count, 2)
+
+    def test_failed_recorder_exit_preserves_name_and_error(self):
+        bag = self.start().effective_bag_name
+        self.process.wait.return_value = 2
+        response = self.node.handle_stop_recording(None, NS())
+        self.assertFalse(response.success)
+        self.assertIn('code 2', response.error_message)
+        self.assertEqual(response.last_bag_name, bag)
+        self.assertIsNone(self.node.rosbag_proc)
+        self.node.publish_state()
+        self.assertEqual(self.node.state_pub.publish.call_args.args[0].bag_name, bag)
+
+    def test_exit_before_stop_is_not_reported_as_successful(self):
+        bag = self.start().effective_bag_name
+        self.process.poll.return_value = 1
+        response = self.node.handle_stop_recording(None, NS())
+        self.assertFalse(response.success)
+        self.assertIn('unexpectedly', response.error_message)
+        self.assertEqual(response.last_bag_name, bag)
+        self.process.send_signal.assert_not_called()
+
+    def test_shutdown_uses_configured_timeout_and_reaps_child(self):
+        self.start()
+        self.node.sigint_timeout = 3.0
+        self.node.destroy_node()
+        self.process.wait.assert_called_once_with(timeout=3.0)
+        self.assertIsNone(self.node.rosbag_proc)
 
     def test_duplicate_start_does_not_launch_another_recorder(self):
         self.start()

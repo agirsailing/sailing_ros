@@ -197,7 +197,7 @@ To disable automatic startup and stop the current container as well:
 
 ```bash
 sudo systemctl disable --now agir_regatta.service
-docker stop agir-ros-raspi
+docker stop --time 30 agir-ros-raspi
 ```
 
 For more detail about each script, see the [DAY_BEFORE_REGATTA README](../DAY_BEFORE_REGATTA/README.md).

@@ -12,13 +12,13 @@ runtime_stop_full() {
   runtime_stop_service
   # Stopping the docker exec client alone does not guarantee that ROS has stopped.
   if command -v docker >/dev/null 2>&1 && sudo docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
-    sudo docker stop "$CONTAINER_NAME"
+    sudo docker stop --time 30 "$CONTAINER_NAME"
   fi
 }
 
 runtime_stop_quick() {
   runtime_stop_service
-  compose stop
+  compose stop --timeout 30
 }
 
 runtime_refresh_entrypoint() {

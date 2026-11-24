@@ -34,7 +34,7 @@ class GpsMessage:
 
 class GPSTests(unittest.TestCase):
     def setUp(self):
-        self.params = dict(port='test', baudrate=230400, timeout_s=0.1,
+        self.params = dict(port='test', baudrate=230400, timeout_s=0.1, retry_interval_s=2.0,
                            read_rate_hz=0.0, publish_rate_hz=10.0,
                            max_sample_age_s=1.0, frame_id='gps', qos_depth=10)
         self.monotonic = Mock(return_value=100.0)
@@ -78,6 +78,8 @@ class GPSTests(unittest.TestCase):
         exec(compile(ast.Module(body=[definition], type_ignores=[]), str(path), 'exec'), scope)
         self.node_type = scope['GPSNode']
         self.node = self.node_type()
+        self.serial.assert_not_called()  # Hardware access belongs to the worker.
+        self.node._open_serial()
 
     def test_publication_timer_does_not_read_and_waits_for_first_nav_pvt(self):
         self.node.create_timer.assert_called_once_with(0.1, self.node.publish_gps)
@@ -210,15 +212,58 @@ class GPSTests(unittest.TestCase):
         self.node._stop.wait.side_effect = lambda delay: setattr(
             self.node._stop.is_set, 'return_value', True)
         self.node._read_loop()
-        self.node._stop.wait.assert_any_call(0.1)
+        self.node._stop.wait.assert_called_once_with(2.0)
+        self.stream.close.assert_called_once()
+        self.assertIsNone(self.node.stream)
         self.node.publish_gps()
         self.node.gps_pub.publish.assert_not_called()
 
     def test_failed_parser_setup_closes_port(self):
         self.ubx.side_effect = ValueError('parser failed')
+        node = self.node_type()
         with self.assertRaisesRegex(ValueError, 'parser failed'):
-            self.node_type()
+            node._open_serial()
         self.stream.close.assert_called_once()
+        self.assertIsNone(node.stream)
+
+    def test_missing_port_at_startup_recovers_without_restart(self):
+        self.node._close_serial()
+        self.serial.side_effect = [OSError('missing port'), self.stream]
+        self.node._stop = Mock()
+        self.node._stop.is_set.return_value = False
+        waits = []
+
+        def wait(delay):
+            waits.append(delay)
+            if delay == 0:
+                self.node._stop.is_set.return_value = True
+
+        self.node._stop.wait.side_effect = wait
+        self.node._read_loop()
+        self.assertEqual(waits, [2.0, 0.0])
+        self.node.publish_gps()
+        self.assertEqual(self.node.gps_pub.publish.call_args.args[0].latitude, 59.3)
+
+    def test_disconnect_reopens_reader_and_requires_a_new_measurement(self):
+        self.node._read_packet()
+        self.reader.read.side_effect = OSError('unplugged')
+        self.node._stop = Mock()
+        self.node._stop.is_set.return_value = False
+        self.node._stop.wait.side_effect = lambda delay: setattr(
+            self.node._stop.is_set, 'return_value', True)
+        self.node._read_loop()
+        self.node.publish_gps()
+        self.node.gps_pub.publish.assert_not_called()
+        self.reader.read.side_effect = None
+        self.node._stop.is_set.return_value = False
+        self.node._open_serial()
+        self.node.publish_gps()
+        self.node.gps_pub.publish.assert_not_called()
+        self.node._read_packet()
+        self.node.publish_gps()
+        self.node.gps_pub.publish.assert_called_once()
+        self.assertEqual(self.serial.call_count, 2)
+        self.assertEqual(self.ubx.call_count, 2)
 
     def test_shutdown_interrupts_idle_reader_and_joins_before_close(self):
         entered = threading.Event()
@@ -243,7 +288,8 @@ class GPSTests(unittest.TestCase):
     def test_invalid_rates_and_timeouts_are_rejected_before_opening(self):
         for key, value in (('read_rate_hz', -1.0), ('read_rate_hz', math.nan),
                            ('publish_rate_hz', 0.0), ('publish_rate_hz', math.inf),
-                           ('timeout_s', 0.0), ('max_sample_age_s', -1.0)):
+                           ('timeout_s', 0.0), ('max_sample_age_s', -1.0),
+                           ('retry_interval_s', 0.0)):
             old = self.params[key]
             self.params[key] = value
             self.serial.reset_mock()

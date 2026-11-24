@@ -161,7 +161,7 @@ Then, on the Raspberry host from the repository root:
 
 ```bash
 sudo systemctl stop agir_regatta.service
-docker compose -f Docker/raspi_container/compose.yaml stop
+docker stop --time 30 agir-ros-raspi
 ```
 
 The first command is only needed when the service is installed. Closing SSH or

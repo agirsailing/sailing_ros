@@ -40,6 +40,8 @@ User=$DEPLOY_USER
 Environment="HOME=$USER_HOME"
 WorkingDirectory=$REPO_DIR/DAY_BEFORE_REGATTA
 ExecStart=/bin/bash "$REPO_DIR/DAY_BEFORE_REGATTA/run.sh"
+ExecStop=-/usr/bin/docker stop --time 30 $CONTAINER_NAME
+TimeoutStopSec=45
 Restart=always
 RestartSec=5
 

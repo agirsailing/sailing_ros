@@ -45,7 +45,7 @@ docker() {
       if [[ "${*: -1}" == build || "${*: -1}" == --no-cache ]]; then
         [[ "$TEST_FAIL" != image_build ]] || return 8
       fi
-      if [[ "$*" == *' up -d' ]]; then
+      if [[ "$*" == *' up '* ]]; then
         [[ "$TEST_FAIL" != start ]] || return 9
       fi ;;
   esac
@@ -366,8 +366,17 @@ class SetupTests(unittest.TestCase):
     def test_run_is_manual_and_uses_shared_network_target(self):
         self.env['AGIR_TARGET_IP'] = '192.168.1.1'
         log = self.run_setup('run.sh')
-        self.assert_order(log, 'ping -c 1 -W 2 192.168.1.1', 'up -d', './run.sh live')
+        self.assert_order(log, 'ping -c 1 -W 2 192.168.1.1',
+                          'compose.run.yaml up --no-build --force-recreate --abort-on-container-exit --exit-code-from jazzy')
+        self.assertFalse(any('docker exec' in line for line in log))
         self.assertFalse(any(line.startswith('systemctl') for line in log))
+
+    def test_live_container_failure_is_reported_to_supervisor(self):
+        self.env['TEST_FAIL'] = 'start'
+        log = self.run_setup('run.sh', success=False)
+        self.assertEqual(self.last_result.returncode, 9)
+        self.assertTrue(any('--exit-code-from jazzy' in line for line in log))
+        self.assertFalse(any('docker exec' in line for line in log))
 
     def test_autostart_is_only_installed_by_explicit_command(self):
         log = self.run_setup('autostart_setup.sh')
@@ -379,6 +388,8 @@ class SetupTests(unittest.TestCase):
         self.assertIn(f'Environment="HOME={self.home.as_posix()}"', unit)
         self.assertIn(f'WorkingDirectory={self.scripts.as_posix()}', unit.splitlines())
         self.assertIn(f'ExecStart=/bin/bash "{self.scripts.as_posix()}/run.sh"', unit)
+        self.assertIn('ExecStop=-/usr/bin/docker stop --time 30 agir-ros-raspi', unit)
+        self.assertIn('TimeoutStopSec=45', unit)
         self.assertNotIn('agir_regatta_start.sh', unit)
 
     def test_autostart_validates_launcher_before_stopping_anything(self):

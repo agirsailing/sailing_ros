@@ -1,6 +1,6 @@
 # Raspberry installation, updates and startup
 
-_Updated on: 30/10/2026_
+_Updated on: 24/11/2026_
 
 [Repository index](../README.md)
 
@@ -31,7 +31,7 @@ private and ignored by Git. Defaults: user `boat`, home `/home/boat`, repository
 `/home/boat/2025_SOFTWARE/sailing_ros`, branch `main`. Set `AGIR_BRANCH`
 deliberately; quick updates the current checkout and is not a branch switch.
 `AGIR_TARGET_IP` changes the startup network ping target (default `8.8.8.8`).
-A reachable router can be more suitable without Internet.
+Keep an Internet target: reaching only the local router does not meet the startup requirement.
 
 Git and MQTT have different credentials. `repository.sh` reuses the available
 Git origin/helper, or applies an explicitly configured credential pair.
@@ -80,15 +80,25 @@ hardware setup enables UART and removes the serial console, requiring a reboot.
 ## Starting and stopping
 
 Run waits indefinitely for ping before starting ROS. This does not verify MQTT
-credentials. Closing SSH does not guarantee that the container process stops.
-First close any recording, then stop the service if active and the container:
+credentials. Once running, MQTT reconnects automatically after a network outage;
+ROS acquisition and recording continue locally.
+
+The live [Compose override](../Docker/raspi_container/compose.run.yaml) runs ROS as
+the container's main command, supervised in the foreground. Press Ctrl+C to stop
+a manual run. The container forwards SIGINT and allows up to 30 seconds for ROS
+and the recorder to close. Do not rely on closing the SSH window as a stop command.
+For a service run, `systemctl stop` now also stops the container. From a second
+SSH session you can explicitly stop either mode:
 
 ```bash
 sudo systemctl stop agir_regatta.service
 cd /home/boat/2025_SOFTWARE/sailing_ros
-docker compose -f Docker/raspi_container/compose.yaml stop
+docker stop --time 30 agir-ros-raspi
 ```
 
 The first command is only needed if the service is installed. To return to manual
 operation permanently use `sudo systemctl disable --now agir_regatta.service`.
 Autostart logs: `journalctl -u agir_regatta.service -b`.
+After updating the service definition, rerun `sudo bash autostart_setup.sh` to
+install it; this stops the current run and immediately starts the updated service.
+Quick setup does not install or rewrite the service. Autostart remains optional.

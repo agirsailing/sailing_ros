@@ -70,6 +70,8 @@ def test_stop_returns_bag_name_before_clearing_state():
     node.recording = True
     node.current_bag_name = 'completed_bag'
     process = Mock()
+    process.poll.return_value = None
+    process.wait.return_value = 0
     node.rosbag_proc = process
     response = node.handle_stop_recording(None, SimpleNamespace())
     assert response.success
@@ -84,9 +86,11 @@ def test_stop_reaps_process_after_timeout():
     node = make_node()
     node.recording = True
     process = Mock()
+    process.poll.return_value = None
     process.wait.side_effect = [subprocess.TimeoutExpired('recorder', 5.0), 0]
     node.rosbag_proc = process
     response = node.handle_stop_recording(None, SimpleNamespace())
-    assert response.success
+    assert not response.success
+    assert 'forcibly killed' in response.error_message
     process.kill.assert_called_once_with()
     assert process.wait.call_count == 2

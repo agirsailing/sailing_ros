@@ -24,7 +24,7 @@ class UltrasonicNodeTests(unittest.TestCase):
     def setUp(self):
         self.params = dict(
             enabled=True, endpoint_group='ULTRASONIC_LEFT_NODE', port='test',
-            baudrate=9600, timeout_s=0.1, read_rate_hz=0.0, publish_rate_hz=20.0,
+            baudrate=9600, timeout_s=0.1, retry_interval_s=2.0, read_rate_hz=0.0, publish_rate_hz=20.0,
             max_sample_age_s=0.5, frame_id='ultrasonic_left', min_range_m=0.03,
             max_range_m=4.5, field_of_view_rad=0.1, qos_depth=10,
         )
@@ -147,7 +147,7 @@ class UltrasonicNodeTests(unittest.TestCase):
     def test_reader_mode_period_and_error_backoff(self):
         for rate, success, wait_for_data, delay in (
             (0.0, True, True, 0.0), (10.0, True, False, 0.1),
-            (0.0, False, True, 0.1), (20.0, False, False, 0.1),
+            (0.0, False, True, 2.0), (20.0, False, False, 2.0),
         ):
             with self.subTest(rate=rate, success=success):
                 self.node.read_rate_hz = rate
@@ -171,9 +171,38 @@ class UltrasonicNodeTests(unittest.TestCase):
 
     def test_failed_setup_closes_open_port(self):
         self.sensor.set_dis_range.side_effect = ValueError('setup failure')
-        with self.assertRaisesRegex(ValueError, 'setup failure'):
-            self.node_type()
+        self.assertFalse(self.node._read_distance(wait_for_data=True))
         self.sensor.close.assert_called_once()
+        self.assertIsNone(self.node.sensor)
+
+    def test_absent_port_at_startup_then_recovery(self):
+        self.driver.assert_not_called()
+        self.driver.side_effect = [OSError('not attached'), self.sensor]
+        self.assertFalse(self.node._read_distance(wait_for_data=True))
+        self.node.publish_distance()
+        self.node.range_pub.publish.assert_not_called()
+        self.assertTrue(self.node._read_distance(wait_for_data=True))
+        self.node.publish_distance()
+        self.node.range_pub.publish.assert_called_once()
+
+    def test_unplug_replug_does_not_republish_old_sample(self):
+        self.node._read_distance(wait_for_data=True)
+        self.sensor.getDistance.side_effect = OSError('unplugged')
+        self.assertFalse(self.node._read_distance(wait_for_data=True))
+        self.sensor.close.assert_called_once()
+        self.assertIsNone(self.node.sensor)
+        self.sensor.getDistance.side_effect = None
+        self.sensor.getDistance.return_value = None
+        self.sensor.last_operate_status = self.sensor.STA_ERR_DATA
+        self.node._read_distance(wait_for_data=True)
+        self.node.publish_distance()
+        self.node.range_pub.publish.assert_not_called()
+        self.sensor.last_operate_status = self.sensor.STA_OK
+        self.sensor.getDistance.return_value = 750
+        self.node._read_distance(wait_for_data=True)
+        self.node.publish_distance()
+        self.assertEqual(self.node.range_pub.publish.call_args.args[0].range, .75)
+        self.assertEqual(self.driver.call_count, 2)
 
     def test_shutdown_joins_reader_before_closing_port(self):
         entered = threading.Event()
@@ -203,7 +232,7 @@ class UltrasonicNodeTests(unittest.TestCase):
         for name, value in (
             ('read_rate_hz', -1.0), ('read_rate_hz', math.nan),
             ('publish_rate_hz', 0.0), ('publish_rate_hz', math.inf),
-            ('max_sample_age_s', 0.0), ('timeout_s', math.inf),
+            ('max_sample_age_s', 0.0), ('timeout_s', math.inf), ('retry_interval_s', 0.0),
         ):
             with self.subTest(name=name, value=value):
                 old = self.params[name]

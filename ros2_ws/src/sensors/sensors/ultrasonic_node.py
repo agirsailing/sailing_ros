@@ -23,6 +23,7 @@ class UltrasonicNode(Node):
         self.port = self.declare_parameter('port', Parameter.Type.STRING).value
         self.baudrate = self.declare_parameter('baudrate', Parameter.Type.INTEGER).value
         self.timeout_s = self.declare_parameter('timeout_s', Parameter.Type.DOUBLE).value
+        self.retry_interval_s = self.declare_parameter('retry_interval_s', 2.0).value
         self.read_rate_hz = self.declare_parameter('read_rate_hz', Parameter.Type.DOUBLE).value
         self.publish_rate_hz = self.declare_parameter('publish_rate_hz', Parameter.Type.DOUBLE).value
         self.max_sample_age_s = self.declare_parameter('max_sample_age_s', Parameter.Type.DOUBLE).value
@@ -61,12 +62,6 @@ class UltrasonicNode(Node):
 
         # Serial waits run outside the ROS executor; publication has its own timer.
         try:
-            self.sensor = DFRobot_A02_Distance(
-                self.port, self.baudrate, self.timeout_s
-            )
-            self.sensor.set_dis_range(
-                self.min_range_m * 1000, self.max_range_m * 1000
-            )
             self.distance_timer = self.create_timer(
                 1.0 / self.publish_rate_hz, self.publish_distance
             )
@@ -94,7 +89,7 @@ class UltrasonicNode(Node):
 
         if self.endpoint_group not in ('ULTRASONIC_LEFT_NODE', 'ULTRASONIC_RIGHT_NODE'):
             raise ValueError(f'Unknown endpoint_group: {self.endpoint_group}')
-        for name in ('timeout_s', 'publish_rate_hz', 'max_sample_age_s'):
+        for name in ('timeout_s', 'publish_rate_hz', 'max_sample_age_s', 'retry_interval_s'):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f'{name} must be finite and positive')
@@ -118,17 +113,27 @@ class UltrasonicNode(Node):
             # Back off on a disconnected device; never spin on repeated errors.
             delay = max(0.0, period - (time.monotonic() - started))
             if not success:
-                delay = max(delay, self.timeout_s)
+                delay = max(delay, self.retry_interval_s)
             self._stop.wait(delay)
 
     def _read_distance(self, wait_for_data):
         try:
+            if self.sensor is None:
+                self.sensor = DFRobot_A02_Distance(
+                    self.port, self.baudrate, self.timeout_s
+                )
+                self.sensor.set_dis_range(
+                    self.min_range_m * 1000, self.max_range_m * 1000
+                )
+                self.get_logger().info(f'Ultrasonic serial port opened: {self.port}')
             distance_mm = self.sensor.getDistance(wait_for_data=wait_for_data)
-        except OSError as error:
+        except (OSError, ValueError) as error:
             with self._sample_lock:
                 self._latest_sample = None
+            self._close_serial()
             self.get_logger().warning(
-                f'Ultrasonic read failed: {error}', throttle_duration_sec=5.0
+                f'Ultrasonic unavailable: {error}; retrying in {self.retry_interval_s}s',
+                throttle_duration_sec=5.0
             )
             return False
 
@@ -178,14 +183,20 @@ class UltrasonicNode(Node):
     # -----------------------
     #   Release the serial connection
     # -----------------------
+    def _close_serial(self):
+        sensor, self.sensor = self.sensor, None
+        if sensor is not None:
+            try:
+                sensor.close()
+            except OSError as error:
+                self.get_logger().warning(f'Ultrasonic serial close failed: {error}')
+
     def destroy_node(self):
         self._stop.set()
         if self._reader is not None and self._reader.is_alive():
             # A finite serial timeout bounds the reader's idle wait.
             self._reader.join()
-        if self.sensor is not None:
-            self.sensor.close()
-            self.sensor = None
+        self._close_serial()
         return super().destroy_node()
 
 

@@ -4,27 +4,40 @@ Packet: [decivolts][~decivolts], both LSB first. Bits are rebuilt from the
 kernel's edge timestamps, so Python timing jitter does not matter.
 """
 
-import time
 import lgpio
 
 BIT_NS = 10_000_000  # 10 ms per bit
 WATCHDOG = 2         # lgpio reports "no edge for a while" as level 2
+PACKET_NS = 20 * BIT_NS
+# Longer than the longest constant level within an 8N1 frame (9 bits).
+IDLE_MICROS = 110_000
 
 class BatteryDriver:
     def __init__(self, chip, line):
         self.chip, self.line = chip, line
         self.edges = []
-        self.latest = None  # (volts, time received)
+        self.latest = None  # (volts, packet end in CLOCK_MONOTONIC seconds)
+        self._closed = False
         lgpio.gpio_claim_alert(chip, line, lgpio.BOTH_EDGES, lgpio.SET_PULL_UP)
-        self.cb = lgpio.callback(chip, line, lgpio.BOTH_EDGES, self._on_edge)
+        self.cb = None
+        try:
+            self.cb = lgpio.callback(chip, line, lgpio.BOTH_EDGES, self._on_edge)
+            lgpio.gpio_set_watchdog_micros(chip, line, IDLE_MICROS)
+        except Exception:
+            self.close()
+            raise
 
     def _on_edge(self, chip, line, level, timestamp):
-        if level == WATCHDOG:
+        if self._closed:
             return
-        # A packet lasts 20 bits; an edge after that belongs to the next one.
-        if self.edges and timestamp - self.edges[0][0] > 20 * BIT_NS:
+        # Decode at idle, even if this is the last packet ever received.
+        # Watchdog and edge callbacks are delivered by the same lgpio thread.
+        if self.edges and timestamp - self.edges[0][0] >= PACKET_NS:
             self._decode()
             self.edges = []
+        if level == WATCHDOG:
+            self.edges = []  # Discard incomplete packets as well.
+            return
         if self.edges or level == 0:  # a falling edge starts a packet
             self.edges.append((timestamp, level))
 
@@ -47,8 +60,14 @@ class BatteryDriver:
                 return
             values.append(sum(bit << i for i, bit in enumerate(bits[1:9])))
         if values[0] ^ values[1] == 0xFF:  # second byte must be the inverse
-            self.latest = (values[0] / 10.0, time.monotonic())
+            # Linux GPIO v2 timestamps use CLOCK_MONOTONIC by default, the
+            # same clock battery_node uses for voltage expiry. Decoding later
+            # must not give an old packet a new acquisition time.
+            self.latest = (values[0] / 10.0, (t0 + PACKET_NS) / 1e9)
 
     def close(self):
-        self.cb.cancel()
-        lgpio.gpio_free(self.chip, self.line)
+        if not self._closed:
+            self._closed = True
+            if self.cb is not None:
+                self.cb.cancel()
+            lgpio.gpio_free(self.chip, self.line)
